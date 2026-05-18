@@ -1,18 +1,9 @@
-import {
-  Box,
-  ButtonBase,
-  Divider,
-  IconButton,
-  ListItemIcon,
-  ListItemText,
-  Menu,
-  MenuItem,
-  Tooltip,
-  Typography,
-} from "@mui/material";
+import { Box, ButtonBase, Typography } from "@mui/material";
 import { type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, useState } from "react";
-import { LuChevronDown, LuChevronRight, LuCopy, LuCornerUpLeft, LuMinus, LuPlus } from "react-icons/lu";
-import { GitChangeTotals } from "./GitChangeTotals";
+import { LuChevronDown, LuChevronRight, LuMinus, LuPlus } from "react-icons/lu";
+import { GitChangesContextMenu, type GitChangesContextMenuState } from "./GitChangesContextMenu";
+import { GitChangesFileRow } from "./GitChangesFileRow";
+import { GitChangesSectionHeader } from "./GitChangesSectionHeader";
 
 export type ProjectGitChangeKind = "added" | "modified" | "deleted" | "renamed" | "untracked";
 
@@ -56,31 +47,6 @@ type FolderGroup = {
   files: ProjectGitChangeItem[];
 };
 
-/** Returns one icon/color pair for one git change kind badge. */
-function getChangeColors(kind: ProjectGitChangeKind, sectionId: string) {
-  if (sectionId === "untracked") {
-    return { icon: "?", color: "info.main" };
-  }
-
-  if (kind === "renamed") {
-    return { icon: "R", color: "info.main" };
-  }
-
-  if (kind === "untracked") {
-    return { icon: "?", color: "info.main" };
-  }
-
-  if (kind === "added") {
-    return { icon: "A", color: "success.main" };
-  }
-
-  if (kind === "deleted") {
-    return { icon: "D", color: "error.main" };
-  }
-
-  return { icon: "M", color: "warning.light" };
-}
-
 /** Groups changed files by parent folder so list rows stay compact. */
 function groupByFolder(files: ProjectGitChangeItem[]): FolderGroup[] {
   const groups = new Map<string, ProjectGitChangeItem[]>();
@@ -97,33 +63,6 @@ function groupByFolder(files: ProjectGitChangeItem[]): FolderGroup[] {
     folder,
     files: folderFiles,
   }));
-}
-
-/** Resolves label and icon used for track/unstage actions per section. */
-function getTrackActionMeta(sectionId: string) {
-  if (sectionId === "staged") {
-    return {
-      verb: "Unstage",
-      SectionIcon: LuMinus,
-      FileIcon: LuMinus,
-    };
-  }
-
-  return {
-    verb: "Stage",
-    SectionIcon: LuPlus,
-    FileIcon: LuPlus,
-  };
-}
-
-/** Returns whether one section should render revert actions. */
-function shouldShowRevertAction(sectionId: string) {
-  return sectionId !== "staged";
-}
-
-/** Resolves section-specific wording for destructive restore actions. */
-function getRestoreActionVerb(sectionId: string) {
-  return sectionId === "untracked" ? "Discard" : "Revert";
 }
 
 /** Returns whether one drag/drop move between sections maps to a valid git action. */
@@ -149,6 +88,31 @@ function getFolderCollapseKey(sectionId: string, folder: string) {
   return `${sectionId}::${folder}`;
 }
 
+/** Resolves label and icon used for track/unstage actions per section. */
+function getTrackActionMeta(sectionId: string) {
+  if (sectionId === "staged") {
+    return {
+      verb: "Unstage",
+      FileIcon: LuMinus,
+    };
+  }
+
+  return {
+    verb: "Stage",
+    FileIcon: LuPlus,
+  };
+}
+
+/** Returns whether one section should render revert actions. */
+function shouldShowRevertAction(sectionId: string) {
+  return sectionId !== "staged";
+}
+
+/** Resolves section-specific wording for destructive restore actions. */
+function getRestoreActionVerb(sectionId: string) {
+  return sectionId === "untracked" ? "Discard" : "Revert";
+}
+
 /** Renders grouped git sections and supports selecting one diff row. */
 export function ProjectGitChangesList({
   sections,
@@ -164,12 +128,7 @@ export function ProjectGitChangesList({
   onCopyRelativeFilePath,
 }: ProjectGitChangesListProps) {
   const [collapsedSectionIds, setCollapsedSectionIds] = useState<Set<string>>(new Set());
-  const [contextMenuState, setContextMenuState] = useState<{
-    file: ProjectGitChangeItem;
-    sectionId: ProjectGitChangesSection["id"];
-    top: number;
-    left: number;
-  } | null>(null);
+  const [contextMenuState, setContextMenuState] = useState<GitChangesContextMenuState | null>(null);
   const [draggedFileState, setDraggedFileState] = useState<{
     files: ProjectGitChangeItem[];
     sectionId: ProjectGitChangesSection["id"];
@@ -180,9 +139,9 @@ export function ProjectGitChangesList({
     sectionId: ProjectGitChangesSection["id"];
     path: string;
   } | null>(null);
-  const visibleSections = sections.filter((section) => section.files.length > 0);
   const [collapsedFolderKeys, setCollapsedFolderKeys] = useState<Set<string>>(new Set());
-  const isContextMenuFileStaged = contextMenuState?.sectionId === "staged";
+
+  const visibleSections = sections.filter((section) => section.files.length > 0);
   const shouldShowContextMenu = Boolean(
     onCopyFilePath || onCopyRelativeFilePath || (!readOnly && (onTrackFile || onRevertFile)),
   );
@@ -361,80 +320,14 @@ export function ProjectGitChangesList({
               outlineColor: "primary.main",
             }}
           >
-            <Box
-              sx={{
-                height: 34,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                "&:hover .section-actions, &:focus-within .section-actions": {
-                  opacity: 1,
-                  pointerEvents: "auto",
-                },
-              }}
-            >
-              <Box sx={{ display: "flex", alignItems: "center", minWidth: 0 }}>
-                <ButtonBase
-                  disableRipple
-                  onClick={() => toggleSection(section.id)}
-                  aria-label={isCollapsed ? `Expand ${section.label}` : `Collapse ${section.label}`}
-                  sx={{
-                    width: 18,
-                    height: 18,
-                    mr: 0.75,
-                    color: "text.secondary",
-                    borderRadius: 0.5,
-                  }}
-                >
-                  {isCollapsed ? <LuChevronRight size={12} /> : <LuChevronDown size={12} />}
-                </ButtonBase>
-
-                <Typography variant="body2" sx={{ fontSize: 13, fontWeight: 400 }}>
-                  {section.label}
-                  <Box component="span" sx={{ ml: 1, color: "text.secondary", fontWeight: 400 }}>
-                    {section.files.length}
-                  </Box>
-                </Typography>
-              </Box>
-
-              {readOnly ? null : (
-                <Box
-                  className="section-actions"
-                  sx={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 0.5,
-                    color: "text.secondary",
-                    opacity: 0,
-                    pointerEvents: "none",
-                    transition: "opacity 0.15s ease",
-                  }}
-                >
-                  {showRevertAction ? (
-                    <Tooltip title={`${restoreActionVerb} all`} arrow placement="top">
-                      <ButtonBase
-                        disableRipple
-                        aria-label={`${restoreActionVerb} ${section.label}`}
-                        sx={{ width: 18, height: 18, borderRadius: 0.5 }}
-                        onClick={() => onRevertSection?.(section)}
-                      >
-                        <LuCornerUpLeft size={12} />
-                      </ButtonBase>
-                    </Tooltip>
-                  ) : null}
-                  <Tooltip title={`${trackActionMeta.verb} all`} arrow placement="top">
-                    <ButtonBase
-                      disableRipple
-                      aria-label={`${trackActionMeta.verb} ${section.label}`}
-                      sx={{ width: 18, height: 18, borderRadius: 0.5 }}
-                      onClick={() => onTrackSection?.(section)}
-                    >
-                      <trackActionMeta.SectionIcon size={13} />
-                    </ButtonBase>
-                  </Tooltip>
-                </Box>
-              )}
-            </Box>
+            <GitChangesSectionHeader
+              section={section}
+              isCollapsed={isCollapsed}
+              readOnly={readOnly}
+              onToggle={() => toggleSection(section.id)}
+              onTrackSection={onTrackSection}
+              onRevertSection={onRevertSection}
+            />
 
             {isCollapsed
               ? null
@@ -508,138 +401,28 @@ export function ProjectGitChangesList({
                               }
                             >
                               {group.files.map((file) => {
-                                const fileName = file.path.split("/").pop() ?? file.path;
-                                const indicator = getChangeColors(file.kind, section.id);
                                 const fileSelectionKey = getFileSelectionKey(section.id, file.path);
                                 const isSelected = selectedFileKeys.has(fileSelectionKey);
 
                                 return (
-                                  <Box
+                                  <GitChangesFileRow
                                     key={`${section.id}-${file.path}`}
-                                    data-testid={`changes-file-${section.id}-${file.path}`}
-                                    onContextMenu={
-                                      shouldShowContextMenu
-                                        ? (event) => handleFileContextMenu(event, file, section.id)
-                                        : undefined
-                                    }
-                                    draggable={!readOnly}
-                                    onDragStart={
-                                      readOnly ? undefined : (event) => handleFileDragStart(event, file, section.id)
-                                    }
-                                    onDragEnd={readOnly ? undefined : handleFileDragEnd}
-                                    sx={{
-                                      minHeight: 30,
-                                      minWidth: 0,
-                                      display: "flex",
-                                      alignItems: "center",
-                                      borderRadius: 1,
-                                      bgcolor: isSelected ? "action.selected" : undefined,
-                                      "&:hover": { bgcolor: "action.hover" },
-                                      "&:hover .file-actions, &:focus-within .file-actions": {
-                                        opacity: 1,
-                                        pointerEvents: "auto",
-                                      },
-                                    }}
-                                  >
-                                    <ButtonBase
-                                      disableRipple
-                                      onClick={(event) => handleFileClick(event, file, section)}
-                                      sx={{
-                                        minHeight: 30,
-                                        flex: 1,
-                                        minWidth: 0,
-                                        display: "flex",
-                                        alignItems: "center",
-                                        px: 0.75,
-                                        justifyContent: "flex-start",
-                                      }}
-                                    >
-                                      <Box sx={{ display: "flex", alignItems: "center", flex: 1, minWidth: 0 }}>
-                                        <Box
-                                          data-testid={`changes-file-indicator-${section.id}-${file.path}`}
-                                          sx={{
-                                            width: 14,
-                                            height: 14,
-                                            border: 1,
-                                            borderColor: indicator.color,
-                                            borderRadius: 0.5,
-                                            color: indicator.color,
-                                            display: "inline-flex",
-                                            alignItems: "center",
-                                            justifyContent: "center",
-                                            fontSize: 10,
-                                            mr: 1,
-                                            flexShrink: 0,
-                                          }}
-                                        >
-                                          {indicator.icon}
-                                        </Box>
-
-                                        <Typography
-                                          variant="body2"
-                                          data-testid={`changes-file-name-${section.id}-${file.path}`}
-                                          title={file.path}
-                                          sx={{
-                                            flex: 1,
-                                            fontSize: 12,
-                                            minWidth: 0,
-                                            overflow: "hidden",
-                                            textOverflow: "ellipsis",
-                                            whiteSpace: "nowrap",
-                                            textAlign: "left",
-                                          }}
-                                        >
-                                          {fileName}
-                                        </Typography>
-
-                                        {file.kind !== "renamed" && (file.additions > 0 || file.deletions > 0) ? (
-                                          <GitChangeTotals
-                                            testId={`changes-file-stats-${section.id}-${file.path}`}
-                                            additions={file.additions}
-                                            deletions={file.deletions}
-                                            hideZeroSides
-                                            sx={{ ml: 1, flexShrink: 0 }}
-                                          />
-                                        ) : null}
-                                      </Box>
-                                    </ButtonBase>
-
-                                    {readOnly ? null : (
-                                      <Box
-                                        className="file-actions"
-                                        sx={{
-                                          display: "inline-flex",
-                                          alignItems: "center",
-                                          gap: 0.25,
-                                          pr: 0.5,
-                                          opacity: 0,
-                                          pointerEvents: "none",
-                                          transition: "opacity 0.15s ease",
-                                        }}
-                                      >
-                                        {showRevertAction ? (
-                                          <Tooltip title={`${restoreActionVerb} file`} arrow placement="top">
-                                            <IconButton
-                                              size="small"
-                                              aria-label={`${restoreActionVerb} ${file.path}`}
-                                              onClick={() => onRevertFile?.(file)}
-                                            >
-                                              <LuCornerUpLeft size={12} />
-                                            </IconButton>
-                                          </Tooltip>
-                                        ) : null}
-                                        <Tooltip title={`${trackActionMeta.verb} file`} arrow placement="top">
-                                          <IconButton
-                                            size="small"
-                                            aria-label={`${trackActionMeta.verb} ${file.path}`}
-                                            onClick={() => onTrackFile?.(file, section.id)}
-                                          >
-                                            <trackActionMeta.FileIcon size={12} />
-                                          </IconButton>
-                                        </Tooltip>
-                                      </Box>
-                                    )}
-                                  </Box>
+                                    file={file}
+                                    section={section}
+                                    isSelected={isSelected}
+                                    readOnly={readOnly}
+                                    showContextMenu={shouldShowContextMenu}
+                                    showRevertAction={showRevertAction}
+                                    trackVerb={trackActionMeta.verb}
+                                    restoreVerb={restoreActionVerb}
+                                    TrackIcon={trackActionMeta.FileIcon}
+                                    onFileClick={handleFileClick}
+                                    onContextMenu={handleFileContextMenu}
+                                    onRevertFile={onRevertFile}
+                                    onTrackFile={onTrackFile}
+                                    onDragStart={handleFileDragStart}
+                                    onDragEnd={handleFileDragEnd}
+                                  />
                                 );
                               })}
                             </Box>
@@ -652,91 +435,17 @@ export function ProjectGitChangesList({
           </Box>
         );
       })}
-      <Menu
-        open={Boolean(contextMenuState) && shouldShowContextMenu}
-        onClose={closeContextMenu}
-        anchorReference="anchorPosition"
-        anchorPosition={
-          contextMenuState
-            ? {
-                top: contextMenuState.top,
-                left: contextMenuState.left,
-              }
-            : undefined
-        }
-      >
-        {!readOnly && !isContextMenuFileStaged ? (
-          <MenuItem
-            onClick={() => {
-              if (contextMenuState) {
-                onRevertFile?.(contextMenuState.file);
-              }
-              closeContextMenu();
-            }}
-          >
-            <ListItemIcon>
-              <LuCornerUpLeft size={14} />
-            </ListItemIcon>
-            <ListItemText>Discard</ListItemText>
-          </MenuItem>
-        ) : null}
-        {!readOnly && isContextMenuFileStaged ? (
-          <MenuItem
-            onClick={() => {
-              if (contextMenuState) {
-                onTrackFile?.(contextMenuState.file, "staged");
-              }
-              closeContextMenu();
-            }}
-          >
-            <ListItemIcon>
-              <LuMinus size={14} />
-            </ListItemIcon>
-            <ListItemText>Unstage</ListItemText>
-          </MenuItem>
-        ) : !readOnly ? (
-          <MenuItem
-            onClick={() => {
-              if (contextMenuState) {
-                onTrackFile?.(contextMenuState.file, contextMenuState.sectionId);
-              }
-              closeContextMenu();
-            }}
-          >
-            <ListItemIcon>
-              <LuPlus size={14} />
-            </ListItemIcon>
-            <ListItemText>Stage</ListItemText>
-          </MenuItem>
-        ) : null}
-        {onCopyFilePath || onCopyRelativeFilePath ? <Divider component="li" /> : null}
-        <MenuItem
-          onClick={() => {
-            if (contextMenuState) {
-              onCopyFilePath?.(contextMenuState.file);
-            }
-            closeContextMenu();
-          }}
-        >
-          <ListItemIcon>
-            <LuCopy size={14} />
-          </ListItemIcon>
-          <ListItemText>Copy File Path</ListItemText>
-        </MenuItem>
-        <MenuItem
-          onClick={() => {
-            if (contextMenuState) {
-              onCopyRelativeFilePath?.(contextMenuState.file);
-            }
-            closeContextMenu();
-          }}
-        >
-          <ListItemIcon>
-            <LuCopy size={14} />
-          </ListItemIcon>
-          <ListItemText>Copy Relative Path</ListItemText>
-        </MenuItem>
-      </Menu>
+      {shouldShowContextMenu ? (
+        <GitChangesContextMenu
+          menuState={contextMenuState}
+          readOnly={readOnly}
+          onClose={closeContextMenu}
+          onTrackFile={onTrackFile}
+          onRevertFile={onRevertFile}
+          onCopyFilePath={onCopyFilePath}
+          onCopyRelativeFilePath={onCopyRelativeFilePath}
+        />
+      ) : null}
     </Box>
   );
 }

@@ -1,17 +1,11 @@
-import { Box, Typography } from "@mui/material";
+import { Box } from "@mui/material";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useTranslation } from "react-i18next";
 import { LuGlobe, LuSquareTerminal } from "react-icons/lu";
 import { SYSTEM_FILE_MANAGER_APP_ID, findExternalAppPreset } from "../../../shared/contracts/externalApps";
-import { copyToClipboard } from "../../helpers/clipboard";
-import { FileEditor } from "../../components/FileEditor";
-import { FileDiffViewer } from "../../components/FileDiffViewer";
-import { ImagePreview } from "../../components/ImagePreview";
-import { TabPanel } from "../../components/TabPanel";
-import { UnsupportedFileView } from "../../components/UnsupportedFileView";
-import { SplitPaneGroup } from "../../components/SplitPaneGroup";
 import { SplitPaneContainer } from "../../components/SplitPaneContainer";
+import { SplitPaneGroup } from "../../components/SplitPaneGroup";
+import { TabPanel } from "../../components/TabPanel";
 import { getFileTreeIcon } from "../../components/fileTreeIcons";
 import { type DesktopAgentKind, SUPPORTED_DESKTOP_AGENT_KINDS } from "../../helpers/agentSettings";
 import { useCommands } from "../../hooks/useCommands";
@@ -25,12 +19,11 @@ import { workspaceStore } from "../../store/workspaceStore";
 import { DARK_SURFACE_COLORS } from "../../theme";
 import { LaunchView } from "./LaunchView";
 import { MainPaneTitleBarView } from "./MainPaneTitleBarView";
-import { BrowserView } from "./browser/BrowserView";
 import { removeWebviewsForClosedTabs } from "./browser/webviewRegistry";
 import { getOrCreateRuntimeRoot } from "./runtime/runtimeRoot";
-import { TerminalView } from "./terminal/TerminalView";
 import { disposeTerminalRuntimesForClosedTabs } from "./terminal/terminalRuntimeRegistry";
 import { usePaneTabHandlers } from "./usePaneTabHandlers";
+import { useTabContentRenderer } from "./useTabContentRenderer";
 
 // ─── Small helpers ────────────────────────────────────────────────────────────
 
@@ -89,7 +82,6 @@ type WorkspaceSplitPaneProps = {
  * `display: none` when inactive, so terminals/editors preserve their state.
  */
 function WorkspaceSplitPane({ workspaceId, isActive, workspaceTabs }: WorkspaceSplitPaneProps) {
-  const { t } = useTranslation();
   const cmd = useCommands();
   const workspaces = workspaceStore((state) => state.workspaces);
   const selectedTabId = tabStore((state) => state.selectedTabId);
@@ -127,7 +119,9 @@ function WorkspaceSplitPane({ workspaceId, isActive, workspaceTabs }: WorkspaceS
   const didSyncPaneSelectionRef = useRef(false);
   const [panePlaceholders, setPanePlaceholders] = useState<Record<string, HTMLDivElement | null>>({});
   const [layoutVersion, setLayoutVersion] = useState(0);
-  const lastKnownRectByTabIdRef = useRef<Record<string, { left: number; top: number; width: number; height: number }>>({});
+  const lastKnownRectByTabIdRef = useRef<Record<string, { left: number; top: number; width: number; height: number }>>(
+    {},
+  );
 
   const layout = splitPaneStore((state) => state.layoutByWorkspaceId[workspaceId]);
   const splitRoot = layout?.root;
@@ -269,141 +263,13 @@ function WorkspaceSplitPane({ workspaceId, isActive, workspaceTabs }: WorkspaceS
 
   // ─── Tab content renderer ───────────────────────────────────────────────────
 
-  const renderTabContent = useCallback(
-    (tab: WorkspaceTab, isSelected: boolean, isInActivePane: boolean) => {
-      const shouldFocusContent = isSelected && isInActivePane;
-
-      if (tab.kind === "diff") {
-        return (
-          <TabPanel key={tab.id} active={isSelected}>
-            <FileDiffViewer
-              filePath={tab.data.path}
-              oldContent={tab.data.oldContent ?? ""}
-              newContent={tab.data.newContent ?? ""}
-            />
-          </TabPanel>
-        );
-      }
-
-      if (tab.kind === "file") {
-        if (tab.data.isUnsupported) {
-          return (
-            <TabPanel key={tab.id} active={isSelected}>
-              <UnsupportedFileView
-                path={tab.data.path}
-                title={t("files.unsupported.title")}
-                description={
-                  tab.data.unsupportedReason === "size"
-                    ? t("files.unsupported.descriptionLarge")
-                    : t("files.unsupported.description")
-                }
-                hint={
-                  tab.data.unsupportedReason === "size"
-                    ? t("files.unsupported.hintLarge")
-                    : t("files.unsupported.hint")
-                }
-                onCopyPath={copyToClipboard}
-                onOpenExternalApp={handleOpenExternalApp}
-                openExternalAppLabel={externalAppLabel}
-              />
-            </TabPanel>
-          );
-        }
-
-        return (
-          <TabPanel key={tab.id} active={isSelected}>
-            <FileEditor
-              path={tab.data.path}
-              content={tab.data.content ?? ""}
-              worktreePath={workspace?.worktreePath}
-              isDeleted={Boolean(tab.data.isDeleted)}
-              focusRequestKey={shouldFocusContent ? focusContentRequestKey : 0}
-              onContentChange={(nextContent) => cmd.updateFileTabContent(tab.id, nextContent)}
-              onSave={async (nextContent) => {
-                const workspaceWorktreePath = workspace?.worktreePath;
-                if (!workspaceWorktreePath) return;
-                try {
-                  await cmd.writeFile({ workspaceWorktreePath, relativePath: tab.data.path, content: nextContent });
-                  cmd.updateFileTabContent(tab.id, nextContent);
-                  cmd.markFileTabSaved(tab.id);
-                } catch (error) {
-                  console.error("Failed to save workspace file", error);
-                }
-              }}
-              onCopyPath={copyToClipboard}
-              onOpenExternalApp={handleOpenExternalApp}
-              openExternalAppLabel={externalAppLabel}
-            />
-          </TabPanel>
-        );
-      }
-
-      if (tab.kind === "image") {
-        return (
-          <TabPanel key={tab.id} active={isSelected}>
-            <ImagePreview
-              path={tab.data.path}
-              dataUrl={tab.data.dataUrl}
-              onCopyPath={copyToClipboard}
-              onOpenExternalApp={handleOpenExternalApp}
-              openExternalAppLabel={externalAppLabel}
-            />
-          </TabPanel>
-        );
-      }
-
-      if (tab.kind === "session") {
-        return (
-          <TabPanel key={tab.id} active={isSelected}>
-            <Box
-              sx={{
-                flex: 1,
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 1.5,
-              }}
-            >
-              <Typography variant="body2" color="text.secondary">
-                Chat is currently disabled.
-              </Typography>
-            </Box>
-          </TabPanel>
-        );
-      }
-
-      if (tab.kind === "browser") {
-        return (
-          <Box
-            key={tab.id}
-            sx={{
-              position: "absolute",
-              inset: 0,
-              display: isSelected ? "flex" : "none",
-              flexDirection: "column",
-            }}
-          >
-            <BrowserView tabId={tab.id} initialUrl={tab.data.url} />
-          </Box>
-        );
-      }
-
-      if (tab.kind === "terminal") {
-        if (!isSelected) {
-          return null;
-        }
-        return (
-          <Box key={tab.id} sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
-            <TerminalView tabId={tab.id} focusRequestKey={shouldFocusContent ? focusContentRequestKey : 0} />
-          </Box>
-        );
-      }
-
-      return null;
-    },
-    [t, cmd, workspace, externalAppLabel, handleOpenExternalApp, focusContentRequestKey],
-  );
+  const renderTabContent = useTabContentRenderer({
+    workspace,
+    externalAppLabel,
+    focusContentRequestKey,
+    cmd,
+    onOpenExternalApp: handleOpenExternalApp,
+  });
 
   // ─── Tab surface renderer (fixed-position portal overlay) ─────────────────
 
