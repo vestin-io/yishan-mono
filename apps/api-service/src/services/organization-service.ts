@@ -2,6 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import type { AppDb } from "@/db/client";
 import { organizationMembers, organizations, users } from "@/db/schema";
+import type { OrganizationMemberRole } from "@/db/schema";
 import {
   InvalidOrganizationMemberRoleError,
   InvalidOrganizationMembersError,
@@ -20,8 +21,6 @@ type CreateOrganizationInput = {
   actorUserId: string;
   memberUserIds: string[];
 };
-
-type OrganizationMemberRole = "owner" | "admin" | "member";
 
 export type OrganizationMemberView = {
   userId: string;

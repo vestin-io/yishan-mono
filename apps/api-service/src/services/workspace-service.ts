@@ -2,7 +2,7 @@ import { and, eq, isNull } from "drizzle-orm";
 
 import type { AppDb } from "@/db/client";
 import { organizationMembers, projects, workspaces } from "@/db/schema";
-import type { WorkspacePullRequestState } from "@/db/schema";
+import type { WorkspaceKind, WorkspacePullRequestState } from "@/db/schema";
 import {
   ProjectNotFoundError,
   WorkspaceBranchRequiredError,
@@ -15,8 +15,6 @@ import { assertNodeOwnedByActor } from "@/services/shared/assertNodeOwnedByActor
 import { assertOrganizationMember } from "@/services/shared/assertOrganizationMember";
 import type { WorkspaceProvisioner } from "@/services/workspace-provisioner";
 import { fetchLatestPrByWorkspaceId } from "@/services/workspace-pull-request-service";
-
-type WorkspaceKind = "primary" | "worktree";
 
 export type WorkspacePullRequestSummary = {
   id: string;

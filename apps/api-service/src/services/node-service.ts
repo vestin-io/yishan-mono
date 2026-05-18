@@ -40,6 +40,16 @@ type RegisterNodeInput = {
   updateIfExists?: boolean;
 };
 
+/** Shape of one entry in the relay `/api/v1/metrics` connectedSessions array. */
+type RelaySession = {
+  nodeId: string;
+  daemonVersion?: string;
+};
+
+function isRelaySession(value: unknown): value is RelaySession {
+  return typeof value === "object" && value !== null && typeof (value as Record<string, unknown>).nodeId === "string";
+}
+
 export class NodeService {
   constructor(
     private readonly db: AppDb,
@@ -73,16 +83,9 @@ export class NodeService {
       // Prefer the richer connectedSessions view when available.
       if (Array.isArray(body.connectedSessions)) {
         for (const s of body.connectedSessions) {
-          if (s && typeof s === "object" && typeof (s as any).nodeId === "string") {
-            const nodeId = (s as any).nodeId as string;
-            const daemonVersion =
-              typeof (s as any).daemonVersion === "string" ? ((s as any).daemonVersion as string) : "";
-            if (daemonVersion) {
-              result.set(nodeId, daemonVersion);
-            } else {
-              // Mark as online with empty version so callers can still detect online state.
-              result.set(nodeId, "");
-            }
+          if (isRelaySession(s)) {
+            const daemonVersion = s.daemonVersion ?? "";
+            result.set(s.nodeId, daemonVersion);
           }
         }
         return result;

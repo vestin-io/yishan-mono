@@ -2,7 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import type { AppDb } from "@/db/client";
 import { projects, workspaces } from "@/db/schema";
-import type { WorkspacePullRequestState } from "@/db/schema";
+import type { ProjectSourceType } from "@/db/schema";
 import { ProjectNotFoundError } from "@/errors";
 import { newId } from "@/lib/id";
 import { inferRepoSource } from "@/lib/repo";
@@ -10,8 +10,7 @@ import type { OrganizationService } from "@/services/organization-service";
 import { assertNodeOwnedByActor } from "@/services/shared/assertNodeOwnedByActor";
 import { assertOrganizationMember } from "@/services/shared/assertOrganizationMember";
 import { fetchLatestPrByWorkspaceId } from "@/services/workspace-pull-request-service";
-
-type ProjectSourceType = "git" | "git-local" | "unknown";
+import type { WorkspacePullRequestSummary } from "@/services/workspace-service";
 
 export type ProjectView = {
   id: string;
@@ -42,18 +41,7 @@ export type ProjectWithWorkspacesView = ProjectView & {
     status: "active" | "closed";
     branch: string | null;
     localPath: string;
-    latestPullRequest: {
-      id: string;
-      prId: string;
-      title: string | null;
-      url: string | null;
-      branch: string | null;
-      baseBranch: string | null;
-      state: WorkspacePullRequestState;
-      metadata: unknown;
-      detectedAt: Date;
-      resolvedAt: Date | null;
-    } | null;
+    latestPullRequest: WorkspacePullRequestSummary | null;
     createdAt: Date;
     updatedAt: Date;
   }>;

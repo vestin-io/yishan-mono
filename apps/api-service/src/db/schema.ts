@@ -3,6 +3,7 @@ import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
 import { boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 export type NodeScope = "private" | "shared";
+export type OrganizationMemberRole = "owner" | "admin" | "member";
 export type ProjectSourceType = "git" | "git-local" | "unknown";
 export type WorkspaceKind = "primary" | "worktree";
 export type WorkspaceStatus = "active" | "closed";
