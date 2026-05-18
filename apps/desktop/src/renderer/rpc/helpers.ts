@@ -1,5 +1,6 @@
-import type * as Rpc from "./daemonTypes";
 import { generateId } from "../helpers/generateId";
+import type * as Rpc from "./daemonTypes";
+export { delay } from "../helpers/delay";
 
 function toWebSocketPayload(data: unknown): string {
   if (typeof data === "string") {
@@ -86,11 +87,5 @@ export function parseJsonRpcMessage(data: unknown): Rpc.JsonRpcResponse | Rpc.Js
 }
 
 export function buildUnsupportedMethodError(path: string): Error {
-  return new Error(`desktop daemon JSON-RPC does not support procedure \"${path}\"`);
-}
-
-export function delay(ms: number): Promise<void> {
-  return new Promise((resolvePromise) => {
-    setTimeout(resolvePromise, ms);
-  });
+  return new Error(`desktop daemon JSON-RPC does not support procedure "${path}"`);
 }

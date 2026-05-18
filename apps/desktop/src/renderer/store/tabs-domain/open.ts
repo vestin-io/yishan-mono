@@ -60,6 +60,13 @@ function createDiffContent(input: {
   };
 }
 
+/**
+ * Produces minimal placeholder content for a file tab opened without pre-loaded content.
+ *
+ * This fallback is intentional: `MarkdownPreview` opens file tabs via link clicks without
+ * providing content upfront. The actual file content is loaded asynchronously by
+ * `useOpenTabAutoRefresh` and replaces this placeholder via `refreshFileTabFromDisk`.
+ */
 function createFileContent(path: string): string {
   const fileName = getFileName(path);
   const extension = fileName.split(".").pop()?.toLowerCase() ?? "";
@@ -121,6 +128,7 @@ export function buildTabDataByInput<T extends OpenWorkspaceTabInput>(input: T): 
   }
 
   if (input.kind === "file") {
+    // fire-and-forget: content loaded asynchronously by useOpenTabAutoRefresh
     const fileContent = input.content ?? createFileContent(input.path);
     return {
       path: input.path,

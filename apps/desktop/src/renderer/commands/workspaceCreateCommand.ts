@@ -1,3 +1,4 @@
+import { delay } from "../helpers/delay";
 import { generateId } from "../helpers/generateId";
 import { normalizeCreateWorkspaceInput } from "../helpers/workspaceHelpers";
 import { getDaemonClient } from "../rpc/rpcTransport";
@@ -48,12 +49,6 @@ const WORKSPACE_CREATE_STEP_DISPLAY_MS = 200;
 
 function createWorkspaceId(): string {
   return generateId();
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 }
 
 /**
