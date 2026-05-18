@@ -1,12 +1,10 @@
-export const SUPPORTED_DESKTOP_AGENT_KINDS = [
-  "opencode",
-  "codex",
-  "claude",
-  "gemini",
-  "pi",
-  "copilot",
-  "cursor",
-] as const;
+import { AGENT_KINDS } from "@yishan/core";
+
+/**
+ * The canonical agent kind list for this desktop app.
+ * Values come from `@yishan/core` — do not duplicate inline.
+ */
+export const SUPPORTED_DESKTOP_AGENT_KINDS = AGENT_KINDS;
 
 export type DesktopAgentKind = (typeof SUPPORTED_DESKTOP_AGENT_KINDS)[number];
 

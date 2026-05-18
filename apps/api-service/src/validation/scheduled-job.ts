@@ -1,33 +1,26 @@
+import { AGENT_KINDS } from "@yishan/core";
 import { z } from "zod";
 
 import { nonEmptyStringSchema } from "@/validation/common";
 
-const scheduledAgentKindSchema = z.enum([
-  "opencode",
-  "codex",
-  "claude",
-  "gemini",
-  "pi",
-  "copilot",
-  "cursor"
-]);
+const scheduledAgentKindSchema = z.enum(AGENT_KINDS);
 
 export const scheduledJobOrgParamsSchema = z.object({
-  orgId: nonEmptyStringSchema
+  orgId: nonEmptyStringSchema,
 });
 
 export const scheduledJobParamsSchema = z.object({
   orgId: nonEmptyStringSchema,
-  jobId: nonEmptyStringSchema
+  jobId: nonEmptyStringSchema,
 });
 
 export const scheduledJobListQuerySchema = z.object({
   projectId: nonEmptyStringSchema.optional(),
-  limit: z.coerce.number().int().min(1).max(100).optional().default(50)
+  limit: z.coerce.number().int().min(1).max(100).optional().default(50),
 });
 
 export const scheduledJobRunsQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(100).optional().default(20)
+  limit: z.coerce.number().int().min(1).max(100).optional().default(20),
 });
 
 export const createScheduledJobBodySchema = z.object({
@@ -39,7 +32,7 @@ export const createScheduledJobBodySchema = z.object({
   model: nonEmptyStringSchema.max(120).optional(),
   command: nonEmptyStringSchema.max(2048).optional(),
   cronExpression: nonEmptyStringSchema.max(120),
-  timezone: nonEmptyStringSchema.max(120).optional()
+  timezone: nonEmptyStringSchema.max(120).optional(),
 });
 
 export const updateScheduledJobBodySchema = z
@@ -51,10 +44,10 @@ export const updateScheduledJobBodySchema = z
     model: nonEmptyStringSchema.max(120).nullable().optional(),
     command: nonEmptyStringSchema.max(2048).nullable().optional(),
     cronExpression: nonEmptyStringSchema.max(120).optional(),
-    timezone: nonEmptyStringSchema.max(120).optional()
+    timezone: nonEmptyStringSchema.max(120).optional(),
   })
   .refine((value) => Object.values(value).some((item) => item !== undefined), {
-    message: "At least one field must be provided"
+    message: "At least one field must be provided",
   });
 
 export type ScheduledJobOrgParamsInput = z.infer<typeof scheduledJobOrgParamsSchema>;
@@ -65,12 +58,12 @@ export type CreateScheduledJobBodyInput = z.infer<typeof createScheduledJobBodyS
 export type UpdateScheduledJobBodyInput = z.infer<typeof updateScheduledJobBodySchema>;
 
 export const nodeScheduledJobParamsSchema = z.object({
-  nodeId: nonEmptyStringSchema
+  nodeId: nonEmptyStringSchema,
 });
 
 export const startScheduledJobRunBodySchema = z.object({
   runId: nonEmptyStringSchema,
-  startedAt: z.string().datetime().optional()
+  startedAt: z.string().datetime().optional(),
 });
 
 export const completeScheduledJobRunBodySchema = z.object({
@@ -80,7 +73,7 @@ export const completeScheduledJobRunBodySchema = z.object({
   responseBody: z.string().max(4096).optional(),
   errorCode: z.string().max(120).optional(),
   errorMessage: z.string().max(1000).optional(),
-  errorDetails: z.record(z.string(), z.unknown()).optional()
+  errorDetails: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type NodeScheduledJobParamsInput = z.infer<typeof nodeScheduledJobParamsSchema>;

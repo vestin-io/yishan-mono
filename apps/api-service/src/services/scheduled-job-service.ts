@@ -1,3 +1,4 @@
+import type { AgentKind } from "@yishan/core";
 import { and, asc, desc, eq, lte } from "drizzle-orm";
 
 import type { AppDb } from "@/db/client";
@@ -10,7 +11,7 @@ import {
   ScheduledJobInvalidTimezoneError,
   ScheduledJobNotFoundError,
   WorkspaceLocalNodePermissionRequiredError,
-  WorkspaceLocalNodeScopeInvalidError
+  WorkspaceLocalNodeScopeInvalidError,
 } from "@/errors";
 import { newId } from "@/lib/id";
 import { computeNextRunAt, ensureTimezoneSupported, parseCronExpression } from "@/scheduled/cron";
@@ -30,7 +31,7 @@ export type ScheduledJobView = {
   projectId: string;
   nodeId: string;
   name: string;
-  agentKind: "opencode" | "codex" | "claude" | "gemini" | "pi" | "copilot" | "cursor";
+  agentKind: AgentKind;
   prompt: string;
   model: string | null;
   command: string | null;
@@ -77,7 +78,7 @@ type CreateScheduledJobInput = {
   actorUserId: string;
   name: string;
   nodeId: string;
-  agentKind?: "opencode" | "codex" | "claude" | "gemini" | "pi" | "copilot" | "cursor";
+  agentKind?: AgentKind;
   prompt: string;
   model?: string;
   command?: string;
@@ -91,7 +92,7 @@ type UpdateScheduledJobInput = {
   actorUserId: string;
   name?: string;
   nodeId?: string;
-  agentKind?: "opencode" | "codex" | "claude" | "gemini" | "pi" | "copilot" | "cursor";
+  agentKind?: AgentKind;
   prompt?: string;
   model?: string | null;
   command?: string | null;
@@ -131,7 +132,7 @@ function toScheduledJobView(row: ScheduledJobRecord): ScheduledJobView {
     lastErrorMessage: row.lastErrorMessage,
     createdByUserId: row.createdByUserId,
     createdAt: row.createdAt,
-    updatedAt: row.updatedAt
+    updatedAt: row.updatedAt,
   };
 }
 
@@ -153,7 +154,7 @@ function toRunView(row: ScheduledJobRunRecord): ScheduledJobRunView {
       row.errorDetails && typeof row.errorDetails === "object" && !Array.isArray(row.errorDetails)
         ? (row.errorDetails as Record<string, unknown>)
         : null,
-    createdAt: row.createdAt
+    createdAt: row.createdAt,
   };
 }
 
@@ -176,7 +177,7 @@ function validateCronOrThrow(expression: string) {
   } catch (error) {
     throw new ScheduledJobInvalidCronError(
       expression,
-      error instanceof Error ? error.message : "Unknown cron parse error"
+      error instanceof Error ? error.message : "Unknown cron parse error",
     );
   }
 }
@@ -187,7 +188,7 @@ function validateTimezoneOrThrow(timezone: string): string {
   } catch (error) {
     throw new ScheduledJobInvalidTimezoneError(
       timezone,
-      error instanceof Error ? error.message : "Unknown timezone validation error"
+      error instanceof Error ? error.message : "Unknown timezone validation error",
     );
   }
 }
@@ -195,7 +196,7 @@ function validateTimezoneOrThrow(timezone: string): string {
 export class ScheduledJobService {
   constructor(
     private readonly db: AppDb,
-    private readonly organizationService: OrganizationService
+    private readonly organizationService: OrganizationService,
   ) {}
 
   private async assertOrganizationMember(organizationId: string, userId: string): Promise<void> {
@@ -239,12 +240,7 @@ export class ScheduledJobService {
     const rows = await this.db
       .select()
       .from(scheduledJobs)
-      .where(
-        and(
-          eq(scheduledJobs.id, jobId),
-          eq(scheduledJobs.organizationId, organizationId)
-        )
-      )
+      .where(and(eq(scheduledJobs.id, jobId), eq(scheduledJobs.organizationId, organizationId)))
       .limit(1);
 
     const job = rows[0];
@@ -280,7 +276,7 @@ export class ScheduledJobService {
         timezone,
         status: "active",
         nextRunAt,
-        createdByUserId: input.actorUserId
+        createdByUserId: input.actorUserId,
       })
       .returning();
 
@@ -328,9 +324,7 @@ export class ScheduledJobService {
     const parsed = validateCronOrThrow(nextCron);
     const shouldRecomputeNextRun =
       input.cronExpression !== undefined || input.timezone !== undefined || existing.status === "active";
-    const nextRunAt = shouldRecomputeNextRun
-      ? computeNextRunAt(parsed, nextTimezone, new Date())
-      : existing.nextRunAt;
+    const nextRunAt = shouldRecomputeNextRun ? computeNextRunAt(parsed, nextTimezone, new Date()) : existing.nextRunAt;
 
     const rows = await this.db
       .update(scheduledJobs)
@@ -344,7 +338,7 @@ export class ScheduledJobService {
         cronExpression: nextCron,
         timezone: nextTimezone,
         nextRunAt,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
       .where(eq(scheduledJobs.id, existing.id))
       .returning();
@@ -363,12 +357,7 @@ export class ScheduledJobService {
     const rows = await this.db
       .update(scheduledJobs)
       .set({ status: "paused", updatedAt: new Date() })
-      .where(
-        and(
-          eq(scheduledJobs.id, input.jobId),
-          eq(scheduledJobs.organizationId, input.organizationId)
-        )
-      )
+      .where(and(eq(scheduledJobs.id, input.jobId), eq(scheduledJobs.organizationId, input.organizationId)))
       .returning();
 
     const updated = rows[0];
@@ -406,12 +395,7 @@ export class ScheduledJobService {
     const rows = await this.db
       .update(scheduledJobs)
       .set({ status: "disabled", updatedAt: new Date() })
-      .where(
-        and(
-          eq(scheduledJobs.id, input.jobId),
-          eq(scheduledJobs.organizationId, input.organizationId)
-        )
-      )
+      .where(and(eq(scheduledJobs.id, input.jobId), eq(scheduledJobs.organizationId, input.organizationId)))
       .returning();
 
     const updated = rows[0];
@@ -429,12 +413,7 @@ export class ScheduledJobService {
     const rows = await this.db
       .select()
       .from(scheduledJobRuns)
-      .where(
-        and(
-          eq(scheduledJobRuns.jobId, input.jobId),
-          eq(scheduledJobRuns.organizationId, input.organizationId)
-        )
-      )
+      .where(and(eq(scheduledJobRuns.jobId, input.jobId), eq(scheduledJobRuns.organizationId, input.organizationId)))
       .orderBy(desc(scheduledJobRuns.scheduledFor))
       .limit(limit);
 
@@ -450,12 +429,7 @@ export class ScheduledJobService {
     const dueJobs = await this.db
       .select()
       .from(scheduledJobs)
-      .where(
-        and(
-          eq(scheduledJobs.status, "active"),
-          lte(scheduledJobs.nextRunAt, now)
-        )
-      )
+      .where(and(eq(scheduledJobs.status, "active"), lte(scheduledJobs.nextRunAt, now)))
       .orderBy(asc(scheduledJobs.nextRunAt))
       .limit(input.limit);
 
@@ -477,8 +451,8 @@ export class ScheduledJobService {
           and(
             eq(scheduledJobs.id, dueJob.id),
             eq(scheduledJobs.status, "active"),
-            eq(scheduledJobs.nextRunAt, rawScheduledFor)
-          )
+            eq(scheduledJobs.nextRunAt, rawScheduledFor),
+          ),
         )
         .returning();
 
@@ -498,7 +472,7 @@ export class ScheduledJobService {
           projectId: updated.projectId,
           nodeId: updated.nodeId,
           scheduledFor,
-          status: "pending"
+          status: "pending",
         })
         .onConflictDoNothing()
         .returning({ id: scheduledJobRuns.id });
@@ -510,7 +484,7 @@ export class ScheduledJobService {
       pending.push({
         runId,
         scheduledFor,
-        job: toScheduledJobView(updated)
+        job: toScheduledJobView(updated),
       });
     }
 
@@ -527,12 +501,7 @@ export class ScheduledJobService {
     const rows = await this.db
       .update(scheduledJobRuns)
       .set({ status: "skipped_offline", finishedAt: now })
-      .where(
-        and(
-          eq(scheduledJobRuns.status, "pending"),
-          lte(scheduledJobRuns.createdAt, threshold)
-        )
-      )
+      .where(and(eq(scheduledJobRuns.status, "pending"), lte(scheduledJobRuns.createdAt, threshold)))
       .returning({ id: scheduledJobRuns.id });
 
     return rows.length;
@@ -583,7 +552,7 @@ export class ScheduledJobService {
         responseBody: input.responseBody ? limitResponseBody(input.responseBody) : null,
         errorCode: input.errorCode ?? null,
         errorMessage: input.errorMessage ?? null,
-        errorDetails: input.errorDetails ?? null
+        errorDetails: input.errorDetails ?? null,
       })
       .where(eq(scheduledJobRuns.id, run.id));
 
@@ -594,7 +563,7 @@ export class ScheduledJobService {
         lastRunStatus: input.status,
         lastErrorCode: input.status === "failed" ? (input.errorCode ?? null) : null,
         lastErrorMessage: input.status === "failed" ? (input.errorMessage ?? null) : null,
-        updatedAt: finishedAt
+        updatedAt: finishedAt,
       })
       .where(eq(scheduledJobs.id, run.jobId));
   }
