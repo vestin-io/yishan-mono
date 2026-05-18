@@ -343,6 +343,11 @@ func (m *Manager) HandleNodeDisconnect(nodeID string) {
 		switch run.Status {
 		case StatusAwaitingAck, StatusDispatching:
 			m.clearAckTimer(run.RunID)
+			// Decrement AwaitingAck here; scheduleRetry will re-increment it
+			// if the run is immediately re-dispatched via attemptDispatch.
+			if run.Status == StatusAwaitingAck {
+				m.metrics.AwaitingAck--
+			}
 			retryRuns = append(retryRuns, run)
 		case StatusAwaitingResult:
 			m.clearResultTimer(run.RunID)
