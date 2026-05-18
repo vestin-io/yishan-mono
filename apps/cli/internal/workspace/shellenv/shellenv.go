@@ -129,6 +129,34 @@ func ResolveEnvWithUserPath(env []string, shellCommand string) []string {
 	return EnsurePathHasExistingDirectories(withMergedPath, CommonUserBinDirectories())
 }
 
+func ResolveExecutablePathFromEnv(command string, env []string) string {
+	commandName := strings.TrimSpace(command)
+	if commandName == "" {
+		return ""
+	}
+
+	pathValue := EnvValueOrDefault(env, "PATH", "")
+	if strings.TrimSpace(pathValue) == "" {
+		return ""
+	}
+
+	for segment := range strings.SplitSeq(pathValue, string(os.PathListSeparator)) {
+		dir := strings.TrimSpace(segment)
+		if dir == "" {
+			continue
+		}
+
+		candidate := filepath.Join(dir, commandName)
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			if runtime.GOOS == "windows" || info.Mode().Perm()&0o111 != 0 {
+				return candidate
+			}
+		}
+	}
+
+	return ""
+}
+
 func CommonUserBinDirectories() []string {
 	directories := []string{"/opt/homebrew/bin", "/usr/local/bin"}
 	homeDir, err := os.UserHomeDir()

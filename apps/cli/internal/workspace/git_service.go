@@ -1149,9 +1149,15 @@ func gitCommandCombined(ctx context.Context, cwd string, args ...string) (string
 }
 
 func ghCommand(ctx context.Context, cwd string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "gh", args...)
+	env := shellenv.ResolveEnvWithUserPath(os.Environ(), os.Getenv("SHELL"))
+	ghPath := shellenv.ResolveExecutablePathFromEnv("gh", env)
+	if ghPath == "" {
+		return "", NewRPCError(-32010, "GitHub CLI (gh) is not installed")
+	}
+
+	cmd := exec.CommandContext(ctx, ghPath, args...)
 	cmd.Dir = cwd
-	cmd.Env = shellenv.ResolveEnvWithUserPath(os.Environ(), os.Getenv("SHELL"))
+	cmd.Env = env
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
