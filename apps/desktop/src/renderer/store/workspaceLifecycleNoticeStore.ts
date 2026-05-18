@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
+import { generateId } from "../helpers/generateId";
 
 export type WorkspaceLifecycleScriptWarning = {
   scriptKind: "setup" | "post";
@@ -30,7 +31,7 @@ export type WorkspaceErrorNotice = {
 export type WorkspaceNotice = WorkspaceLifecycleNotice | WorkspaceErrorNotice;
 
 type WorkspaceLifecycleNoticeStoreState = {
-  queue: WorkspaceNotice[];
+  noticeQueue: WorkspaceNotice[];
   detailNotice: WorkspaceLifecycleNotice | null;
   enqueueWarnings: (workspaceName: string, warnings: WorkspaceLifecycleScriptWarning[]) => void;
   enqueueError: (title: string, message: string) => void;
@@ -40,13 +41,13 @@ type WorkspaceLifecycleNoticeStoreState = {
 };
 
 function createNoticeId(scriptKind: "setup" | "post"): string {
-  return `${scriptKind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return `${scriptKind}-${generateId()}`;
 }
 
 /** Stores workspace lifecycle warning queue and selected detail modal payload. */
 export const workspaceLifecycleNoticeStore = create<WorkspaceLifecycleNoticeStoreState>()(
   immer((set) => ({
-    queue: [],
+    noticeQueue: [],
     detailNotice: null,
     enqueueWarnings: (workspaceName, warnings) => {
       const normalizedWorkspaceName = workspaceName.trim() || "Workspace";
@@ -61,13 +62,13 @@ export const workspaceLifecycleNoticeStore = create<WorkspaceLifecycleNoticeStor
       }
 
       set((state) => {
-        state.queue.push(...notices);
+        state.noticeQueue.push(...notices);
       });
     },
     enqueueError: (title, message) => {
       set((state) => {
-        state.queue.push({
-          id: `error-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        state.noticeQueue.push({
+          id: `error-${generateId()}`,
           kind: "error",
           title,
           message,
@@ -76,17 +77,17 @@ export const workspaceLifecycleNoticeStore = create<WorkspaceLifecycleNoticeStor
     },
     dismissActiveNotice: () => {
       set((state) => {
-        state.queue = state.queue.slice(1);
+        state.noticeQueue = state.noticeQueue.slice(1);
       });
     },
     openActiveNoticeDetails: () => {
       set((state) => {
-        const activeNotice = state.queue[0] ?? null;
+        const activeNotice = state.noticeQueue[0] ?? null;
         if (!activeNotice || activeNotice.kind !== "lifecycle") {
           return;
         }
 
-        state.queue = state.queue.slice(1);
+        state.noticeQueue = state.noticeQueue.slice(1);
         state.detailNotice = activeNotice;
       });
     },

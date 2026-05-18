@@ -13,7 +13,6 @@ describe("workspaceHelpers", () => {
       }),
     ).toEqual({
       normalizedName: "feature-a",
-      normalizedTitle: "feature-a",
       normalizedBranch: "main",
     });
   });
@@ -30,7 +29,7 @@ describe("workspaceHelpers", () => {
 
   it("updates existing optimistic workspace when backend details arrive", () => {
     const state = {
-      projects: [{ id: "repo-1", worktreePath: "/tmp/repo-1" }],
+      projects: [{ id: "repo-1", name: "repo-1", worktreePath: "/tmp/repo-1" }],
       workspaces: [
         {
           id: "workspace-1",
@@ -53,7 +52,6 @@ describe("workspaceHelpers", () => {
     applyCreatedWorkspaceState(state, {
       projectId: "repo-1",
       normalizedName: "feature-a",
-      normalizedTitle: "feature-a",
       normalizedBranch: "feature-a",
       backendWorkspace: {
         workspaceId: "workspace-1",

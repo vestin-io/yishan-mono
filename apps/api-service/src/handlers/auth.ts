@@ -1,14 +1,19 @@
 import { deleteCookie, getCookie, getSignedCookie, setCookie, setSignedCookie } from "hono/cookie";
 import { StatusCodes } from "http-status-codes";
 
-import { buildAuthorizationUrl, exchangeCodeForProfile } from "@/auth/oauth";
 import {
   OAUTH_COOKIE_NAME,
+  type OAuthCookiePayload,
   SESSION_COOKIE_NAME,
   cookieOptions,
-  type OAuthCookiePayload
+  oauthCookiePayloadSchema,
 } from "@/auth/http";
+import { InvalidOAuthCallbackError, OAuthStateMismatchError, ProviderEmailNotVerifiedError } from "@/errors";
 import type { AppContext } from "@/hono";
+import type { OAuthStartQueryInput, RefreshTokenBodyInput, RevokeTokenBodyInput } from "@/validation/auth";
+
+/** Cookie max-age for the OAuth state cookie, in seconds (10 minutes). */
+const OAUTH_STATE_COOKIE_MAX_AGE_SECONDS = 10 * 60;
 
 function isLoopbackHost(hostname: string): boolean {
   return hostname === "127.0.0.1" || hostname === "localhost" || hostname === "::1";
@@ -41,25 +46,24 @@ function parseCliRedirectUri(value: string | undefined): string | null {
   return parsed.toString();
 }
 
-export async function startOAuthHandler(c: AppContext) {
+export async function startOAuthHandler(c: AppContext, query: OAuthStartQueryInput) {
   const providerParam = c.get("oauthProvider");
   const config = c.get("config");
+  const authService = c.get("services").auth;
   const oauthBaseUrl = config.appBaseUrl;
-  const { authorizationUrl, state, codeVerifier } = await buildAuthorizationUrl(
+  const { authorizationUrl, state, codeVerifier } = await authService.buildOAuthAuthorizationUrl(
     providerParam,
-    config,
-    oauthBaseUrl
+    oauthBaseUrl,
   );
 
-  const responseModeParam = c.req.query("mode");
-  const responseMode = responseModeParam === "token" || responseModeParam === "cli" ? responseModeParam : undefined;
-  const cliRedirectUri = parseCliRedirectUri(c.req.query("redirect_uri"));
-  const cliState = c.req.query("state");
+  const responseMode = query.mode;
+  const cliRedirectUri = parseCliRedirectUri(query.redirect_uri);
+  const cliState = query.state;
 
   if (responseMode === "cli" && (!cliRedirectUri || !cliState)) {
     return c.json(
       { error: "mode=cli requires valid redirect_uri and state query parameters" },
-      StatusCodes.BAD_REQUEST
+      StatusCodes.BAD_REQUEST,
     );
   }
 
@@ -70,13 +74,13 @@ export async function startOAuthHandler(c: AppContext) {
     createdAt: Date.now(),
     callbackBaseUrl: oauthBaseUrl,
     responseMode,
-    cliRedirectUri: responseMode === "cli" ? cliRedirectUri ?? undefined : undefined,
-    cliState: responseMode === "cli" ? cliState ?? undefined : undefined
+    cliRedirectUri: responseMode === "cli" ? (cliRedirectUri ?? undefined) : undefined,
+    cliState: responseMode === "cli" ? (cliState ?? undefined) : undefined,
   };
 
   await setSignedCookie(c, OAUTH_COOKIE_NAME, JSON.stringify(payload), config.sessionSecret, {
     ...cookieOptions(c.req.url, config.cookieDomain),
-    maxAge: 10 * 60
+    maxAge: OAUTH_STATE_COOKIE_MAX_AGE_SECONDS,
   });
 
   return c.redirect(authorizationUrl, StatusCodes.MOVED_TEMPORARILY);
@@ -93,59 +97,50 @@ export async function callbackOAuthHandler(c: AppContext) {
   deleteCookie(c, OAUTH_COOKIE_NAME, cookieOptions(c.req.url, config.cookieDomain));
 
   if (!state || !code || !rawCookie) {
-    return c.json({ error: "Invalid OAuth callback payload" }, StatusCodes.BAD_REQUEST);
+    throw new InvalidOAuthCallbackError("missing state, code or OAuth cookie");
   }
 
   let oauthContext: OAuthCookiePayload;
 
   try {
-    oauthContext = JSON.parse(rawCookie) as OAuthCookiePayload;
+    oauthContext = oauthCookiePayloadSchema.parse(JSON.parse(rawCookie));
   } catch {
-    return c.json({ error: "Invalid OAuth state" }, StatusCodes.BAD_REQUEST);
+    throw new InvalidOAuthCallbackError("malformed OAuth cookie payload");
   }
 
-  const isFresh = Date.now() - oauthContext.createdAt <= 10 * 60 * 1000;
-
-  if (
-    !isFresh ||
-    oauthContext.state !== state ||
-    oauthContext.provider !== providerParam
-  ) {
-    return c.json({ error: "OAuth state mismatch" }, StatusCodes.BAD_REQUEST);
+  // No manual freshness check needed — the cookie is set with maxAge: 600 so an
+  // expired cookie is never returned by getSignedCookie.
+  if (oauthContext.state !== state || oauthContext.provider !== providerParam) {
+    throw new OAuthStateMismatchError();
   }
 
-  const profile = await exchangeCodeForProfile(
+  const profile = await authService.exchangeOAuthCodeForProfile(
     providerParam,
     code,
     oauthContext.codeVerifier,
-    config,
-    oauthContext.callbackBaseUrl
+    oauthContext.callbackBaseUrl ?? config.appBaseUrl,
   );
 
   if (!profile.emailVerified) {
-    return c.json({ error: "Provider email must be verified" }, StatusCodes.BAD_REQUEST);
+    throw new ProviderEmailNotVerifiedError();
   }
 
   const userId = await authService.resolveUserIdForOAuthProfile(profile);
 
   const responseMode = oauthContext.responseMode ?? c.req.query("mode");
 
-  const session = await authService.createWebSession(userId, config.sessionTtlDays);
-  setCookie(c, SESSION_COOKIE_NAME, session.token, {
-    ...cookieOptions(c.req.url, config.cookieDomain),
-    expires: session.expiresAt
-  });
-
   if (responseMode === "token") {
+    // Bearer-token clients do not use the session cookie — skip creating it.
     const tokens = await authService.issueApiTokens(userId);
     return c.json({ userId, tokens });
   }
 
   if (responseMode === "cli") {
     if (!oauthContext.cliRedirectUri || !oauthContext.cliState) {
-      return c.json({ error: "Invalid OAuth CLI context" }, StatusCodes.BAD_REQUEST);
+      throw new InvalidOAuthCallbackError("missing CLI redirect_uri or state");
     }
 
+    // CLI mode uses a bearer token redirected to the local callback server — no cookie needed.
     const tokens = await authService.issueApiTokens(userId);
     const redirectUrl = new URL(oauthContext.cliRedirectUri);
     redirectUrl.searchParams.set("state", oauthContext.cliState);
@@ -158,6 +153,13 @@ export async function callbackOAuthHandler(c: AppContext) {
 
     return c.redirect(redirectUrl.toString(), StatusCodes.MOVED_TEMPORARILY);
   }
+
+  // Default (web) mode: create a session cookie.
+  const session = await authService.createWebSession(userId, config.sessionTtlDays);
+  setCookie(c, SESSION_COOKIE_NAME, session.token, {
+    ...cookieOptions(c.req.url, config.cookieDomain),
+    expires: session.expiresAt,
+  });
 
   return c.redirect(new URL("/", config.appBaseUrl).toString(), StatusCodes.MOVED_TEMPORARILY);
 }
@@ -182,23 +184,11 @@ export async function issueTokenHandler(c: AppContext) {
   const tokens = await authService.issueApiTokens(sessionUser.id);
   return c.json({
     tokenType: "Bearer",
-    ...tokens
+    ...tokens,
   });
 }
 
-export async function refreshTokenHandler(c: AppContext) {
-  let body: { refreshToken?: string };
-
-  try {
-    body = await c.req.json<{ refreshToken?: string }>();
-  } catch {
-    return c.json({ error: "Invalid JSON body" }, StatusCodes.BAD_REQUEST);
-  }
-
-  if (!body.refreshToken) {
-    return c.json({ error: "refreshToken is required" }, StatusCodes.BAD_REQUEST);
-  }
-
+export async function refreshTokenHandler(c: AppContext, body: RefreshTokenBodyInput) {
   const authService = c.get("services").auth;
   const refreshed = await authService.refreshApiTokens(body.refreshToken);
 
@@ -208,23 +198,11 @@ export async function refreshTokenHandler(c: AppContext) {
 
   return c.json({
     tokenType: "Bearer",
-    ...refreshed
+    ...refreshed,
   });
 }
 
-export async function revokeTokenHandler(c: AppContext) {
-  let body: { refreshToken?: string };
-
-  try {
-    body = await c.req.json<{ refreshToken?: string }>();
-  } catch {
-    return c.json({ error: "Invalid JSON body" }, StatusCodes.BAD_REQUEST);
-  }
-
-  if (!body.refreshToken) {
-    return c.json({ error: "refreshToken is required" }, StatusCodes.BAD_REQUEST);
-  }
-
+export async function revokeTokenHandler(c: AppContext, body: RevokeTokenBodyInput) {
   const authService = c.get("services").auth;
   await authService.revokeApiRefreshToken(body.refreshToken);
 

@@ -1,20 +1,34 @@
-import type { AppDb } from "@/db/client";
-import { OrganizationService } from "@/services/organization-service";
-import { ScheduledJobService } from "@/services/scheduled-job-service";
 import type { ScheduledDbEnv } from "@/scheduled/db";
-import { publishViaQStash, type DispatchMessage, type QStashEnv } from "@/scheduled/qstash";
+import { type DispatchMessage, type QStashEnv, publishViaQStash } from "@/scheduled/qstash";
+import type { JobEvaluatorService } from "@/services/job-evaluator-service";
 
 const EVALUATE_LIMIT = 500;
 const STALE_THRESHOLD_MINUTES = 5;
 
+/**
+ * Hard deadline for a single evaluator run, in milliseconds (50 seconds).
+ *
+ * The cron fires every 60 s. Setting the deadline to 50 s ensures the evaluator
+ * finishes before the next tick, preventing overlapping evaluations when the DB
+ * or QStash is temporarily slow.
+ */
+const EVALUATOR_TIMEOUT_MS = 50_000;
+
 export type EvaluatorEnv = ScheduledDbEnv & QStashEnv;
 
-export async function handleEvaluateJobs(db: AppDb, env: EvaluatorEnv): Promise<void> {
-  try {
-    const orgService = new OrganizationService(db);
-    const jobService = new ScheduledJobService(db, orgService);
+function timeoutAfter(ms: number): Promise<never> {
+  return new Promise((_, reject) =>
+    setTimeout(() => reject(new Error(`[evaluator] Timed out after ${ms}ms`)), ms),
+  );
+}
 
-    const pendingRuns = await jobService.evaluateDueJobs({ limit: EVALUATE_LIMIT });
+export async function handleEvaluateJobs(jobEvaluatorService: JobEvaluatorService, env: EvaluatorEnv): Promise<void> {
+  await Promise.race([runEvaluator(jobEvaluatorService, env), timeoutAfter(EVALUATOR_TIMEOUT_MS)]);
+}
+
+async function runEvaluator(jobEvaluatorService: JobEvaluatorService, env: EvaluatorEnv): Promise<void> {
+  try {
+    const pendingRuns = await jobEvaluatorService.evaluateDueJobs({ limit: EVALUATE_LIMIT });
 
     if (pendingRuns.length === 0) {
       return;
@@ -28,17 +42,15 @@ export async function handleEvaluateJobs(db: AppDb, env: EvaluatorEnv): Promise<
       prompt: run.job.prompt,
       model: run.job.model ?? "",
       command: run.job.command ?? "",
-      scheduledFor: run.scheduledFor.toISOString()
+      scheduledFor: run.scheduledFor.toISOString(),
     }));
 
     const published = await publishViaQStash(env, messages);
 
-    console.log(
-      `[evaluator] Evaluated ${pendingRuns.length} due jobs, dispatched ${published} via QStash`
-    );
+    console.log(`[evaluator] Evaluated ${pendingRuns.length} due jobs, dispatched ${published} via QStash`);
 
-    const staleCount = await jobService.markStaleRunsOffline({
-      staleThresholdMinutes: STALE_THRESHOLD_MINUTES
+    const staleCount = await jobEvaluatorService.markStaleRunsOffline({
+      staleThresholdMinutes: STALE_THRESHOLD_MINUTES,
     });
 
     if (staleCount > 0) {

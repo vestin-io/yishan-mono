@@ -53,6 +53,7 @@ type StartConfig struct {
 }
 
 func Run(cfg RunConfig, statePath string) error {
+	// ── Phase 1: stale state guard ─────────────────────────────────────────
 	state, err := LoadState(statePath)
 	if err == nil {
 		if IsProcessRunning(state.PID) {
@@ -65,6 +66,7 @@ func Run(cfg RunConfig, statePath string) error {
 		return fmt.Errorf("load daemon state: %w", err)
 	}
 
+	// ── Phase 2: TCP listener ──────────────────────────────────────────────
 	listener, err := net.Listen("tcp", net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port)))
 	if err != nil {
 		return fmt.Errorf("listen daemon server: %w", err)
@@ -90,6 +92,7 @@ func Run(cfg RunConfig, statePath string) error {
 	}
 	currentPID := os.Getpid()
 
+	// ── Phase 3: handler + auth + relay status ─────────────────────────────
 	workspaceManager := workspace.NewManager()
 	handler := NewJSONRPCHandler(workspaceManager, daemonID, cfg.LogFilePath)
 	auth := NewJWTAuth(JWTAuthConfig{
@@ -101,9 +104,9 @@ func Run(cfg RunConfig, statePath string) error {
 	if err := auth.ValidateConfig(); err != nil {
 		return err
 	}
-
 	relayStatus := NewRelayStatus(cfg.RelayEnabled, cfg.RelayURL)
 
+	// ── Phase 4: HTTP server ───────────────────────────────────────────────
 	mux := http.NewServeMux()
 	mux.Handle("/ws", auth.Middleware(handler))
 	mux.HandleFunc(agentHookIngestPath, handler.ServeAgentHook)
@@ -117,53 +120,37 @@ func Run(cfg RunConfig, statePath string) error {
 			"relay":    relayStatus.Snapshot(),
 		})
 	})
-
 	server := &http.Server{
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	if err := SaveState(statePath, RuntimeState{
-		PID:       currentPID,
-		Host:      cfg.Host,
-		Port:      tcpAddr.Port,
-		StartedAt: time.Now().UTC(),
-	}); err != nil {
-		return fmt.Errorf("save daemon state: %w", err)
+	// ── Phase 5: persist state + env setup + node registration + relay ─────
+	if err := startDaemonServices(cfg, statePath, actualAddr, daemonID, currentPID, tcpAddr.Port, handler, relayStatus); err != nil {
+		return err
 	}
-	_ = os.Setenv("YISHAN_HOOK_INGRESS_URL", "http://"+actualAddr+agentHookIngestPath)
-	setup.EnsureManagedAgentRuntime()
 	defer func() {
 		if err := RemoveState(statePath); err != nil {
 			log.Warn().Err(err).Msg("failed to remove daemon state file")
 		}
 	}()
 
-	if cliruntime.APIConfigured() {
-		agentDetectionStatus := clidetector.ListAgentCLIDetectionStatuses()
-		if err := registerRemoteNode(NodeRegistration{
-			ID:                   daemonID,
-			Endpoint:             "http://" + actualAddr,
-			AgentDetectionStatus: agentDetectionStatus,
-		}); err != nil {
-			if isReauthRequiredError(err) {
-				log.Warn().Err(err).Msg("daemon started without remote node registration; re-authentication required")
-			} else {
-				return fmt.Errorf("register daemon node: %w", err)
-			}
-		}
-	}
-
-	if cfg.RelayEnabled && cfg.RelayURL != "" {
-		go runRelayClientLoop(handler, daemonID, cfg.RelayURL, relayStatus)
-	}
-
+	// ── Phase 6: signal handling + serve ──────────────────────────────────
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(stop)
 
+	shutdownCtx, cancelShutdown := context.WithCancel(context.Background())
+	defer cancelShutdown()
+
+	if cfg.RelayEnabled && cfg.RelayURL != "" {
+		go runRelayClientLoop(shutdownCtx, handler, daemonID, cfg.RelayURL, relayStatus)
+	}
+
 	go func() {
 		<-stop
+		cancelShutdown()
+		handler.Shutdown()
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := server.Shutdown(ctx); err != nil {
@@ -182,6 +169,39 @@ func Run(cfg RunConfig, statePath string) error {
 	}
 
 	log.Debug().Msg("daemon server stopped")
+	return nil
+}
+
+// startDaemonServices handles the most complex startup phase: persisting daemon
+// state, setting up the hook ingress env var, running managed agent runtime
+// setup, registering the daemon as a remote node if API credentials are
+// configured, and initialising the relay client goroutine.
+func startDaemonServices(cfg RunConfig, statePath string, actualAddr string, daemonID string, currentPID int, actualPort int, handler *JSONRPCHandler, relayStatus *RelayStatus) error {
+	if err := SaveState(statePath, RuntimeState{
+		PID:       currentPID,
+		Host:      cfg.Host,
+		Port:      actualPort,
+		StartedAt: time.Now().UTC(),
+	}); err != nil {
+		return fmt.Errorf("save daemon state: %w", err)
+	}
+	_ = os.Setenv("YISHAN_HOOK_INGRESS_URL", "http://"+actualAddr+agentHookIngestPath)
+	setup.EnsureManagedAgentRuntime()
+
+	if cliruntime.APIConfigured() {
+		agentDetectionStatus := clidetector.ListAgentCLIDetectionStatuses()
+		if err := registerRemoteNode(NodeRegistration{
+			ID:                   daemonID,
+			Endpoint:             "http://" + actualAddr,
+			AgentDetectionStatus: agentDetectionStatus,
+		}); err != nil {
+			if isReauthRequiredError(err) {
+				log.Warn().Err(err).Msg("daemon started without remote node registration; re-authentication required")
+			} else {
+				return fmt.Errorf("register daemon node: %w", err)
+			}
+		}
+	}
 	return nil
 }
 
@@ -291,7 +311,10 @@ func StartDetached(cfg StartConfig) (int, error) {
 	return pid, nil
 }
 
-func IsHealthy(state RuntimeState, timeout time.Duration) bool {
+// ProbeHealth performs a live HTTP GET to the daemon's /healthz endpoint.
+// It returns true only if the daemon responds with HTTP 200 within the given timeout.
+// Unlike a simple state predicate, this function performs network I/O.
+func ProbeHealth(state RuntimeState, timeout time.Duration) bool {
 	if state.Host == "" || state.Port <= 0 {
 		return false
 	}
@@ -310,7 +333,7 @@ func WaitForReady(statePath string, timeout time.Duration) (RuntimeState, error)
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		state, err := LoadState(statePath)
-		if err == nil && IsProcessRunning(state.PID) && IsHealthy(state, 250*time.Millisecond) {
+		if err == nil && IsProcessRunning(state.PID) && ProbeHealth(state, 250*time.Millisecond) {
 			return state, nil
 		}
 		time.Sleep(200 * time.Millisecond)

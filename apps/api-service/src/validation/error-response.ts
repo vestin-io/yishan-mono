@@ -14,8 +14,8 @@ function normalizeValidationIssues(error: unknown): ValidationIssue[] {
       {
         path: "",
         message: "Validation failed",
-        code: "invalid_request"
-      }
+        code: "invalid_request",
+      },
     ];
   }
 
@@ -30,7 +30,9 @@ function normalizeValidationIssues(error: unknown): ValidationIssue[] {
   });
 }
 
-export const validationErrorResponse = (result: any, c: Context) => {
+type ValidationHookResult = { success: boolean; error?: unknown };
+
+export const validationErrorResponse = (result: ValidationHookResult, c: Context) => {
   if (result.success) {
     return;
   }
@@ -40,8 +42,8 @@ export const validationErrorResponse = (result: any, c: Context) => {
     {
       error: appError.message,
       code: appError.code,
-      ...(appError.details ?? {})
+      ...(appError.details ?? {}),
     },
-    appError.status as ContentfulStatusCode
+    appError.status as ContentfulStatusCode,
   );
 };

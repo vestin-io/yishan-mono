@@ -1,22 +1,15 @@
+import type { AgentKind } from "@yishan/core";
 import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
-import {
-  boolean,
-  integer,
-  jsonb,
-  index,
-  pgTable,
-  text,
-  timestamp,
-  uniqueIndex
-} from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 export type NodeScope = "private" | "shared";
+export type OrganizationMemberRole = "owner" | "admin" | "member";
 export type ProjectSourceType = "git" | "git-local" | "unknown";
 export type WorkspaceKind = "primary" | "worktree";
 export type WorkspaceStatus = "active" | "closed";
 export type WorkspacePullRequestState = "open" | "closed" | "merged";
 export type ScheduledJobStatus = "active" | "paused" | "disabled";
-export type ScheduledAgentKind = "opencode" | "codex" | "claude" | "gemini" | "pi" | "copilot" | "cursor";
+export type ScheduledAgentKind = AgentKind;
 export type ScheduledJobRunStatus = "pending" | "running" | "succeeded" | "failed" | "skipped_offline";
 
 export const users = pgTable("users", {
@@ -26,7 +19,7 @@ export const users = pgTable("users", {
   avatarUrl: text("avatar_url"),
   userPreferences: jsonb("user_preferences"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 export const oauthAccounts = pgTable(
@@ -38,15 +31,12 @@ export const oauthAccounts = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     provider: text("provider").notNull(),
     providerUserId: text("provider_user_id").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
-    uniqueIndex("oauth_accounts_provider_provider_user_id_uq").on(
-      table.provider,
-      table.providerUserId
-    ),
-    uniqueIndex("oauth_accounts_user_id_provider_uq").on(table.userId, table.provider)
-  ]
+    uniqueIndex("oauth_accounts_provider_provider_user_id_uq").on(table.provider, table.providerUserId),
+    uniqueIndex("oauth_accounts_user_id_provider_uq").on(table.userId, table.provider),
+  ],
 );
 
 export const sessions = pgTable(
@@ -58,13 +48,13 @@ export const sessions = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     tokenHash: text("token_hash").notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     uniqueIndex("sessions_token_hash_uq").on(table.tokenHash),
     index("sessions_user_id_idx").on(table.userId),
-    index("sessions_expires_at_idx").on(table.expiresAt)
-  ]
+    index("sessions_expires_at_idx").on(table.expiresAt),
+  ],
 );
 
 export const refreshTokens = pgTable(
@@ -78,13 +68,13 @@ export const refreshTokens = pgTable(
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
     replacedByTokenId: text("replaced_by_token_id"),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     uniqueIndex("refresh_tokens_token_hash_uq").on(table.tokenHash),
     index("refresh_tokens_user_id_idx").on(table.userId),
-    index("refresh_tokens_expires_at_idx").on(table.expiresAt)
-  ]
+    index("refresh_tokens_expires_at_idx").on(table.expiresAt),
+  ],
 );
 
 export const organizations = pgTable(
@@ -93,9 +83,9 @@ export const organizations = pgTable(
     id: text("id").primaryKey(),
     name: text("name").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [index("organizations_created_at_idx").on(table.createdAt)]
+  (table) => [index("organizations_created_at_idx").on(table.createdAt)],
 );
 
 export const organizationMembers = pgTable(
@@ -109,13 +99,13 @@ export const organizationMembers = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     role: text("role").notNull().default("member"),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     uniqueIndex("organization_members_org_id_user_id_uq").on(table.organizationId, table.userId),
     index("organization_members_org_id_idx").on(table.organizationId),
-    index("organization_members_user_id_idx").on(table.userId)
-  ]
+    index("organization_members_user_id_idx").on(table.userId),
+  ],
 );
 
 export const nodes = pgTable(
@@ -132,14 +122,14 @@ export const nodes = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     index("nodes_scope_idx").on(table.scope),
     index("nodes_owner_user_id_idx").on(table.ownerUserId),
     index("nodes_organization_id_idx").on(table.organizationId),
-    index("nodes_created_by_user_id_idx").on(table.createdByUserId)
-  ]
+    index("nodes_created_by_user_id_idx").on(table.createdByUserId),
+  ],
 );
 
 export const projects = pgTable(
@@ -163,18 +153,14 @@ export const projects = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     index("projects_organization_id_idx").on(table.organizationId),
     index("projects_source_type_idx").on(table.sourceType),
     index("projects_created_by_user_id_idx").on(table.createdByUserId),
-    uniqueIndex("projects_org_repo_provider_key_uq").on(
-      table.organizationId,
-      table.repoProvider,
-      table.repoKey
-    )
-  ]
+    uniqueIndex("projects_org_repo_provider_key_uq").on(table.organizationId, table.repoProvider, table.repoKey),
+  ],
 );
 
 export const workspaces = pgTable(
@@ -199,7 +185,7 @@ export const workspaces = pgTable(
     sourceBranch: text("source_branch"),
     localPath: text("local_path").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     index("workspaces_organization_id_idx").on(table.organizationId),
@@ -213,9 +199,9 @@ export const workspaces = pgTable(
       table.userId,
       table.nodeId,
       table.kind,
-      table.branch
-    )
-  ]
+      table.branch,
+    ),
+  ],
 );
 
 export const workspacePullRequests = pgTable(
@@ -238,14 +224,14 @@ export const workspacePullRequests = pgTable(
     detectedAt: timestamp("detected_at", { withTimezone: true }).notNull(),
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     uniqueIndex("workspace_pull_requests_workspace_id_pr_id_uq").on(table.workspaceId, table.prId),
     index("workspace_pull_requests_workspace_id_idx").on(table.workspaceId),
     index("workspace_pull_requests_organization_id_idx").on(table.organizationId),
-    index("workspace_pull_requests_state_idx").on(table.state)
-  ]
+    index("workspace_pull_requests_state_idx").on(table.state),
+  ],
 );
 
 export const scheduledJobs = pgTable(
@@ -279,7 +265,7 @@ export const scheduledJobs = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     index("scheduled_jobs_organization_id_idx").on(table.organizationId),
@@ -287,8 +273,8 @@ export const scheduledJobs = pgTable(
     index("scheduled_jobs_node_id_idx").on(table.nodeId),
     index("scheduled_jobs_status_idx").on(table.status),
     index("scheduled_jobs_next_run_at_idx").on(table.nextRunAt),
-    index("scheduled_jobs_created_by_user_id_idx").on(table.createdByUserId)
-  ]
+    index("scheduled_jobs_created_by_user_id_idx").on(table.createdByUserId),
+  ],
 );
 
 export const scheduledJobRuns = pgTable(
@@ -315,7 +301,7 @@ export const scheduledJobRuns = pgTable(
     errorCode: text("error_code"),
     errorMessage: text("error_message"),
     errorDetails: jsonb("error_details"),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     uniqueIndex("scheduled_job_runs_job_id_scheduled_for_uq").on(table.jobId, table.scheduledFor),
@@ -323,8 +309,8 @@ export const scheduledJobRuns = pgTable(
     index("scheduled_job_runs_project_id_idx").on(table.projectId),
     index("scheduled_job_runs_node_id_idx").on(table.nodeId),
     index("scheduled_job_runs_status_idx").on(table.status),
-    index("scheduled_job_runs_scheduled_for_idx").on(table.scheduledFor)
-  ]
+    index("scheduled_job_runs_scheduled_for_idx").on(table.scheduledFor),
+  ],
 );
 
 export type User = InferSelectModel<typeof users>;

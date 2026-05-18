@@ -1,8 +1,8 @@
 import { and, eq, inArray, or } from "drizzle-orm";
 
+import { signRelayToken } from "@/auth/security";
 import type { AppDb } from "@/db/client";
 import { nodes, organizationMembers } from "@/db/schema";
-import { signRelayToken } from "@/auth/security";
 import {
   NodeDeletePermissionRequiredError,
   NodeNotFoundError,
@@ -30,15 +30,6 @@ export type NodeView = {
   isOnline: boolean;
 };
 
-type CreateNodeInput = {
-  actorUserId: string;
-  organizationId: string;
-  name: string;
-  scope: NodeScope;
-  endpoint?: string | null;
-  metadata?: Record<string, unknown>;
-};
-
 type RegisterNodeInput = {
   actorUserId: string;
   nodeId: string;
@@ -48,6 +39,16 @@ type RegisterNodeInput = {
   metadata?: Record<string, unknown>;
   updateIfExists?: boolean;
 };
+
+/** Shape of one entry in the relay `/api/v1/metrics` connectedSessions array. */
+type RelaySession = {
+  nodeId: string;
+  daemonVersion?: string;
+};
+
+function isRelaySession(value: unknown): value is RelaySession {
+  return typeof value === "object" && value !== null && typeof (value as Record<string, unknown>).nodeId === "string";
+}
 
 export class NodeService {
   constructor(
@@ -69,8 +70,8 @@ export class NodeService {
     try {
       const response = await fetch(new URL("/api/v1/metrics", relayUrl), {
         headers: {
-          Authorization: `Bearer ${relayApiToken}`
-        }
+          Authorization: `Bearer ${relayApiToken}`,
+        },
       });
 
       if (!response.ok) {
@@ -82,15 +83,9 @@ export class NodeService {
       // Prefer the richer connectedSessions view when available.
       if (Array.isArray(body.connectedSessions)) {
         for (const s of body.connectedSessions) {
-          if (s && typeof s === "object" && typeof (s as any).nodeId === "string") {
-            const nodeId = (s as any).nodeId as string;
-            const daemonVersion = typeof (s as any).daemonVersion === "string" ? ((s as any).daemonVersion as string) : "";
-            if (daemonVersion) {
-              result.set(nodeId, daemonVersion);
-            } else {
-              // Mark as online with empty version so callers can still detect online state.
-              result.set(nodeId, "");
-            }
+          if (isRelaySession(s)) {
+            const daemonVersion = s.daemonVersion ?? "";
+            result.set(s.nodeId, daemonVersion);
           }
         }
         return result;
@@ -106,7 +101,8 @@ export class NodeService {
       }
 
       return result;
-    } catch {
+    } catch (error) {
+      console.warn("[NodeService] Failed to fetch relay metrics — treating all nodes as offline:", error);
       return result;
     }
   }
@@ -119,77 +115,19 @@ export class NodeService {
     return value as Record<string, unknown>;
   }
 
-  async createNode(input: CreateNodeInput): Promise<NodeView> {
-    return this.db.transaction(async (tx) => {
-      const actorMembershipRows = await tx
-        .select({ role: organizationMembers.role })
-        .from(organizationMembers)
-        .where(
-          and(
-            eq(organizationMembers.organizationId, input.organizationId),
-            eq(organizationMembers.userId, input.actorUserId),
-          ),
-        )
-        .limit(1);
-
-      const actorRole = actorMembershipRows[0]?.role;
-      if (!actorRole) {
-        throw new OrganizationMembershipRequiredError();
-      }
-
-      let organizationId: string | null = null;
-      let ownerUserId: string | null = null;
-
-      if (input.scope === "shared") {
-        if (actorRole !== "owner" && actorRole !== "admin") {
-          throw new OrganizationNodePermissionRequiredError();
-        }
-
-        organizationId = input.organizationId;
-      } else {
-        ownerUserId = input.actorUserId;
-      }
-
-      const insertedRows = await tx
-        .insert(nodes)
-        .values({
-          id: newId(),
-          name: input.name,
-          scope: input.scope,
-          endpoint: input.endpoint ?? null,
-          metadata: input.metadata ?? null,
-          ownerUserId,
-          organizationId,
-          createdByUserId: input.actorUserId,
-        })
-        .returning();
-
-      const node = insertedRows[0];
-      if (!node) {
-        throw new Error("Failed to create node");
-      }
-
-      return {
-        ...node,
-        canUse: true,
-        metadata: this.normalizeMetadata(node.metadata),
-        scope: node.scope,
-        isOnline: false,
-      };
-    });
-  }
-
   async listNodes(input: { actorUserId: string; organizationId: string }): Promise<NodeView[]> {
-    const actorRole = await this.organizationService.getMembershipRole({
-      organizationId: input.organizationId,
-      userId: input.actorUserId,
-    });
+    const [actorRole, orgMemberUserIds] = await Promise.all([
+      this.organizationService.getMembershipRole({
+        organizationId: input.organizationId,
+        userId: input.actorUserId,
+      }),
+      this.organizationService.getOrganizationMemberUserIds(input.organizationId),
+    ]);
 
     if (!actorRole) {
       throw new OrganizationMembershipRequiredError();
     }
 
-    const orgMemberUserIds = await this.organizationService.getOrganizationMemberUserIds(input.organizationId);
     if (orgMemberUserIds.length === 0) {
       return [];
     }
@@ -368,9 +306,6 @@ export class NodeService {
   async issueRelayToken(input: {
     actorUserId: string;
     nodeId: string;
-    jwtSecret: string;
-    jwtIssuer: string;
-    jwtAudience: string;
   }): Promise<{ token: string; expiresAt: string }> {
     const rows = await this.db
       .select({ id: nodes.id, ownerUserId: nodes.ownerUserId })
@@ -391,10 +326,10 @@ export class NodeService {
       {
         sub: input.actorUserId,
         nodeId: input.nodeId,
-        iss: input.jwtIssuer,
-        aud: input.jwtAudience,
+        iss: this.config.jwtIssuer,
+        aud: this.config.jwtAudience,
       },
-      input.jwtSecret,
+      this.config.jwtAccessSecret,
     );
   }
 }

@@ -1,21 +1,22 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { isDevMode } from "../runtime/environment";
+import {
+  DAEMON_HEALTH_RETRY_COUNT,
+  DAEMON_HEALTH_RETRY_DELAY_MS,
+  DAEMON_PRECHECK_HEALTH_RETRY_COUNT,
+  DAEMON_PRECHECK_HEALTH_RETRY_DELAY_MS,
+  DEV_DAEMON_HEALTH_RETRY_COUNT,
+  type DaemonInfo,
+  fetchDaemonInfo,
+  firstExistingPath,
+  waitForDaemonHealthy,
+} from "./daemonHealthCheck";
 
 const DAEMON_START_ARGS = ["daemon", "start", "--jwt-required=true"];
 const DAEMON_DEV_RELAY_URL = "http://127.0.0.1:8788";
 const DAEMON_STOP_ARGS = ["daemon", "stop"];
-const DAEMON_STATE_FILE_NAME = "daemon.state.json";
-const DAEMON_ID_FILE_NAME = "daemon.id";
-const DAEMON_HEALTH_RETRY_COUNT = 24;
-const DAEMON_HEALTH_RETRY_DELAY_MS = 50;
-const DAEMON_PRECHECK_HEALTH_RETRY_COUNT = 1;
-const DAEMON_PRECHECK_HEALTH_RETRY_DELAY_MS = 20;
-/** Dev mode uses go run . which compiles from source — need longer timeout for cold build cache. */
-const DEV_DAEMON_HEALTH_RETRY_COUNT = 200;
 const CLI_COMMAND_TIMEOUT_MS = 30_000;
 const DEV_DAEMON_STOP_TIMEOUT_MS = 5_000;
 const CLI_COMMAND_TERM_GRACE_MS = 1_000;
@@ -44,41 +45,6 @@ type DaemonManagerOptions = {
   fetch?: typeof fetch;
 };
 
-type DaemonRelayInfo = {
-  enabled: boolean;
-  url: string;
-  connected: boolean;
-  connectedAt?: string;
-  lastError?: string;
-  lastErrorAt?: string;
-};
-
-type DaemonInfo = {
-  version: string;
-  daemonId: string;
-  wsUrl: string;
-  relay?: DaemonRelayInfo;
-};
-
-type DaemonState = {
-  host: string;
-  port: number;
-};
-
-function firstExistingPath(candidates: Array<string | undefined>): string | undefined {
-  for (const candidate of candidates) {
-    const value = candidate?.trim();
-    if (!value) {
-      continue;
-    }
-    if (existsSync(value)) {
-      return value;
-    }
-  }
-
-  return undefined;
-}
-
 function resolveDevCliDir(): string | undefined {
   return firstExistingPath([
     process.env.YISHAN_CLI_DEV_DIR,
@@ -87,106 +53,6 @@ function resolveDevCliDir(): string | undefined {
     resolve(process.cwd(), "..", "apps", "cli"),
     resolve(process.cwd(), "..", "..", "apps", "cli"),
   ]);
-}
-
-function resolveCliProfileName(): string {
-  if (isDevMode()) {
-    return "dev";
-  }
-
-  return process.env.YISHAN_PROFILE?.trim() || "default";
-}
-
-function resolveDaemonStateFilePath(): string {
-  return resolve(homedir(), ".yishan", "profiles", resolveCliProfileName(), DAEMON_STATE_FILE_NAME);
-}
-
-function resolveDaemonIdFilePath(): string {
-  return resolve(homedir(), ".yishan", "profiles", resolveCliProfileName(), DAEMON_ID_FILE_NAME);
-}
-
-function isFileNotFoundError(error: unknown): boolean {
-  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
-}
-
-async function readPersistedDaemonId(): Promise<string> {
-  try {
-    const raw = await readFile(resolveDaemonIdFilePath(), "utf8");
-    return raw.trim();
-  } catch {
-    return "";
-  }
-}
-
-async function readDaemonState(): Promise<DaemonState> {
-  const stateFilePath = resolveDaemonStateFilePath();
-  let stateRaw: string;
-  try {
-    stateRaw = await readFile(stateFilePath, "utf8");
-  } catch (error) {
-    if (isFileNotFoundError(error)) {
-      throw new Error(`daemon state file not found: ${stateFilePath}`);
-    }
-    throw error;
-  }
-
-  const parsed = JSON.parse(stateRaw) as { host?: unknown; port?: unknown };
-  const host = typeof parsed.host === "string" ? parsed.host.trim() : "";
-  const port = typeof parsed.port === "number" ? parsed.port : 0;
-  if (!host || port <= 0) {
-    throw new Error("daemon state is invalid");
-  }
-
-  return { host, port };
-}
-
-function resolveDaemonWsUrlFromHealthUrl(healthUrl: string): string {
-  try {
-    const parsed = new URL(healthUrl);
-    const protocol = parsed.protocol === "https:" ? "wss:" : "ws:";
-    return `${protocol}//${parsed.host}/ws`;
-  } catch {
-    return "";
-  }
-}
-
-async function resolveDaemonHealthUrl(): Promise<string> {
-  const explicitHealthUrl = process.env.YISHAN_DAEMON_HEALTH_URL?.trim();
-  if (explicitHealthUrl) {
-    return explicitHealthUrl;
-  }
-
-  const explicitWsUrl = process.env.YISHAN_DAEMON_WS_URL?.trim();
-  if (explicitWsUrl) {
-    try {
-      const parsed = new URL(explicitWsUrl);
-      const protocol = parsed.protocol === "wss:" ? "https:" : "http:";
-      return `${protocol}//${parsed.host}/healthz`;
-    } catch {
-      // fall through to daemon state file
-    }
-  }
-
-  const state = await readDaemonState();
-  return `http://${state.host}:${state.port}/healthz`;
-}
-
-async function resolveDaemonWebSocketUrl(): Promise<string> {
-  const explicitWsUrl = process.env.YISHAN_DAEMON_WS_URL?.trim();
-  if (explicitWsUrl) {
-    return explicitWsUrl;
-  }
-
-  const explicitHealthUrl = process.env.YISHAN_DAEMON_HEALTH_URL?.trim();
-  if (explicitHealthUrl) {
-    const inferredWsUrl = resolveDaemonWsUrlFromHealthUrl(explicitHealthUrl);
-    if (inferredWsUrl) {
-      return inferredWsUrl;
-    }
-  }
-
-  const state = await readDaemonState();
-  return `ws://${state.host}:${state.port}/ws`;
 }
 
 function resolveCliInvocation(): CliInvocation {
@@ -224,6 +90,34 @@ function resolveCliInvocation(): CliInvocation {
     executablePath: bundledCliPath,
     prefixArgs: [],
   };
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolvePromise) => {
+    setTimeout(resolvePromise, ms);
+  });
+}
+
+async function terminateChildProcess(child: ChildProcess): Promise<void> {
+  const waitForExit = new Promise<void>((resolvePromise) => {
+    child.once("exit", () => {
+      resolvePromise();
+    });
+  });
+
+  const termSignal: NodeJS.Signals | undefined = process.platform === "win32" ? undefined : "SIGTERM";
+  child.kill(termSignal);
+
+  const exitedAfterTerminate = await Promise.race([
+    waitForExit.then(() => true),
+    delay(CLI_COMMAND_TERM_GRACE_MS).then(() => false),
+  ]);
+
+  if (!exitedAfterTerminate) {
+    const killSignal: NodeJS.Signals | undefined = process.platform === "win32" ? undefined : "SIGKILL";
+    child.kill(killSignal);
+    await Promise.race([waitForExit, delay(CLI_COMMAND_FORCE_KILL_WAIT_MS)]);
+  }
 }
 
 async function runCliCommand(args: string[]): Promise<CliCommandResult> {
@@ -305,34 +199,6 @@ function isDaemonNotRunning(details: string): boolean {
   return details.toLowerCase().includes("daemon is not running");
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolvePromise) => {
-    setTimeout(resolvePromise, ms);
-  });
-}
-
-async function terminateChildProcess(child: ChildProcess): Promise<void> {
-  const waitForExit = new Promise<void>((resolvePromise) => {
-    child.once("exit", () => {
-      resolvePromise();
-    });
-  });
-
-  const termSignal: NodeJS.Signals | undefined = process.platform === "win32" ? undefined : "SIGTERM";
-  child.kill(termSignal);
-
-  const exitedAfterTerminate = await Promise.race([
-    waitForExit.then(() => true),
-    delay(CLI_COMMAND_TERM_GRACE_MS).then(() => false),
-  ]);
-
-  if (!exitedAfterTerminate) {
-    const killSignal: NodeJS.Signals | undefined = process.platform === "win32" ? undefined : "SIGKILL";
-    child.kill(killSignal);
-    await Promise.race([waitForExit, delay(CLI_COMMAND_FORCE_KILL_WAIT_MS)]);
-  }
-}
-
 function formatDevDaemonExitFailure(exitCode: number | null, signal: NodeJS.Signals | null, output: string): string {
   const status = typeof exitCode === "number" ? `code ${exitCode}` : `signal ${signal ?? "unknown"}`;
   const details = output.trim();
@@ -359,32 +225,7 @@ export class DaemonManager {
   }
 
   private async waitForHealthy(options?: { retryCount?: number; retryDelayMs?: number }): Promise<void> {
-    const retryCount = Math.max(0, Math.floor(options?.retryCount ?? DAEMON_HEALTH_RETRY_COUNT));
-    const retryDelayMs = Math.max(0, Math.floor(options?.retryDelayMs ?? DAEMON_HEALTH_RETRY_DELAY_MS));
-    let lastError: Error | null = null;
-
-    for (let attempt = 0; attempt <= retryCount; attempt += 1) {
-      try {
-        const url = await resolveDaemonHealthUrl();
-        const response = await this.fetchFn(url, {
-          method: "GET",
-          headers: { Accept: "application/json" },
-        });
-        if (response.ok) {
-          return;
-        }
-
-        lastError = new Error(`daemon health check failed: HTTP ${response.status}`);
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error("daemon health check failed");
-      }
-
-      if (attempt < retryCount) {
-        await delay(retryDelayMs);
-      }
-    }
-
-    throw lastError ?? new Error("daemon failed health checks after start");
+    return waitForDaemonHealthy(this.fetchFn, delay, options);
   }
 
   private async startDevForegroundDaemon(): Promise<void> {
@@ -539,39 +380,6 @@ export class DaemonManager {
   }
 
   async getInfo(): Promise<DaemonInfo> {
-    const url = await resolveDaemonHealthUrl();
-    const wsUrl = await resolveDaemonWebSocketUrl();
-    const response = await this.fetchFn(url, {
-      method: "GET",
-      headers: { Accept: "application/json" },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to load daemon health: HTTP ${response.status}`);
-    }
-
-    const body = (await response.json()) as { version?: unknown; daemonId?: unknown; relay?: unknown };
-    const version = typeof body.version === "string" ? body.version.trim() : "";
-    const daemonIdFromHealth = typeof body.daemonId === "string" ? body.daemonId.trim() : "";
-    const daemonId = daemonIdFromHealth || (await readPersistedDaemonId());
-    if (!version || !daemonId) {
-      throw new Error("daemon health response is invalid");
-    }
-
-    const result: DaemonInfo = { version, daemonId, wsUrl };
-
-    if (body.relay != null && typeof body.relay === "object") {
-      const r = body.relay as Record<string, unknown>;
-      result.relay = {
-        enabled: r.enabled === true,
-        url: typeof r.url === "string" ? r.url : "",
-        connected: r.connected === true,
-        connectedAt: typeof r.connectedAt === "string" ? r.connectedAt : undefined,
-        lastError: typeof r.lastError === "string" ? r.lastError : undefined,
-        lastErrorAt: typeof r.lastErrorAt === "string" ? r.lastErrorAt : undefined,
-      };
-    }
-
-    return result;
+    return fetchDaemonInfo(this.fetchFn);
   }
 }

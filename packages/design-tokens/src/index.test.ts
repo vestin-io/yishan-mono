@@ -4,17 +4,7 @@ import {
   SEMANTIC_COLOR_TOKENS,
   createMuiThemeOptions,
   createReactNativeThemeTokens,
-  getDesignTokenPackageInfo,
 } from "./index";
-
-describe("getDesignTokenPackageInfo", () => {
-  it("returns design token package identity metadata", () => {
-    expect(getDesignTokenPackageInfo()).toEqual({
-      name: "@yishan/design-tokens",
-      layer: "ui-foundation",
-    });
-  });
-});
 
 describe("token version exports", () => {
   it("exposes a stable v1 token contract", () => {

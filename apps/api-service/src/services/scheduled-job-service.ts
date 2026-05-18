@@ -1,23 +1,23 @@
-import { and, asc, desc, eq, lte } from "drizzle-orm";
+import type { AgentKind } from "@yishan/core";
+import { and, desc, eq } from "drizzle-orm";
+
+import type { OrganizationMemberRole } from "@/db/schema";
 
 import type { AppDb } from "@/db/client";
-import { nodes, projects, scheduledJobRuns, scheduledJobs } from "@/db/schema";
+import { projects, scheduledJobRuns, scheduledJobs } from "@/db/schema";
 import {
-  NodeNotFoundError,
-  OrganizationMembershipRequiredError,
   ProjectNotFoundError,
   ScheduledJobInvalidCronError,
   ScheduledJobInvalidTimezoneError,
   ScheduledJobNotFoundError,
-  WorkspaceLocalNodePermissionRequiredError,
-  WorkspaceLocalNodeScopeInvalidError
 } from "@/errors";
 import { newId } from "@/lib/id";
 import { computeNextRunAt, ensureTimezoneSupported, parseCronExpression } from "@/scheduled/cron";
 import type { OrganizationService } from "@/services/organization-service";
+import { assertNodeOwnedByActor } from "@/services/shared/assertNodeOwnedByActor";
+import { assertOrganizationMember } from "@/services/shared/assertOrganizationMember";
 
 const DEFAULT_RUN_LIMIT = 20;
-const MAX_RESPONSE_BODY_SIZE = 4096;
 
 type ScheduledJobRecord = typeof scheduledJobs.$inferSelect;
 type ScheduledJobRunRecord = typeof scheduledJobRuns.$inferSelect;
@@ -30,7 +30,7 @@ export type ScheduledJobView = {
   projectId: string;
   nodeId: string;
   name: string;
-  agentKind: "opencode" | "codex" | "claude" | "gemini" | "pi" | "copilot" | "cursor";
+  agentKind: AgentKind;
   prompt: string;
   model: string | null;
   command: string | null;
@@ -75,9 +75,10 @@ type CreateScheduledJobInput = {
   organizationId: string;
   projectId: string;
   actorUserId: string;
+  actorRole?: OrganizationMemberRole;
   name: string;
   nodeId: string;
-  agentKind?: "opencode" | "codex" | "claude" | "gemini" | "pi" | "copilot" | "cursor";
+  agentKind?: AgentKind;
   prompt: string;
   model?: string;
   command?: string;
@@ -89,9 +90,10 @@ type UpdateScheduledJobInput = {
   organizationId: string;
   jobId: string;
   actorUserId: string;
+  actorRole?: OrganizationMemberRole;
   name?: string;
   nodeId?: string;
-  agentKind?: "opencode" | "codex" | "claude" | "gemini" | "pi" | "copilot" | "cursor";
+  agentKind?: AgentKind;
   prompt?: string;
   model?: string | null;
   command?: string | null;
@@ -103,36 +105,15 @@ type JobIdentityInput = {
   organizationId: string;
   jobId: string;
   actorUserId: string;
+  actorRole?: OrganizationMemberRole;
 };
 
 type ListRunsInput = JobIdentityInput & {
   limit?: number;
 };
 
-function toScheduledJobView(row: ScheduledJobRecord): ScheduledJobView {
-  return {
-    id: row.id,
-    organizationId: row.organizationId,
-    projectId: row.projectId,
-    nodeId: row.nodeId,
-    name: row.name,
-    agentKind: row.agentKind,
-    prompt: row.prompt,
-    model: row.model,
-    command: row.command,
-    cronExpression: row.cronExpression,
-    timezone: row.timezone,
-    status: row.status,
-    nextRunAt: row.nextRunAt,
-    lastScheduledFor: row.lastScheduledFor,
-    lastRunAt: row.lastRunAt,
-    lastRunStatus: row.lastRunStatus,
-    lastErrorCode: row.lastErrorCode,
-    lastErrorMessage: row.lastErrorMessage,
-    createdByUserId: row.createdByUserId,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt
-  };
+export function toScheduledJobView(row: ScheduledJobRecord): ScheduledJobView {
+  return row as ScheduledJobView;
 }
 
 function toRunView(row: ScheduledJobRunRecord): ScheduledJobRunView {
@@ -153,21 +134,8 @@ function toRunView(row: ScheduledJobRunRecord): ScheduledJobRunView {
       row.errorDetails && typeof row.errorDetails === "object" && !Array.isArray(row.errorDetails)
         ? (row.errorDetails as Record<string, unknown>)
         : null,
-    createdAt: row.createdAt
+    createdAt: row.createdAt,
   };
-}
-
-function limitResponseBody(raw: string): string {
-  if (raw.length <= MAX_RESPONSE_BODY_SIZE) {
-    return raw;
-  }
-  return `${raw.slice(0, MAX_RESPONSE_BODY_SIZE)}...`;
-}
-
-function bucketToMinute(date: Date): Date {
-  const rounded = new Date(date.getTime());
-  rounded.setUTCSeconds(0, 0);
-  return rounded;
 }
 
 function validateCronOrThrow(expression: string) {
@@ -176,7 +144,7 @@ function validateCronOrThrow(expression: string) {
   } catch (error) {
     throw new ScheduledJobInvalidCronError(
       expression,
-      error instanceof Error ? error.message : "Unknown cron parse error"
+      error instanceof Error ? error.message : "Unknown cron parse error",
     );
   }
 }
@@ -187,22 +155,24 @@ function validateTimezoneOrThrow(timezone: string): string {
   } catch (error) {
     throw new ScheduledJobInvalidTimezoneError(
       timezone,
-      error instanceof Error ? error.message : "Unknown timezone validation error"
+      error instanceof Error ? error.message : "Unknown timezone validation error",
     );
   }
 }
 
+/** Handles HTTP CRUD operations for scheduled jobs. Background evaluation lives in JobEvaluatorService. */
 export class ScheduledJobService {
   constructor(
     private readonly db: AppDb,
-    private readonly organizationService: OrganizationService
+    private readonly organizationService: OrganizationService,
   ) {}
 
-  private async assertOrganizationMember(organizationId: string, userId: string): Promise<void> {
-    const role = await this.organizationService.getMembershipRole({ organizationId, userId });
-    if (!role) {
-      throw new OrganizationMembershipRequiredError();
-    }
+  private async assertOrganizationMember(
+    organizationId: string,
+    userId: string,
+    preResolvedRole?: OrganizationMemberRole,
+  ): Promise<void> {
+    await assertOrganizationMember(this.organizationService, organizationId, userId, preResolvedRole);
   }
 
   private async assertProjectBelongsToOrganization(projectId: string, organizationId: string): Promise<void> {
@@ -217,34 +187,14 @@ export class ScheduledJobService {
   }
 
   private async assertNodeOwnedByActor(nodeId: string, actorUserId: string): Promise<void> {
-    const rows = await this.db
-      .select({ id: nodes.id, ownerUserId: nodes.ownerUserId, scope: nodes.scope })
-      .from(nodes)
-      .where(eq(nodes.id, nodeId))
-      .limit(1);
-
-    const node = rows[0];
-    if (!node) {
-      throw new NodeNotFoundError(nodeId);
-    }
-    if (node.scope !== "private") {
-      throw new WorkspaceLocalNodeScopeInvalidError(nodeId);
-    }
-    if (node.ownerUserId !== actorUserId) {
-      throw new WorkspaceLocalNodePermissionRequiredError();
-    }
+    await assertNodeOwnedByActor(this.db, nodeId, actorUserId);
   }
 
   private async getJobOrThrow(jobId: string, organizationId: string): Promise<ScheduledJobRecord> {
     const rows = await this.db
       .select()
       .from(scheduledJobs)
-      .where(
-        and(
-          eq(scheduledJobs.id, jobId),
-          eq(scheduledJobs.organizationId, organizationId)
-        )
-      )
+      .where(and(eq(scheduledJobs.id, jobId), eq(scheduledJobs.organizationId, organizationId)))
       .limit(1);
 
     const job = rows[0];
@@ -254,10 +204,29 @@ export class ScheduledJobService {
     return job;
   }
 
+  /**
+   * Lightweight existence-and-ownership check — fetches only `id` and `status`.
+   * Use when the full job record is not needed (e.g. pause / disable / list runs).
+   */
+  private async assertJobExistsInOrg(jobId: string, organizationId: string): Promise<void> {
+    const rows = await this.db
+      .select({ id: scheduledJobs.id })
+      .from(scheduledJobs)
+      .where(and(eq(scheduledJobs.id, jobId), eq(scheduledJobs.organizationId, organizationId)))
+      .limit(1);
+
+    if (rows.length === 0) {
+      throw new ScheduledJobNotFoundError(jobId);
+    }
+  }
+
   async createScheduledJob(input: CreateScheduledJobInput): Promise<ScheduledJobView> {
-    await this.assertOrganizationMember(input.organizationId, input.actorUserId);
-    await this.assertProjectBelongsToOrganization(input.projectId, input.organizationId);
-    await this.assertNodeOwnedByActor(input.nodeId, input.actorUserId);
+    await this.assertOrganizationMember(input.organizationId, input.actorUserId, input.actorRole);
+    // Project-ownership check and node-ownership check are independent — run concurrently.
+    await Promise.all([
+      this.assertProjectBelongsToOrganization(input.projectId, input.organizationId),
+      this.assertNodeOwnedByActor(input.nodeId, input.actorUserId),
+    ]);
 
     const cronExpression = input.cronExpression.trim();
     const timezone = validateTimezoneOrThrow(input.timezone?.trim() || "UTC");
@@ -280,7 +249,7 @@ export class ScheduledJobService {
         timezone,
         status: "active",
         nextRunAt,
-        createdByUserId: input.actorUserId
+        createdByUserId: input.actorUserId,
       })
       .returning();
 
@@ -295,8 +264,10 @@ export class ScheduledJobService {
     organizationId: string;
     projectId?: string;
     actorUserId: string;
+    actorRole?: OrganizationMemberRole;
+    limit?: number;
   }): Promise<ScheduledJobView[]> {
-    await this.assertOrganizationMember(input.organizationId, input.actorUserId);
+    await this.assertOrganizationMember(input.organizationId, input.actorUserId, input.actorRole);
     if (input.projectId) {
       await this.assertProjectBelongsToOrganization(input.projectId, input.organizationId);
     }
@@ -306,17 +277,19 @@ export class ScheduledJobService {
       conditions.push(eq(scheduledJobs.projectId, input.projectId));
     }
 
-    const rows = await this.db
+    const query = this.db
       .select()
       .from(scheduledJobs)
       .where(and(...conditions))
       .orderBy(desc(scheduledJobs.createdAt));
 
+    const rows = input.limit != null ? await query.limit(input.limit) : await query;
+
     return rows.map(toScheduledJobView);
   }
 
   async updateScheduledJob(input: UpdateScheduledJobInput): Promise<ScheduledJobView> {
-    await this.assertOrganizationMember(input.organizationId, input.actorUserId);
+    await this.assertOrganizationMember(input.organizationId, input.actorUserId, input.actorRole);
     const existing = await this.getJobOrThrow(input.jobId, input.organizationId);
     const nodeId = input.nodeId?.trim() ?? existing.nodeId;
     if (input.nodeId !== undefined) {
@@ -328,9 +301,7 @@ export class ScheduledJobService {
     const parsed = validateCronOrThrow(nextCron);
     const shouldRecomputeNextRun =
       input.cronExpression !== undefined || input.timezone !== undefined || existing.status === "active";
-    const nextRunAt = shouldRecomputeNextRun
-      ? computeNextRunAt(parsed, nextTimezone, new Date())
-      : existing.nextRunAt;
+    const nextRunAt = shouldRecomputeNextRun ? computeNextRunAt(parsed, nextTimezone, new Date()) : existing.nextRunAt;
 
     const rows = await this.db
       .update(scheduledJobs)
@@ -344,7 +315,7 @@ export class ScheduledJobService {
         cronExpression: nextCron,
         timezone: nextTimezone,
         nextRunAt,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
       .where(eq(scheduledJobs.id, existing.id))
       .returning();
@@ -357,18 +328,13 @@ export class ScheduledJobService {
   }
 
   async pauseScheduledJob(input: JobIdentityInput): Promise<ScheduledJobView> {
-    await this.assertOrganizationMember(input.organizationId, input.actorUserId);
-    await this.getJobOrThrow(input.jobId, input.organizationId);
+    await this.assertOrganizationMember(input.organizationId, input.actorUserId, input.actorRole);
+    await this.assertJobExistsInOrg(input.jobId, input.organizationId);
 
     const rows = await this.db
       .update(scheduledJobs)
       .set({ status: "paused", updatedAt: new Date() })
-      .where(
-        and(
-          eq(scheduledJobs.id, input.jobId),
-          eq(scheduledJobs.organizationId, input.organizationId)
-        )
-      )
+      .where(and(eq(scheduledJobs.id, input.jobId), eq(scheduledJobs.organizationId, input.organizationId)))
       .returning();
 
     const updated = rows[0];
@@ -379,7 +345,7 @@ export class ScheduledJobService {
   }
 
   async resumeScheduledJob(input: JobIdentityInput): Promise<ScheduledJobView> {
-    await this.assertOrganizationMember(input.organizationId, input.actorUserId);
+    await this.assertOrganizationMember(input.organizationId, input.actorUserId, input.actorRole);
     const existing = await this.getJobOrThrow(input.jobId, input.organizationId);
 
     const parsed = validateCronOrThrow(existing.cronExpression);
@@ -400,18 +366,13 @@ export class ScheduledJobService {
   }
 
   async disableScheduledJob(input: JobIdentityInput): Promise<ScheduledJobView> {
-    await this.assertOrganizationMember(input.organizationId, input.actorUserId);
-    await this.getJobOrThrow(input.jobId, input.organizationId);
+    await this.assertOrganizationMember(input.organizationId, input.actorUserId, input.actorRole);
+    await this.assertJobExistsInOrg(input.jobId, input.organizationId);
 
     const rows = await this.db
       .update(scheduledJobs)
       .set({ status: "disabled", updatedAt: new Date() })
-      .where(
-        and(
-          eq(scheduledJobs.id, input.jobId),
-          eq(scheduledJobs.organizationId, input.organizationId)
-        )
-      )
+      .where(and(eq(scheduledJobs.id, input.jobId), eq(scheduledJobs.organizationId, input.organizationId)))
       .returning();
 
     const updated = rows[0];
@@ -422,180 +383,17 @@ export class ScheduledJobService {
   }
 
   async listJobRuns(input: ListRunsInput): Promise<ScheduledJobRunView[]> {
-    await this.assertOrganizationMember(input.organizationId, input.actorUserId);
-    await this.getJobOrThrow(input.jobId, input.organizationId);
+    await this.assertOrganizationMember(input.organizationId, input.actorUserId, input.actorRole);
+    await this.assertJobExistsInOrg(input.jobId, input.organizationId);
 
     const limit = input.limit ?? DEFAULT_RUN_LIMIT;
     const rows = await this.db
       .select()
       .from(scheduledJobRuns)
-      .where(
-        and(
-          eq(scheduledJobRuns.jobId, input.jobId),
-          eq(scheduledJobRuns.organizationId, input.organizationId)
-        )
-      )
+      .where(and(eq(scheduledJobRuns.jobId, input.jobId), eq(scheduledJobRuns.organizationId, input.organizationId)))
       .orderBy(desc(scheduledJobRuns.scheduledFor))
       .limit(limit);
 
     return rows.map(toRunView);
-  }
-
-  async evaluateDueJobs(input: {
-    limit: number;
-    now?: Date;
-  }): Promise<PendingRun[]> {
-    const now = input.now ?? new Date();
-
-    const dueJobs = await this.db
-      .select()
-      .from(scheduledJobs)
-      .where(
-        and(
-          eq(scheduledJobs.status, "active"),
-          lte(scheduledJobs.nextRunAt, now)
-        )
-      )
-      .orderBy(asc(scheduledJobs.nextRunAt))
-      .limit(input.limit);
-
-    const pending: PendingRun[] = [];
-
-    for (const dueJob of dueJobs) {
-      const parsed = validateCronOrThrow(dueJob.cronExpression);
-      const timezone = validateTimezoneOrThrow(dueJob.timezone);
-      const rawScheduledFor = dueJob.nextRunAt;
-      const scheduledFor = bucketToMinute(rawScheduledFor);
-      const nextRunAt = computeNextRunAt(parsed, timezone, rawScheduledFor);
-      const runId = newId();
-
-      // Optimistic lock: only advance if nextRunAt hasn't changed (another evaluator didn't claim it)
-      const updatedRows = await this.db
-        .update(scheduledJobs)
-        .set({ nextRunAt, lastScheduledFor: scheduledFor, updatedAt: now })
-        .where(
-          and(
-            eq(scheduledJobs.id, dueJob.id),
-            eq(scheduledJobs.status, "active"),
-            eq(scheduledJobs.nextRunAt, rawScheduledFor)
-          )
-        )
-        .returning();
-
-      const updated = updatedRows[0];
-      if (!updated) {
-        continue;
-      }
-
-      // Conflict guard: unique index on (job_id, scheduled_for) prevents duplicate runs
-      // If this insert conflicts, another evaluator tick already created the run — skip publishing
-      const insertedRows = await this.db
-        .insert(scheduledJobRuns)
-        .values({
-          id: runId,
-          jobId: updated.id,
-          organizationId: updated.organizationId,
-          projectId: updated.projectId,
-          nodeId: updated.nodeId,
-          scheduledFor,
-          status: "pending"
-        })
-        .onConflictDoNothing()
-        .returning({ id: scheduledJobRuns.id });
-
-      if (insertedRows.length === 0) {
-        continue;
-      }
-
-      pending.push({
-        runId,
-        scheduledFor,
-        job: toScheduledJobView(updated)
-      });
-    }
-
-    return pending;
-  }
-
-  async markStaleRunsOffline(input: {
-    staleThresholdMinutes: number;
-    now?: Date;
-  }): Promise<number> {
-    const now = input.now ?? new Date();
-    const threshold = new Date(now.getTime() - input.staleThresholdMinutes * 60_000);
-
-    const rows = await this.db
-      .update(scheduledJobRuns)
-      .set({ status: "skipped_offline", finishedAt: now })
-      .where(
-        and(
-          eq(scheduledJobRuns.status, "pending"),
-          lte(scheduledJobRuns.createdAt, threshold)
-        )
-      )
-      .returning({ id: scheduledJobRuns.id });
-
-    return rows.length;
-  }
-
-  async markRunStarted(input: {
-    runId: string;
-    nodeId: string;
-    actorUserId: string;
-    startedAt?: Date;
-  }): Promise<void> {
-    await this.assertNodeOwnedByActor(input.nodeId, input.actorUserId);
-    await this.db
-      .update(scheduledJobRuns)
-      .set({ status: "running", startedAt: input.startedAt ?? new Date() })
-      .where(and(eq(scheduledJobRuns.id, input.runId), eq(scheduledJobRuns.nodeId, input.nodeId)));
-  }
-
-  async completeRun(input: {
-    runId: string;
-    nodeId: string;
-    actorUserId: string;
-    status: "succeeded" | "failed";
-    finishedAt?: Date;
-    responseBody?: string;
-    errorCode?: string;
-    errorMessage?: string;
-    errorDetails?: Record<string, unknown>;
-  }): Promise<void> {
-    await this.assertNodeOwnedByActor(input.nodeId, input.actorUserId);
-    const runRows = await this.db
-      .select()
-      .from(scheduledJobRuns)
-      .where(and(eq(scheduledJobRuns.id, input.runId), eq(scheduledJobRuns.nodeId, input.nodeId)))
-      .limit(1);
-
-    const run = runRows[0];
-    if (!run) {
-      return;
-    }
-
-    const finishedAt = input.finishedAt ?? new Date();
-    await this.db
-      .update(scheduledJobRuns)
-      .set({
-        status: input.status,
-        finishedAt,
-        responseBody: input.responseBody ? limitResponseBody(input.responseBody) : null,
-        errorCode: input.errorCode ?? null,
-        errorMessage: input.errorMessage ?? null,
-        errorDetails: input.errorDetails ?? null
-      })
-      .where(eq(scheduledJobRuns.id, run.id));
-
-    await this.db
-      .update(scheduledJobs)
-      .set({
-        lastRunAt: finishedAt,
-        lastRunStatus: input.status,
-        lastErrorCode: input.status === "failed" ? (input.errorCode ?? null) : null,
-        lastErrorMessage: input.status === "failed" ? (input.errorMessage ?? null) : null,
-        updatedAt: finishedAt
-      })
-      .where(eq(scheduledJobs.id, run.jobId));
   }
 }

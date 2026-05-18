@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 
 import type { SessionUser } from "@/auth/session";
+import type { OrganizationMemberRole } from "@/db/schema";
 import type { AppServices } from "@/services";
 import type { OAuthProvider, ServiceConfig } from "@/types";
 
@@ -18,7 +19,7 @@ export type AppEnv = {
     oauthProvider: OAuthProvider;
     sessionUser: SessionUser;
     organizationId: string;
-    organizationRole: "owner" | "admin" | "member";
+    organizationRole: OrganizationMemberRole;
   };
 };
 

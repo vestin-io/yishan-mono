@@ -1,5 +1,5 @@
 import { Box } from "@mui/material";
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ACTIONS } from "../../shared/contracts/actions";
@@ -11,8 +11,7 @@ import { useCommands } from "../hooks/useCommands";
 import { WorkspacePaneVisibilityProvider, useWorkspacePaneVisibility } from "../hooks/useWorkspacePaneVisibility";
 import { parseWorkspaceSessionNavigationPath } from "../navigation/workspaceNavigation";
 import { isEditableActiveElement } from "../shortcuts/editableTarget";
-import { layoutStore } from "../store/layoutStore";
-import { popupStore } from "../store/popupStore";
+import { layoutStore } from "../store/settings/layoutStore";
 import { tabStore } from "../store/tabStore";
 import { workspaceStore } from "../store/workspaceStore";
 import { CreateProjectDialogView } from "./workspace/LeftPane/CreateProjectDialogView";
@@ -43,7 +42,7 @@ function useWorkspaceAppActions(input: { cmd: WorkspaceViewCommands; navigate: R
 
   useEffect(() => {
     return subscribeAppActionEvent((payload) => {
-      if (payload.action !== ACTIONS.NAVIGATE && popupStore.getState().isPopupOpen) {
+      if (payload.action !== ACTIONS.NAVIGATE && layoutStore.getState().isPopupOpen) {
         return;
       }
 
@@ -68,7 +67,7 @@ function useWorkspaceAppActions(input: { cmd: WorkspaceViewCommands; navigate: R
           if (tabId) {
             const tab = tabStore.getState().tabs.find((item) => item.workspaceId === workspaceId && item.id === tabId);
             if (tab) {
-              cmd.setSelectedTabId(tab.id);
+              cmd.selectTab(tab.id);
             }
           } else if (sessionId) {
             const sessionTab = tabStore
@@ -77,7 +76,7 @@ function useWorkspaceAppActions(input: { cmd: WorkspaceViewCommands; navigate: R
                 (tab) => tab.workspaceId === workspaceId && tab.kind === "session" && tab.data.sessionId === sessionId,
               );
             if (sessionTab) {
-              cmd.setSelectedTabId(sessionTab.id);
+              cmd.selectTab(sessionTab.id);
             }
           }
         }
@@ -161,7 +160,10 @@ function useWorkspaceAppActions(input: { cmd: WorkspaceViewCommands; navigate: R
 }
 
 /** Loads workspace data and restores terminal tabs persisted from previous sessions. */
-function useWorkspaceBootstrap(input: { cmd: WorkspaceViewCommands; terminalRecoveryCoordinator: TerminalRecoveryCoordinator }) {
+function useWorkspaceBootstrap(input: {
+  cmd: WorkspaceViewCommands;
+  terminalRecoveryCoordinator: TerminalRecoveryCoordinator;
+}) {
   const { cmd, terminalRecoveryCoordinator } = input;
 
   useEffect(() => {
@@ -342,7 +344,7 @@ export function WorkspaceView() {
       const { startX, startWidth } = leftDragRef.current;
       const delta = clientX - startX;
       const nextWidth = clamp(startWidth + delta, LEFT_MIN_WIDTH, maxLeftWidth);
-      cmd.setLeftWidth(nextWidth);
+      cmd.setLeftPaneWidth(nextWidth);
     },
     [cmd, maxLeftWidth],
   );
@@ -360,7 +362,7 @@ export function WorkspaceView() {
       const { startX, startWidth } = rightDragRef.current;
       const delta = startX - clientX;
       const nextWidth = clamp(startWidth + delta, RIGHT_MIN_WIDTH, maxRightWidth);
-      cmd.setRightWidth(nextWidth);
+      cmd.setRightPaneWidth(nextWidth);
     },
     [cmd, maxRightWidth],
   );

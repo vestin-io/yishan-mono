@@ -1,12 +1,13 @@
-import { Badge, Box, IconButton, ToggleButton, ToggleButtonGroup, Tooltip } from "@mui/material";
+import { Badge, Box, ToggleButton, ToggleButtonGroup, Tooltip } from "@mui/material";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { LuFolderTree, LuGitBranch, LuGitPullRequest, LuPanelRight } from "react-icons/lu";
 import { PaneHeader } from "../../../components/PaneHeader";
+import { PaneToggleButton } from "../../../components/PaneToggleButton";
 import { getRendererPlatform } from "../../../helpers/platform";
 import { getShortcutDisplayLabelById } from "../../../shortcuts/shortcutDisplay";
-import { workspacePaneStore } from "../../../store/workspacePaneStore";
 import { workspaceStore } from "../../../store/workspaceStore";
+import { workspaceUiStore } from "../../../store/workspaceUiStore";
 import { ChangesTabView } from "./ChangesTabView";
 import { FileManagerView } from "./FileManagerView";
 import { PullRequestTabView } from "./PullRequestTabView";
@@ -20,9 +21,9 @@ export type RightPaneViewProps = {
  */
 export function RightPaneView({ onToggleRightPane }: RightPaneViewProps = {}) {
   const { t } = useTranslation();
-  const activeRightPaneTab = workspacePaneStore((state) => state.rightPaneTab);
-  const openFileSearchRequestKey = workspacePaneStore((state) => state.fileSearchRequestKey);
-  const setRightPaneTab = workspacePaneStore((state) => state.setRightPaneTab);
+  const activeRightPaneTab = workspaceUiStore((state) => state.rightPaneTab);
+  const openFileSearchRequestKey = workspaceUiStore((state) => state.fileSearchRequestKey);
+  const setRightPaneTab = workspaceUiStore((state) => state.setRightPaneTab);
   const selectedWorkspaceId = workspaceStore((state) => state.selectedWorkspaceId);
   const changesCount = workspaceStore((state) => state.gitChangesCountByWorkspaceId[selectedWorkspaceId] ?? 0);
   const [lastHandledFileSearchRequestKey, setLastHandledFileSearchRequestKey] = useState(0);
@@ -140,19 +141,12 @@ export function RightPaneView({ onToggleRightPane }: RightPaneViewProps = {}) {
           </ToggleButtonGroup>
         </Box>
         <Box sx={{ flex: 1, minWidth: 0 }} />
-        <Tooltip title={toggleRightTooltipLabel} arrow>
-          <span>
-            <IconButton
-              className="electron-webkit-app-region-no-drag"
-              size="small"
-              aria-label={t("layout.toggleRightSidebar")}
-              onClick={onToggleRightPane}
-              disabled={!onToggleRightPane}
-            >
-              <LuPanelRight size={16} />
-            </IconButton>
-          </span>
-        </Tooltip>
+        <PaneToggleButton
+          tooltipLabel={toggleRightTooltipLabel}
+          ariaLabel={t("layout.toggleRightSidebar")}
+          icon={<LuPanelRight size={16} />}
+          onClick={onToggleRightPane}
+        />
       </PaneHeader>
       <Box
         sx={{

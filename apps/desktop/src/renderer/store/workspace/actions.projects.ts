@@ -1,0 +1,108 @@
+import {
+  applyCreatedRepoState,
+  applyDeletedRepoState,
+  applyHydratedStateFromApiData,
+  applyUpdatedRepoConfigState,
+  normalizeCreateRepoInput,
+} from "../../helpers/projectHelpers";
+import type { WorkspaceStoreActions, WorkspaceStoreGetState, WorkspaceStoreSetState } from "../types";
+
+type WorkspaceRepoActions = Pick<
+  WorkspaceStoreActions,
+  "load" | "createProject" | "deleteProject" | "updateProjectConfig" | "incrementFileTreeRefreshVersion"
+>;
+
+function isGitInternalPath(path: string): boolean {
+  return path === ".git" || path.startsWith(".git/");
+}
+
+/** Creates project-related workspace store actions and reconciles backend snapshots with in-memory UI state. */
+export function createWorkspaceRepoActions(
+  set: WorkspaceStoreSetState,
+  _get: WorkspaceStoreGetState,
+): WorkspaceRepoActions {
+  const createProject = ({
+    name,
+    source,
+    path,
+    gitUrl,
+    backendProject,
+    organizationId,
+  }: Parameters<WorkspaceStoreActions["createProject"]>[0]) => {
+    const { normalizedPath, normalizedGitUrl, resolvedPath } = normalizeCreateRepoInput({
+      path,
+      gitUrl,
+      source,
+    });
+
+    if (!name.trim() || !resolvedPath) {
+      return;
+    }
+
+    if (!backendProject?.id) {
+      return;
+    }
+
+    const normalizedOrganizationId = organizationId.trim();
+
+    set((state) => {
+      applyCreatedRepoState(state, {
+        name,
+        source,
+        normalizedPath,
+        normalizedGitUrl,
+        resolvedPath,
+        backendProject,
+      });
+
+      // Persist selection + display preferences into organization-scoped storage.
+      if (normalizedOrganizationId) {
+        state.organizationPreferencesById ??= {};
+        state.organizationPreferencesById[normalizedOrganizationId] ??= {};
+        const orgPrefs = state.organizationPreferencesById[normalizedOrganizationId];
+        orgPrefs.selectedProjectId = state.selectedProjectId;
+        orgPrefs.selectedWorkspaceId = state.selectedWorkspaceId;
+        orgPrefs.displayProjectIds = state.displayProjectIds;
+      }
+    });
+  };
+
+  return {
+    load: (organizationId, projects, workspaces) => {
+      set((state) => {
+        applyHydratedStateFromApiData(state, organizationId, projects, workspaces);
+      });
+    },
+    createProject,
+    deleteProject: (projectId) => {
+      if (!projectId) {
+        return;
+      }
+
+      set((state) => {
+        applyDeletedRepoState(state, projectId);
+      });
+    },
+    updateProjectConfig: (projectId, config) => {
+      set((state) => {
+        applyUpdatedRepoConfigState(state, projectId, config);
+      });
+    },
+    incrementFileTreeRefreshVersion: (workspaceWorktreePath, changedRelativePaths) => {
+      const normalizedWorkspaceWorktreePath = workspaceWorktreePath?.trim() ?? "";
+      const normalizedChangedRelativePaths = (changedRelativePaths ?? [])
+        .map((path) => path.trim())
+        .filter((path) => path.length > 0 && !isGitInternalPath(path));
+
+      set((state) => {
+        state.fileTreeRefreshVersion += 1;
+        if (normalizedWorkspaceWorktreePath.length === 0) {
+          return;
+        }
+
+        state.fileTreeChangedRelativePathsByWorktreePath[normalizedWorkspaceWorktreePath] =
+          normalizedChangedRelativePaths;
+      });
+    },
+  };
+}

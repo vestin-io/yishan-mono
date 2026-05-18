@@ -3,18 +3,13 @@ package provision
 import (
 	"context"
 	"fmt"
+	"path/filepath"
+
+	"github.com/rs/zerolog/log"
 	"yishan/apps/cli/internal/api"
+	"yishan/apps/cli/internal/daemon"
 	"yishan/apps/cli/internal/workspace"
 )
-
-type DaemonAuthConfig struct {
-	Host        string
-	Port        int
-	JWTSecret   string
-	JWTIssuer   string
-	JWTAudience string
-	JWTRequired bool
-}
 
 type CreateWorkspaceRequest struct {
 	OrganizationID string
@@ -32,7 +27,7 @@ type Provisioner struct {
 	localNodeID      string
 }
 
-func NewLocalProvisioner(apiClient *api.Client, daemonAuth DaemonAuthConfig, workspaceManager *workspace.Manager, localNodeID string) *Provisioner {
+func NewLocalProvisioner(apiClient *api.Client, workspaceManager *workspace.Manager, localNodeID string) *Provisioner {
 	return &Provisioner{apiClient: apiClient, workspaceManager: workspaceManager, localNodeID: localNodeID}
 }
 
@@ -51,7 +46,7 @@ func (p *Provisioner) CreateWorkspace(ctx context.Context, req CreateWorkspaceRe
 	if workspaceName == "" {
 		workspaceName = req.Branch
 	}
-	if req.Kind == "worktree" {
+	if req.Kind == workspace.KindWorktree {
 		if req.Branch == "" {
 			return api.CreateWorkspaceResponse{}, fmt.Errorf("branch is required for worktree workspace")
 		}
@@ -86,7 +81,7 @@ func (p *Provisioner) CreateWorkspace(ctx context.Context, req CreateWorkspaceRe
 		return api.CreateWorkspaceResponse{}, fmt.Errorf("created workspace response is missing workspace id")
 	}
 
-	if created.Workspace.Kind != "worktree" {
+	if created.Workspace.Kind != workspace.KindWorktree {
 		return created, nil
 	}
 
@@ -167,11 +162,37 @@ func (p *Provisioner) resolvePrimaryWorkspace(orgID string, projectID string, no
 		return api.Workspace{}, err
 	}
 
-	for _, workspace := range response.Workspaces {
-		if workspace.Kind == "primary" && workspace.NodeID == nodeID && workspace.LocalPath != "" {
-			return workspace, nil
+	for _, ws := range response.Workspaces {
+		if ws.Kind == workspace.KindPrimary && ws.NodeID == nodeID && ws.LocalPath != "" {
+			return ws, nil
 		}
 	}
 
 	return api.Workspace{}, fmt.Errorf("no primary workspace found on node %s for project %s; create one first", nodeID, projectID)
+}
+
+// RuntimeConfig holds the configuration needed to create a runtime provisioner
+// from the running daemon's state.
+type RuntimeConfig struct {
+	ConfigPath string
+}
+
+// NewRuntimeProvisioner creates a Provisioner wired to the local daemon's node
+// ID, resolved from the daemon state file at runtime.
+func NewRuntimeProvisioner(apiClient *api.Client, cfg RuntimeConfig) *Provisioner {
+	localNodeID := ""
+
+	statePath, err := daemon.ResolveStateFilePath(cfg.ConfigPath)
+	if err != nil {
+		log.Warn().Err(err).Msg("failed to resolve daemon runtime state path")
+	} else {
+		daemonIDPath := filepath.Join(filepath.Dir(statePath), daemon.IDFileName)
+		if id, err := daemon.EnsureDaemonID(daemonIDPath); err == nil {
+			localNodeID = id
+		} else {
+			log.Warn().Err(err).Msg("failed to resolve local daemon id")
+		}
+	}
+
+	return NewLocalProvisioner(apiClient, workspace.NewManager(), localNodeID)
 }

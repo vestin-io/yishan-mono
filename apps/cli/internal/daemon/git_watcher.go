@@ -9,13 +9,10 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/rs/zerolog/log"
+	"yishan/apps/cli/internal/workspace"
 )
 
 const watcherDebounce = 200 * time.Millisecond
-
-// contextLinkName is the symlink directory inside a worktree that points to the
-// shared per-repo context folder (e.g. ~/.yishan/contexts/<repoKey>).
-const contextLinkName = ".my-context"
 
 type worktreeWatcher struct {
 	mu             sync.Mutex
@@ -150,7 +147,7 @@ func (ws *workspaceWatchers) Watch(worktreePath string) {
 	// Watch the .my-context symlink target directory so that file changes inside
 	// the shared context folder (which lives outside the worktree) trigger file
 	// tree refresh events.
-	contextLinkPath := filepath.Join(worktreePath, contextLinkName)
+	contextLinkPath := filepath.Join(worktreePath, workspace.ContextLinkName)
 	if target, err := filepath.EvalSymlinks(contextLinkPath); err == nil {
 		if fi, err := os.Stat(target); err == nil && fi.IsDir() {
 			if err := fw.Add(target); err != nil {
@@ -229,7 +226,7 @@ func (w *worktreeWatcher) consume() {
 				if relPath == "." {
 					relPath = ""
 				}
-				w.scheduleFileEmit(filepath.ToSlash(filepath.Join(contextLinkName, relPath)))
+				w.scheduleFileEmit(filepath.ToSlash(filepath.Join(workspace.ContextLinkName, relPath)))
 			} else {
 				relPath, err := filepath.Rel(w.path, event.Name)
 				if err != nil {
@@ -237,7 +234,10 @@ func (w *worktreeWatcher) consume() {
 				}
 				w.scheduleFileEmit(filepath.ToSlash(relPath))
 			}
-		case <-w.fw.Errors:
+		case watchErr := <-w.fw.Errors:
+			if watchErr != nil {
+				log.Warn().Err(watchErr).Str("path", w.path).Msg("fsnotify watch error — may indicate inotify limit reached")
+			}
 		}
 	}
 }
@@ -272,20 +272,26 @@ func (w *worktreeWatcher) addWorkspaceRecursive(root string) error {
 }
 
 func (w *worktreeWatcher) addSingleWorkspaceWatch(path string) error {
+	// Claim the slot atomically before releasing the lock for the I/O call.
+	// This prevents two concurrent goroutines from both passing the "already
+	// watched" check and registering duplicate kernel watches for the same path.
 	w.mu.Lock()
 	if w.watchedDirs[path] {
 		w.mu.Unlock()
 		return nil
 	}
+	// Mark as watched before releasing the lock so no other goroutine can
+	// attempt the same fw.Add concurrently.
+	w.watchedDirs[path] = true
 	w.mu.Unlock()
 
 	if err := w.fw.Add(path); err != nil {
+		// Roll back the optimistic reservation on failure.
+		w.mu.Lock()
+		delete(w.watchedDirs, path)
+		w.mu.Unlock()
 		return err
 	}
-
-	w.mu.Lock()
-	w.watchedDirs[path] = true
-	w.mu.Unlock()
 
 	return nil
 }
@@ -302,10 +308,18 @@ func (w *worktreeWatcher) removeWorkspaceWatchesForPath(path string) {
 	}
 	w.mu.Unlock()
 
+	// Call fw.Remove outside the lock — it is a syscall and should not block
+	// other lock-holders. Collect all the paths first, then delete them from
+	// the map in a single locked region.
 	for _, watched := range toRemove {
 		_ = w.fw.Remove(watched)
+	}
+
+	if len(toRemove) > 0 {
 		w.mu.Lock()
-		delete(w.watchedDirs, watched)
+		for _, watched := range toRemove {
+			delete(w.watchedDirs, watched)
+		}
 		w.mu.Unlock()
 	}
 }

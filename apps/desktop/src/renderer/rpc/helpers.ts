@@ -1,12 +1,6 @@
+import { generateId } from "../helpers/generateId";
 import type * as Rpc from "./daemonTypes";
-
-function randomRequestId(): string {
-  if (typeof globalThis.crypto?.randomUUID === "function") {
-    return globalThis.crypto.randomUUID();
-  }
-
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
+export { delay } from "../helpers/delay";
 
 function toWebSocketPayload(data: unknown): string {
   if (typeof data === "string") {
@@ -71,7 +65,7 @@ export function normalizeWorktreePath(worktreePath: string): string {
 export function buildRequest(method: string, params?: unknown): Rpc.JsonRpcRequest {
   return {
     jsonrpc: "2.0",
-    id: randomRequestId(),
+    id: generateId(),
     method,
     params,
   };
@@ -93,11 +87,5 @@ export function parseJsonRpcMessage(data: unknown): Rpc.JsonRpcResponse | Rpc.Js
 }
 
 export function buildUnsupportedMethodError(path: string): Error {
-  return new Error(`desktop daemon JSON-RPC does not support procedure \"${path}\"`);
-}
-
-export function delay(ms: number): Promise<void> {
-  return new Promise((resolvePromise) => {
-    setTimeout(resolvePromise, ms);
-  });
+  return new Error(`desktop daemon JSON-RPC does not support procedure "${path}"`);
 }

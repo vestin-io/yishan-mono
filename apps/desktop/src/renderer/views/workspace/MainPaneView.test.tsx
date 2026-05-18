@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WorkspacePaneVisibilityProvider } from "../../hooks/useWorkspacePaneVisibility";
-import { AGENT_SETTINGS_STORE_STORAGE_KEY, agentSettingsStore } from "../../store/agentSettingsStore";
+import { AGENT_SETTINGS_STORE_STORAGE_KEY, agentSettingsStore } from "../../store/settings/agentSettingsStore";
 import { MainPaneView } from "./MainPaneView";
 
 const mocked = vi.hoisted(() => {
@@ -65,7 +65,7 @@ vi.mock("../../hooks/useCommands", () => ({
       getTerminalResourceUsage: state.getTerminalResourceUsage ?? mocked.getTerminalResourceUsage,
       setSelectedRepoId: state.setSelectedRepoId,
       setSelectedWorkspaceId: state.setSelectedWorkspaceId,
-      setSelectedTabId: state.setSelectedTabId,
+      selectTab: state.selectTab,
       createTab: state.createTab,
       openTab: state.openTab,
       closeTab: state.closeTab,
@@ -142,7 +142,7 @@ vi.mock("../../components/SplitPaneGroup", () => ({
   }: {
     pane: { id: string; tabIds: string[]; selectedTabId: string };
     tabs: Array<{ id: string; title: string }>;
-    renderContent: (pane: { id: string; tabIds: string[]; selectedTabId: string }) => React.ReactNode;
+    renderContent: (pane: { id: string; tabIds: string[]; selectedTabId: string }, _extra: unknown) => React.ReactNode;
     onCreateTab: (option: string) => void;
     enabledAgentKinds?: string[];
   }) => (
@@ -229,8 +229,8 @@ vi.mock("../../store/splitPaneStore", () => {
             getAllPanes: () => [rootPane],
             setActivePane: vi.fn(),
             selectTab: vi.fn(),
-            addTab: vi.fn(),
-            removeTab: vi.fn(),
+            registerTabInPane: vi.fn(),
+            unregisterTabFromPane: vi.fn(),
             splitPane: vi.fn(),
             moveTab: vi.fn(),
             reorderTab: vi.fn(),
@@ -323,7 +323,7 @@ function buildStoreState(isInitializing: boolean) {
     listDetectedPorts: vi.fn().mockResolvedValue([]),
     setSelectedRepoId: vi.fn(),
     setSelectedWorkspaceId: vi.fn(),
-    setSelectedTabId: vi.fn(),
+    selectTab: vi.fn(),
     createTab: vi.fn(),
     openTab: vi.fn(),
     closeTab: vi.fn(),
@@ -443,7 +443,7 @@ describe("MainPaneView", () => {
       listDetectedPorts: vi.fn().mockResolvedValue([]),
       setSelectedRepoId: vi.fn(),
       setSelectedWorkspaceId: vi.fn(),
-      setSelectedTabId: vi.fn(),
+      selectTab: vi.fn(),
       createTab: vi.fn(),
       openTab: vi.fn(),
       closeTab: vi.fn(),
@@ -517,7 +517,7 @@ describe("MainPaneView", () => {
       listDetectedPorts: vi.fn().mockResolvedValue([]),
       setSelectedRepoId: vi.fn(),
       setSelectedWorkspaceId: vi.fn(),
-      setSelectedTabId: vi.fn(),
+      selectTab: vi.fn(),
       createTab: vi.fn(),
       openTab: vi.fn(),
       closeTab: vi.fn(),
@@ -589,7 +589,7 @@ describe("MainPaneView", () => {
       listDetectedPorts: vi.fn().mockResolvedValue([]),
       setSelectedRepoId: vi.fn(),
       setSelectedWorkspaceId: vi.fn(),
-      setSelectedTabId: vi.fn(),
+      selectTab: vi.fn(),
       createTab: vi.fn(),
       openTab: vi.fn(),
       closeTab: vi.fn(),
@@ -659,7 +659,7 @@ describe("MainPaneView", () => {
       listDetectedPorts: vi.fn().mockResolvedValue([]),
       setSelectedRepoId: vi.fn(),
       setSelectedWorkspaceId: vi.fn(),
-      setSelectedTabId: vi.fn(),
+      selectTab: vi.fn(),
       createTab: vi.fn(),
       openTab: vi.fn(),
       closeTab: vi.fn(),
@@ -875,7 +875,7 @@ describe("MainPaneView", () => {
 
   it("shows workspace ports summary and popup entries", async () => {
     const setSelectedWorkspaceId = vi.fn();
-    const setSelectedTabId = vi.fn();
+    const selectTab = vi.fn();
     mocked.stateRef.current = {
       ...buildStoreState(false),
       tabs: [
@@ -892,7 +892,7 @@ describe("MainPaneView", () => {
         },
       ],
       setSelectedWorkspaceId,
-      setSelectedTabId,
+      selectTab,
       listDetectedPorts: vi.fn().mockResolvedValue([
         {
           sessionId: "session-1",
@@ -923,7 +923,7 @@ describe("MainPaneView", () => {
     fireEvent.click(screen.getByRole("button", { name: "terminal.ports.toggleLabel" }));
     fireEvent.click(screen.getByRole("menuitem", { name: /node.*3000.*12345/ }));
     expect(setSelectedWorkspaceId).toHaveBeenCalledWith("workspace-1");
-    expect(setSelectedTabId).toHaveBeenCalledWith("terminal-tab-1");
+    expect(selectTab).toHaveBeenCalledWith("terminal-tab-1");
   });
 
   it("skips port polling when selected workspace has no terminal tabs", async () => {

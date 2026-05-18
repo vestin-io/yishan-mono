@@ -1,11 +1,8 @@
+import { nonEmptyStringSchema, orgIdParamSchema } from "@/validation/common";
 import { z } from "zod";
 
-import { nonEmptyStringSchema } from "@/validation/common";
-
-export const organizationProjectParamsSchema = z.object({
-  orgId: nonEmptyStringSchema,
-});
-
+export { orgIdParamSchema as organizationProjectParamsSchema };
+export type OrganizationProjectParamsInput = z.infer<typeof orgIdParamSchema>;
 export const projectWorkspaceParamsSchema = z.object({
   orgId: nonEmptyStringSchema,
   projectId: nonEmptyStringSchema,
@@ -18,18 +15,18 @@ export const organizationProjectListQuerySchema = z.object({
     .transform((value) => value === "true"),
 });
 
-export const createProjectBodySchema = z.object({
-  name: nonEmptyStringSchema,
-  sourceTypeHint: z.enum(["unknown", "git-local", "git"]).optional(),
-  repoUrl: nonEmptyStringSchema.optional(),
-  nodeId: nonEmptyStringSchema.optional(),
-  localPath: nonEmptyStringSchema.optional(),
-}).refine(
-  (input) => !(input.localPath && input.sourceTypeHint === "unknown"),
-  {
-    message: "sourceTypeHint must be 'git' or 'git-local' when a local path is provided — the folder must be a git repository",
-  },
-);
+export const createProjectBodySchema = z
+  .object({
+    name: nonEmptyStringSchema,
+    sourceTypeHint: z.enum(["unknown", "git-local", "git"]).optional(),
+    repoUrl: nonEmptyStringSchema.optional(),
+    nodeId: nonEmptyStringSchema.optional(),
+    localPath: nonEmptyStringSchema.optional(),
+  })
+  .refine((input) => !(input.localPath && input.sourceTypeHint === "unknown"), {
+    message:
+      "sourceTypeHint must be 'git' or 'git-local' when a local path is provided — the folder must be a git repository",
+  });
 
 export const updateProjectBodySchema = z
   .object({
@@ -43,11 +40,6 @@ export const updateProjectBodySchema = z
   .refine((value) => Object.values(value).some((item) => item !== undefined), {
     message: "At least one field must be provided",
   });
-
-export const projectIdentityParamsSchema = z.object({
-  orgId: nonEmptyStringSchema,
-  projectId: nonEmptyStringSchema,
-});
 
 export const createWorkspaceBodySchema = z.object({
   id: nonEmptyStringSchema.optional(),
@@ -83,12 +75,10 @@ export const upsertWorkspacePullRequestBodySchema = z.object({
   resolvedAt: z.string().datetime().optional(),
 });
 
-export type OrganizationProjectParamsInput = z.infer<typeof organizationProjectParamsSchema>;
 export type OrganizationProjectListQueryInput = z.infer<typeof organizationProjectListQuerySchema>;
 export type ProjectWorkspaceParamsInput = z.infer<typeof projectWorkspaceParamsSchema>;
 export type CreateProjectBodyInput = z.infer<typeof createProjectBodySchema>;
 export type UpdateProjectBodyInput = z.infer<typeof updateProjectBodySchema>;
-export type ProjectIdentityParamsInput = z.infer<typeof projectIdentityParamsSchema>;
 export type CreateWorkspaceBodyInput = z.infer<typeof createWorkspaceBodySchema>;
 export type CloseWorkspaceBodyInput = z.infer<typeof closeWorkspaceBodySchema>;
 export type WorkspacePullRequestParamsInput = z.infer<typeof workspacePullRequestParamsSchema>;

@@ -1,5 +1,6 @@
-import { nonEmptyStringSchema } from "@/validation/common";
+import { nonEmptyStringSchema, orgIdParamSchema } from "@/validation/common";
 import { z } from "zod";
+
 const nodeMetadataSchema = z
   .object({
     os: nonEmptyStringSchema.optional(),
@@ -7,13 +8,12 @@ const nodeMetadataSchema = z
   })
   .catchall(z.unknown());
 
+/** Shared node params schema for any route that identifies a single node by ID. */
 export const nodeParamsSchema = z.object({
   nodeId: nonEmptyStringSchema,
 });
 
-export const organizationNodeParamsSchema = z.object({
-  orgId: nonEmptyStringSchema,
-});
+export { orgIdParamSchema as organizationNodeParamsSchema };
 
 export const organizationNodeDeleteParamsSchema = z.object({
   orgId: nonEmptyStringSchema,
@@ -29,12 +29,7 @@ export const registerNodeBodySchema = z.object({
   updateIfExists: z.boolean().optional(),
 });
 
-export const nodeRelayTokenParamsSchema = z.object({
-  nodeId: nonEmptyStringSchema,
-});
-
 export type NodeParamsInput = z.infer<typeof nodeParamsSchema>;
 export type RegisterNodeBodyInput = z.infer<typeof registerNodeBodySchema>;
-export type OrganizationNodeParamsInput = z.infer<typeof organizationNodeParamsSchema>;
+export type OrganizationNodeParamsInput = z.infer<typeof orgIdParamSchema>;
 export type OrganizationNodeDeleteParamsInput = z.infer<typeof organizationNodeDeleteParamsSchema>;
-export type NodeRelayTokenParamsInput = z.infer<typeof nodeRelayTokenParamsSchema>;

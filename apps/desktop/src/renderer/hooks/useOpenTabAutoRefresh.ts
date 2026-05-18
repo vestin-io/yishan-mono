@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
 import { startBackendEventPipeline, subscribeBackendEvent } from "../events/backendEventPipeline";
-import type { Commands } from "./useCommands";
+import { getErrorMessage } from "../helpers/errorHelpers";
 import type { DiffTabSource } from "../store/types";
+import type { Commands } from "./useCommands";
 
 export type RefreshableOpenTab =
   | {
@@ -31,11 +32,14 @@ type OpenTabAutoRefreshCommands = Pick<
 type UseOpenTabAutoRefreshInput = {
   workspaceWorktreePath?: string;
   tabs: RefreshableOpenTab[];
-  cmd: OpenTabAutoRefreshCommands;
+  commands: OpenTabAutoRefreshCommands;
 };
 
 function normalizeRelativePath(path: string): string {
-  return path.replace(/^\.\/+/, "").replace(/\/+/g, "/").replace(/^\/+|\/+$/g, "");
+  return path
+    .replace(/^\.\/+/, "")
+    .replace(/\/+/g, "/")
+    .replace(/^\/+|\/+$/g, "");
 }
 
 function isPathWithinOrEqual(path: string, candidate: string): boolean {
@@ -55,7 +59,7 @@ function didPathChange(tabPath: string, changedRelativePaths?: string[]): boolea
 }
 
 function isFileNotFoundError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = getErrorMessage(error);
   const normalized = message.toLowerCase();
   return (
     normalized.includes("no such file") ||
@@ -70,9 +74,9 @@ function isFileNotFoundError(error: unknown): boolean {
 export function useOpenTabAutoRefresh(input: UseOpenTabAutoRefreshInput) {
   const { workspaceWorktreePath } = input;
   const tabsRef = useRef(input.tabs);
-  const commandsRef = useRef(input.cmd);
+  const commandsRef = useRef(input.commands);
   tabsRef.current = input.tabs;
-  commandsRef.current = input.cmd;
+  commandsRef.current = input.commands;
 
   useEffect(() => {
     if (!workspaceWorktreePath) {

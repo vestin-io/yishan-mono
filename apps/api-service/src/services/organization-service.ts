@@ -2,16 +2,17 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import type { AppDb } from "@/db/client";
 import { organizationMembers, organizations, users } from "@/db/schema";
+import type { OrganizationMemberRole } from "@/db/schema";
 import {
   InvalidOrganizationMemberRoleError,
   InvalidOrganizationMembersError,
   OrganizationManageMembersPermissionRequiredError,
   OrganizationMemberAlreadyExistsError,
-  OrganizationMembershipRequiredError,
   OrganizationMemberNotFoundError,
+  OrganizationMembershipRequiredError,
   OrganizationNotFoundError,
   OrganizationOwnerRemovalNotAllowedError,
-  OrganizationOwnerRequiredError
+  OrganizationOwnerRequiredError,
 } from "@/errors";
 import { newId } from "@/lib/id";
 
@@ -20,8 +21,6 @@ type CreateOrganizationInput = {
   actorUserId: string;
   memberUserIds: string[];
 };
-
-type OrganizationMemberRole = "owner" | "admin" | "member";
 
 export type OrganizationMemberView = {
   userId: string;
@@ -42,13 +41,28 @@ type OrganizationView = {
 export class OrganizationService {
   constructor(private readonly db: AppDb) {}
 
+  // ── Private helpers ────────────────────────────────────────────────────────
+
+  private async assertOrganizationExists(organizationId: string): Promise<void> {
+    const rows = await this.db
+      .select({ id: organizations.id })
+      .from(organizations)
+      .where(eq(organizations.id, organizationId))
+      .limit(1);
+    if (rows.length === 0) {
+      throw new OrganizationNotFoundError(organizationId);
+    }
+  }
+
+  // ── Public API ─────────────────────────────────────────────────────────────
+
   async listOrganizationMembers(input: {
     organizationId: string;
     actorUserId: string;
   }): Promise<OrganizationMemberView[]> {
     const actorRole = await this.getMembershipRole({
       organizationId: input.organizationId,
-      userId: input.actorUserId
+      userId: input.actorUserId,
     });
 
     if (!actorRole) {
@@ -61,7 +75,7 @@ export class OrganizationService {
         role: organizationMembers.role,
         email: users.email,
         name: users.name,
-        avatarUrl: users.avatarUrl
+        avatarUrl: users.avatarUrl,
       })
       .from(organizationMembers)
       .innerJoin(users, eq(users.id, organizationMembers.userId))
@@ -76,10 +90,7 @@ export class OrganizationService {
       .select({ role: organizationMembers.role })
       .from(organizationMembers)
       .where(
-        and(
-          eq(organizationMembers.organizationId, input.organizationId),
-          eq(organizationMembers.userId, input.userId)
-        )
+        and(eq(organizationMembers.organizationId, input.organizationId), eq(organizationMembers.userId, input.userId)),
       )
       .limit(1);
 
@@ -106,25 +117,16 @@ export class OrganizationService {
     memberUserId: string;
     role: "member" | "admin";
   }): Promise<OrganizationMemberView> {
+    await this.assertOrganizationExists(input.organizationId);
     return this.db.transaction(async (tx) => {
-      const existingOrganizationRows = await tx
-        .select({ id: organizations.id })
-        .from(organizations)
-        .where(eq(organizations.id, input.organizationId))
-        .limit(1);
-
-      if (existingOrganizationRows.length === 0) {
-        throw new OrganizationNotFoundError(input.organizationId);
-      }
-
       const actorMembershipRows = await tx
         .select({ role: organizationMembers.role })
         .from(organizationMembers)
         .where(
           and(
             eq(organizationMembers.organizationId, input.organizationId),
-            eq(organizationMembers.userId, input.actorUserId)
-          )
+            eq(organizationMembers.userId, input.actorUserId),
+          ),
         )
         .limit(1);
 
@@ -137,8 +139,9 @@ export class OrganizationService {
         throw new InvalidOrganizationMemberRoleError(input.role);
       }
 
+      // Fetch user details needed for the return value — also validates the user exists.
       const targetUserRows = await tx
-        .select({ id: users.id })
+        .select({ id: users.id, email: users.email, name: users.name, avatarUrl: users.avatarUrl })
         .from(users)
         .where(eq(users.id, input.memberUserId))
         .limit(1);
@@ -147,14 +150,16 @@ export class OrganizationService {
         throw new InvalidOrganizationMembersError([input.memberUserId]);
       }
 
+      const targetUser = targetUserRows[0]!;
+
       const existingMembershipRows = await tx
         .select({ userId: organizationMembers.userId })
         .from(organizationMembers)
         .where(
           and(
             eq(organizationMembers.organizationId, input.organizationId),
-            eq(organizationMembers.userId, input.memberUserId)
-          )
+            eq(organizationMembers.userId, input.memberUserId),
+          ),
         )
         .limit(1);
 
@@ -166,33 +171,17 @@ export class OrganizationService {
         id: newId(),
         organizationId: input.organizationId,
         userId: input.memberUserId,
-        role: input.role
+        role: input.role,
       });
 
-      const insertedMemberRows = await tx
-        .select({
-          userId: organizationMembers.userId,
-          role: organizationMembers.role,
-          email: users.email,
-          name: users.name,
-          avatarUrl: users.avatarUrl
-        })
-        .from(organizationMembers)
-        .innerJoin(users, eq(users.id, organizationMembers.userId))
-        .where(
-          and(
-            eq(organizationMembers.organizationId, input.organizationId),
-            eq(organizationMembers.userId, input.memberUserId)
-          )
-        )
-        .limit(1);
-
-      const insertedMember = insertedMemberRows[0];
-      if (!insertedMember) {
-        throw new Error("Failed to add organization member");
-      }
-
-      return insertedMember;
+      // Build return value from already-fetched user data — no second SELECT needed.
+      return {
+        userId: targetUser.id,
+        role: input.role,
+        email: targetUser.email,
+        name: targetUser.name,
+        avatarUrl: targetUser.avatarUrl,
+      };
     });
   }
 
@@ -201,25 +190,16 @@ export class OrganizationService {
     actorUserId: string;
     memberUserId: string;
   }): Promise<void> {
+    await this.assertOrganizationExists(input.organizationId);
     await this.db.transaction(async (tx) => {
-      const existingOrganizationRows = await tx
-        .select({ id: organizations.id })
-        .from(organizations)
-        .where(eq(organizations.id, input.organizationId))
-        .limit(1);
-
-      if (existingOrganizationRows.length === 0) {
-        throw new OrganizationNotFoundError(input.organizationId);
-      }
-
       const actorMembershipRows = await tx
         .select({ role: organizationMembers.role })
         .from(organizationMembers)
         .where(
           and(
             eq(organizationMembers.organizationId, input.organizationId),
-            eq(organizationMembers.userId, input.actorUserId)
-          )
+            eq(organizationMembers.userId, input.actorUserId),
+          ),
         )
         .limit(1);
 
@@ -234,8 +214,8 @@ export class OrganizationService {
         .where(
           and(
             eq(organizationMembers.organizationId, input.organizationId),
-            eq(organizationMembers.userId, input.memberUserId)
-          )
+            eq(organizationMembers.userId, input.memberUserId),
+          ),
         )
         .limit(1);
 
@@ -253,32 +233,23 @@ export class OrganizationService {
         .where(
           and(
             eq(organizationMembers.organizationId, input.organizationId),
-            eq(organizationMembers.userId, input.memberUserId)
-          )
+            eq(organizationMembers.userId, input.memberUserId),
+          ),
         );
     });
   }
 
   async deleteOrganization(input: { organizationId: string; actorUserId: string }): Promise<void> {
+    await this.assertOrganizationExists(input.organizationId);
     await this.db.transaction(async (tx) => {
-      const existingOrganizationRows = await tx
-        .select({ id: organizations.id })
-        .from(organizations)
-        .where(eq(organizations.id, input.organizationId))
-        .limit(1);
-
-      if (existingOrganizationRows.length === 0) {
-        throw new OrganizationNotFoundError(input.organizationId);
-      }
-
       const actorMembershipRows = await tx
         .select({ role: organizationMembers.role })
         .from(organizationMembers)
         .where(
           and(
             eq(organizationMembers.organizationId, input.organizationId),
-            eq(organizationMembers.userId, input.actorUserId)
-          )
+            eq(organizationMembers.userId, input.actorUserId),
+          ),
         )
         .limit(1);
 
@@ -295,10 +266,7 @@ export class OrganizationService {
     return this.db.transaction(async (tx) => {
       const normalizedUserIds = Array.from(new Set([input.actorUserId, ...input.memberUserIds]));
 
-      const existingUsers = await tx
-        .select({ id: users.id })
-        .from(users)
-        .where(inArray(users.id, normalizedUserIds));
+      const existingUsers = await tx.select({ id: users.id }).from(users).where(inArray(users.id, normalizedUserIds));
 
       if (existingUsers.length !== normalizedUserIds.length) {
         const existingUserIdSet = new Set(existingUsers.map((row) => row.id));
@@ -308,10 +276,7 @@ export class OrganizationService {
 
       const insertedOrganizations = await tx
         .insert(organizations)
-        .values({
-          id: newId(),
-          name: input.name
-        })
+        .values({ id: newId(), name: input.name })
         .returning();
 
       const organization = insertedOrganizations[0];
@@ -324,8 +289,8 @@ export class OrganizationService {
           id: newId(),
           organizationId: organization.id,
           userId,
-          role: userId === input.actorUserId ? "owner" : "member"
-        }))
+          role: userId === input.actorUserId ? "owner" : "member",
+        })),
       );
 
       const members = await tx
@@ -334,30 +299,19 @@ export class OrganizationService {
           role: organizationMembers.role,
           email: users.email,
           name: users.name,
-          avatarUrl: users.avatarUrl
+          avatarUrl: users.avatarUrl,
         })
         .from(organizationMembers)
         .innerJoin(users, eq(users.id, organizationMembers.userId))
         .where(eq(organizationMembers.organizationId, organization.id));
 
-      return {
-        ...organization,
-        members
-      };
+      return { ...organization, members };
     });
   }
 
   async getOrganizationsForUser(userId: string): Promise<OrganizationView[]> {
-    const organizationRows = await this.db
-      .select({ organizationId: organizationMembers.organizationId })
-      .from(organizationMembers)
-      .where(eq(organizationMembers.userId, userId));
-
-    const organizationIds = Array.from(new Set(organizationRows.map((row) => row.organizationId)));
-    if (organizationIds.length === 0) {
-      return [];
-    }
-
+    // Single JOIN from organization_members → organizations → users.
+    // No need for a preliminary "which orgs does this user belong to" query.
     const memberships = await this.db
       .select({
         organizationId: organizations.id,
@@ -368,24 +322,36 @@ export class OrganizationService {
         role: organizationMembers.role,
         email: users.email,
         name: users.name,
-        avatarUrl: users.avatarUrl
+        avatarUrl: users.avatarUrl,
       })
       .from(organizationMembers)
       .innerJoin(organizations, eq(organizations.id, organizationMembers.organizationId))
       .innerJoin(users, eq(users.id, organizationMembers.userId))
-      .where(inArray(organizationMembers.organizationId, organizationIds));
+      .where(
+        // Limit to orgs the requesting user belongs to.
+        inArray(
+          organizationMembers.organizationId,
+          this.db
+            .select({ organizationId: organizationMembers.organizationId })
+            .from(organizationMembers)
+            .where(eq(organizationMembers.userId, userId)),
+        ),
+      );
+
+    if (memberships.length === 0) {
+      return [];
+    }
 
     const byOrg = new Map<string, OrganizationView>();
 
     for (const row of memberships) {
       const existing = byOrg.get(row.organizationId);
-
       const member = {
         userId: row.userId,
         role: row.role,
         email: row.email,
         name: row.name,
-        avatarUrl: row.avatarUrl
+        avatarUrl: row.avatarUrl,
       };
 
       if (existing) {
@@ -398,7 +364,7 @@ export class OrganizationService {
         name: row.organizationName,
         createdAt: row.organizationCreatedAt,
         updatedAt: row.organizationUpdatedAt,
-        members: [member]
+        members: [member],
       });
     }
 
