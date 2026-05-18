@@ -3,7 +3,6 @@ package daemon
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -19,7 +18,10 @@ const workspacePullRequestPollInterval = 5 * time.Minute
 type workspacePRTracker struct {
 	mu             sync.Mutex
 	manager        *workspace.Manager
-	active         map[string]bool
+	// active maps workspaceID → Workspace for all workspaces currently being
+	// tracked. Storing the full Workspace avoids calling manager.List() on
+	// every poll tick and filtering by active map membership.
+	active         map[string]workspace.Workspace
 	inFlight       map[string]bool
 	started        bool
 	done           chan struct{}
@@ -32,7 +34,7 @@ type workspacePRTracker struct {
 func newWorkspacePRTracker(manager *workspace.Manager, publish func(frontendEvent)) *workspacePRTracker {
 	tracker := &workspacePRTracker{
 		manager:  manager,
-		active:   make(map[string]bool),
+		active:   make(map[string]workspace.Workspace),
 		inFlight: make(map[string]bool),
 		done:     make(chan struct{}),
 		publish:  publish,
@@ -76,7 +78,7 @@ func (t *workspacePRTracker) EnsureTracked(worktreePath string) {
 		t.started = true
 		go t.pollLoop()
 	}
-	t.active[ws.ID] = true
+	t.active[ws.ID] = ws
 	t.mu.Unlock()
 
 	go t.RefreshWorkspaceByPath(worktreePath)
@@ -101,7 +103,7 @@ func (t *workspacePRTracker) EnsureTrackedSkipInitialRefresh(worktreePath string
 		t.started = true
 		go t.pollLoop()
 	}
-	t.active[ws.ID] = true
+	t.active[ws.ID] = ws
 }
 
 func (t *workspacePRTracker) StopTracking(workspaceID string) {
@@ -130,7 +132,7 @@ func (t *workspacePRTracker) RefreshWorkspaceByPath(worktreePath string) {
 	}
 
 	t.mu.Lock()
-	tracked := t.active[ws.ID]
+	_, tracked := t.active[ws.ID]
 	t.mu.Unlock()
 	if !tracked {
 		log.Debug().Str("workspaceId", ws.ID).Str("path", ws.Path).Msg("workspace PR refresh skipped because workspace is no longer active")
@@ -159,13 +161,16 @@ func (t *workspacePRTracker) pollLoop() {
 		case <-ticker.C:
 		}
 
-		for _, ws := range t.manager.List() {
-			t.mu.Lock()
-			tracked := t.active[ws.ID]
-			t.mu.Unlock()
-			if !tracked {
-				continue
-			}
+		t.mu.Lock()
+		// Snapshot the tracked workspaces under the lock, then release before
+		// making network calls. This avoids holding mu during the gh CLI calls.
+		tracked := make([]workspace.Workspace, 0, len(t.active))
+		for _, ws := range t.active {
+			tracked = append(tracked, ws)
+		}
+		t.mu.Unlock()
+
+		for _, ws := range tracked {
 			if !t.beginRefresh(ws.ID) {
 				continue
 			}
@@ -257,7 +262,7 @@ func (t *workspacePRTracker) setWorkspacePullRequest(workspaceID string, pr *wor
 	if err := t.manager.SetWorkspacePullRequest(workspaceID, pr); err != nil {
 		return
 	}
-	if previousErr == nil && !reflect.DeepEqual(previousPullRequest, pr) {
+	if previousErr == nil && prMeaningfullyChanged(previousPullRequest, pr) {
 		if currentWorkspace, err := t.manager.GetWorkspace(workspaceID); err == nil && t.publish != nil {
 			t.publish(frontendEvent{
 				Topic: "workspacePullRequestUpdated",
@@ -273,7 +278,15 @@ func (t *workspacePRTracker) setWorkspacePullRequest(workspaceID string, pr *wor
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if keepActive {
-		t.active[workspaceID] = true
+		// Re-read from active to preserve the Workspace value; the map entry
+		// already exists since setWorkspacePullRequest is only called for tracked
+		// workspaces (via refreshWorkspace or EnsureTracked).
+		if _, ok := t.active[workspaceID]; !ok {
+			// Workspace was untracked while refresh was running; re-resolve.
+			if ws, err := t.manager.GetWorkspace(workspaceID); err == nil {
+				t.active[workspaceID] = ws
+			}
+		}
 	} else {
 		delete(t.active, workspaceID)
 	}
@@ -288,7 +301,10 @@ func (t *workspacePRTracker) setWorkspacePullRequest(workspaceID string, pr *wor
 // prMeaningfullyChanged returns true when the PR fields that matter for
 // persistence have changed, ignoring UpdatedAt which is always refreshed.
 func prMeaningfullyChanged(prev, next *workspace.WorkspacePullRequest) bool {
-	if prev == nil {
+	if prev == nil && next == nil {
+		return false
+	}
+	if prev == nil || next == nil {
 		return true
 	}
 	return prev.Number != next.Number ||
@@ -301,8 +317,44 @@ func prMeaningfullyChanged(prev, next *workspace.WorkspacePullRequest) bool {
 		prev.ReviewDecision != next.ReviewDecision ||
 		prev.IsDraft != next.IsDraft ||
 		prev.Complete != next.Complete ||
-		!reflect.DeepEqual(prev.Checks, next.Checks) ||
-		!reflect.DeepEqual(prev.Deployments, next.Deployments)
+		!checksEqual(prev.Checks, next.Checks) ||
+		!deploymentsEqual(prev.Deployments, next.Deployments)
+}
+
+// checksEqual compares two check slices field-by-field.
+// Length-first comparison short-circuits the common case of different counts.
+func checksEqual(a, b []workspace.GitPullRequestCheck) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].Name != b[i].Name ||
+			a[i].State != b[i].State ||
+			a[i].Workflow != b[i].Workflow ||
+			a[i].Description != b[i].Description ||
+			a[i].URL != b[i].URL {
+			return false
+		}
+	}
+	return true
+}
+
+// deploymentsEqual compares two deployment slices field-by-field.
+// Length-first comparison short-circuits the common case of different counts.
+func deploymentsEqual(a, b []workspace.GitPullRequestDeployment) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].ID != b[i].ID ||
+			a[i].Environment != b[i].Environment ||
+			a[i].State != b[i].State ||
+			a[i].Description != b[i].Description ||
+			a[i].EnvironmentURL != b[i].EnvironmentURL {
+			return false
+		}
+	}
+	return true
 }
 
 func normalizeWorkspacePullRequestStatus(pr workspace.GitBranchPullRequestStatus) string {

@@ -33,9 +33,20 @@ func gitCommandCombined(ctx context.Context, cwd string, args ...string) (string
 	return string(out), nil
 }
 
-func ghCommand(ctx context.Context, cwd string, args ...string) (string, error) {
-	env := shellenv.ResolveEnvWithUserPath(os.Environ(), os.Getenv("SHELL"))
-	ghPath := shellenv.ResolveExecutablePathFromEnv("gh", env)
+// resolveGH resolves the gh CLI binary path and environment once per GitService
+// lifetime using sync.Once. Every call after the first returns the cached result
+// without spawning a login shell subprocess.
+func (s *GitService) resolveGH() (path string, env []string) {
+	s.ghOnce.Do(func() {
+		s.ghEnv = shellenv.ResolveEnvWithUserPath(os.Environ(), os.Getenv("SHELL"))
+		s.ghPath = shellenv.ResolveExecutablePathFromEnv("gh", s.ghEnv)
+	})
+	return s.ghPath, s.ghEnv
+}
+
+// ghCommand runs the gh CLI in the given directory using the cached environment.
+func (s *GitService) ghCommand(ctx context.Context, cwd string, args ...string) (string, error) {
+	ghPath, env := s.resolveGH()
 	if ghPath == "" {
 		return "", NewRPCError(-32010, "GitHub CLI (gh) is not installed")
 	}
@@ -53,8 +64,9 @@ func ghCommand(ctx context.Context, cwd string, args ...string) (string, error) 
 	return string(out), nil
 }
 
-func ghJSON(ctx context.Context, cwd string, target any, args ...string) error {
-	out, err := ghCommand(ctx, cwd, args...)
+// ghJSON runs gh and JSON-decodes the output into target.
+func (s *GitService) ghJSON(ctx context.Context, cwd string, target any, args ...string) error {
+	out, err := s.ghCommand(ctx, cwd, args...)
 	if err != nil {
 		return err
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"strings"
@@ -297,10 +298,19 @@ func mintRelayToken(nodeID string) (string, time.Time, error) {
 	return resp.Token, expiry, nil
 }
 
+// nextRelayDelay doubles the current delay up to relayReconnectMaxDelay and
+// adds ±25% jitter to prevent thundering-herd reconnects when multiple daemon
+// nodes disconnect simultaneously.
 func nextRelayDelay(current time.Duration) time.Duration {
 	next := current * 2
 	if next > relayReconnectMaxDelay {
-		return relayReconnectMaxDelay
+		next = relayReconnectMaxDelay
 	}
-	return next
+	// Add ±25% jitter: jitter is in the range [-next/4, +next/4].
+	jitter := time.Duration(rand.Int63n(int64(next/2))) - next/4
+	result := next + jitter
+	if result < relayReconnectInitialDelay {
+		return relayReconnectInitialDelay
+	}
+	return result
 }

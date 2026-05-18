@@ -13,7 +13,7 @@ import (
 func TestWorkspacePRTracker_BindsActivePullRequest(t *testing.T) {
 	manager, ws := openTrackedWorkspace(t)
 	tracker := newWorkspacePRTracker(manager, nil)
-	tracker.active[ws.ID] = true
+	tracker.active[ws.ID] = ws
 	tracker.branchResolver = func(context.Context, string) (string, error) {
 		return "feature/test", nil
 	}
@@ -42,7 +42,7 @@ func TestWorkspacePRTracker_BindsActivePullRequest(t *testing.T) {
 	if updated.PullRequest.Status != "review" {
 		t.Fatalf("expected review status, got %+v", updated.PullRequest)
 	}
-	if !tracker.active[ws.ID] {
+	if _, ok := tracker.active[ws.ID]; !ok {
 		t.Fatalf("expected workspace %q to remain active", ws.ID)
 	}
 }
@@ -50,7 +50,7 @@ func TestWorkspacePRTracker_BindsActivePullRequest(t *testing.T) {
 func TestWorkspacePRTracker_StopsTrackingMergedPullRequest(t *testing.T) {
 	manager, ws := openTrackedWorkspace(t)
 	tracker := newWorkspacePRTracker(manager, nil)
-	tracker.active[ws.ID] = true
+	tracker.active[ws.ID] = ws
 	tracker.branchResolver = func(context.Context, string) (string, error) {
 		return "feature/test", nil
 	}
@@ -76,7 +76,7 @@ func TestWorkspacePRTracker_StopsTrackingMergedPullRequest(t *testing.T) {
 	if updated.PullRequest == nil || updated.PullRequest.Status != "merged" || !updated.PullRequest.Complete {
 		t.Fatalf("expected merged completed pull request, got %+v", updated.PullRequest)
 	}
-	if tracker.active[ws.ID] {
+	if _, ok := tracker.active[ws.ID]; ok {
 		t.Fatalf("expected workspace %q to be removed from active set", ws.ID)
 	}
 }
@@ -87,7 +87,7 @@ func TestWorkspacePRTracker_ClearsMissingPullRequest(t *testing.T) {
 		t.Fatalf("SetWorkspacePullRequest: %v", err)
 	}
 	tracker := newWorkspacePRTracker(manager, nil)
-	tracker.active[ws.ID] = true
+	tracker.active[ws.ID] = ws
 	tracker.branchResolver = func(context.Context, string) (string, error) {
 		return "feature/test", nil
 	}
@@ -105,7 +105,7 @@ func TestWorkspacePRTracker_ClearsMissingPullRequest(t *testing.T) {
 		t.Fatalf("expected pull request to be cleared, got %+v", updated.PullRequest)
 	}
 	// When no PR is found the workspace stays active so future PRs can be detected.
-	if !tracker.active[ws.ID] {
+	if _, ok := tracker.active[ws.ID]; !ok {
 		t.Fatalf("expected workspace %q to remain active when no PR found", ws.ID)
 	}
 }
@@ -113,7 +113,7 @@ func TestWorkspacePRTracker_ClearsMissingPullRequest(t *testing.T) {
 func TestWorkspacePRTracker_SkipsOverlappingRefreshes(t *testing.T) {
 	manager, ws := openTrackedWorkspace(t)
 	tracker := newWorkspacePRTracker(manager, nil)
-	tracker.active[ws.ID] = true
+	tracker.active[ws.ID] = ws
 	tracker.branchResolver = func(context.Context, string) (string, error) {
 		return "feature/test", nil
 	}

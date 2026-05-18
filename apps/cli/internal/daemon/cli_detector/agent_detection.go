@@ -49,7 +49,7 @@ type cachedAgentDetectionResult struct {
 }
 
 var (
-	agentDetectionCacheMu sync.Mutex
+	agentDetectionCacheMu sync.RWMutex
 	agentDetectionCache   cachedAgentDetectionResult
 )
 
@@ -144,8 +144,8 @@ func loadCachedAgentDetectionStatuses(cacheKey string, ttl time.Duration) ([]Age
 	}
 
 	now := time.Now()
-	agentDetectionCacheMu.Lock()
-	defer agentDetectionCacheMu.Unlock()
+	agentDetectionCacheMu.RLock()
+	defer agentDetectionCacheMu.RUnlock()
 
 	if agentDetectionCache.CacheKey != cacheKey {
 		return nil, false
@@ -163,8 +163,8 @@ func loadAnyCachedAgentDetectionStatuses(ttl time.Duration) ([]AgentCLIDetection
 	}
 
 	now := time.Now()
-	agentDetectionCacheMu.Lock()
-	defer agentDetectionCacheMu.Unlock()
+	agentDetectionCacheMu.RLock()
+	defer agentDetectionCacheMu.RUnlock()
 
 	if now.After(agentDetectionCache.ExpiresAt) {
 		return nil, false
@@ -216,11 +216,18 @@ func listAgentCLIDetectionStatusesWithOptions(options agentDetectionOptions) []A
 	pathSegments := splitPathSegments(options.PathValue)
 	statuses := make([]AgentCLIDetectionStatus, len(supportedAgentCLIs))
 
+	// Limit concurrent subprocess spawns so a cold-cache detection run (7 agents
+	// × up to 3 --version probes each) does not spawn 21 processes simultaneously.
+	const maxConcurrentDetections = 4
+	sem := make(chan struct{}, maxConcurrentDetections)
+
 	var waitGroup sync.WaitGroup
 	waitGroup.Add(len(supportedAgentCLIs))
 	for index, agentCLI := range supportedAgentCLIs {
 		go func(index int, agentCLI supportedAgentCLI) {
 			defer waitGroup.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
 
 			binaryPath, ok := findExecutableInPath(agentCLI.Commands, pathSegments, options)
 			if !ok {

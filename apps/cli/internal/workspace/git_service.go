@@ -23,6 +23,13 @@ type GitService struct {
 	mu                     sync.RWMutex
 	branchCache            map[string]branchCacheEntry
 	branchPullRequestCache map[string]branchPullRequestCacheEntry
+
+	// ghOnce lazily resolves the gh CLI path and environment once per GitService
+	// lifetime. Subsequent calls return the cached values without re-spawning a
+	// login shell subprocess.
+	ghOnce sync.Once
+	ghPath string
+	ghEnv  []string
 }
 
 func NewGitService() *GitService {

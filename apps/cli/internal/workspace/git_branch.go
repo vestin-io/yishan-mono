@@ -10,14 +10,29 @@ import (
 )
 
 func (s *GitService) BranchStatus(ctx context.Context, root string) (GitBranchStatus, error) {
-	tracking, err := gitCommand(ctx, root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
-	hasUpstream := err == nil && strings.TrimSpace(tracking) != ""
+	// `git status --branch --porcelain=v2` returns both the upstream tracking
+	// branch and the ahead/behind counts in a single subprocess call, replacing
+	// two sequential rev-parse + rev-list calls.
+	out, err := gitCommand(ctx, root, "status", "--branch", "--porcelain=v2")
+	if err != nil {
+		return GitBranchStatus{}, err
+	}
 
+	var hasUpstream bool
 	ahead := 0
-	if hasUpstream {
-		count, err := gitCommand(ctx, root, "rev-list", "--count", "@{u}..HEAD")
-		if err == nil {
-			fmt.Sscanf(strings.TrimSpace(count), "%d", &ahead)
+
+	for line := range strings.SplitSeq(out, "\n") {
+		// # branch.ab +<ahead> -<behind>
+		if strings.HasPrefix(line, "# branch.ab ") {
+			hasUpstream = true
+			fields := strings.Fields(line)
+			if len(fields) >= 3 {
+				fmt.Sscanf(fields[2], "+%d", &ahead)
+			}
+		}
+		// # branch.upstream <remote>/<branch>  (only present when tracking branch exists)
+		if strings.HasPrefix(line, "# branch.upstream ") {
+			hasUpstream = true
 		}
 	}
 

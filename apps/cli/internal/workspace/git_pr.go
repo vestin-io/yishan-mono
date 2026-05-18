@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -49,7 +50,7 @@ func (s *GitService) branchPullRequest(ctx context.Context, root string, branch 
 		s.mu.Unlock()
 	}
 
-	out, err := ghCommand(ctx, root,
+	out, err := s.ghCommand(ctx, root,
 		"pr", "list",
 		"--head", branchName,
 		"--state", "all",
@@ -90,11 +91,11 @@ func (s *GitService) branchPullRequest(ctx context.Context, root string, branch 
 	checks := []GitPullRequestCheck{}
 	deployments := []GitPullRequestDeployment{}
 	if includeDetails {
-		checks, err = getPullRequestChecks(ctx, root, pr.Number, pr.HeadRefOID)
+		checks, err = s.getPullRequestChecks(ctx, root, pr.Number, pr.HeadRefOID)
 		if err != nil {
 			return GitBranchPullRequestStatus{}, err
 		}
-		deployments, err = getPullRequestDeployments(ctx, root, pr.HeadRefOID)
+		deployments, err = s.getPullRequestDeployments(ctx, root, pr.HeadRefOID)
 		if err != nil {
 			return GitBranchPullRequestStatus{}, err
 		}
@@ -121,7 +122,7 @@ func (s *GitService) branchPullRequest(ctx context.Context, root string, branch 
 	return status, nil
 }
 
-func getPullRequestChecks(ctx context.Context, root string, prNumber int, headRefOID string) ([]GitPullRequestCheck, error) {
+func (s *GitService) getPullRequestChecks(ctx context.Context, root string, prNumber int, headRefOID string) ([]GitPullRequestCheck, error) {
 	// Use the GitHub REST API to get check runs with correct html_url links.
 	// gh pr checks --json only provides marketplace/app links, not check run URLs.
 	if strings.TrimSpace(headRefOID) != "" {
@@ -136,7 +137,7 @@ func getPullRequestChecks(ctx context.Context, root string, prNumber int, headRe
 		}
 
 		var resp ghCheckRunsResponse
-		if err := ghJSON(ctx, root, &resp,
+		if err := s.ghJSON(ctx, root, &resp,
 			"api", fmt.Sprintf("repos/{owner}/{repo}/commits/%s/check-runs", headRefOID),
 		); err == nil && len(resp.CheckRuns) > 0 {
 			result := make([]GitPullRequestCheck, 0, len(resp.CheckRuns))
@@ -165,7 +166,7 @@ func getPullRequestChecks(ctx context.Context, root string, prNumber int, headRe
 	}
 
 	checks := make([]ghCheck, 0)
-	if err := ghJSON(ctx, root, &checks,
+	if err := s.ghJSON(ctx, root, &checks,
 		"pr", "checks", fmt.Sprintf("%d", prNumber),
 		"--required=false",
 		"--json", "name,workflow,state,description,link",
@@ -186,7 +187,7 @@ func getPullRequestChecks(ctx context.Context, root string, prNumber int, headRe
 	return result, nil
 }
 
-func getPullRequestDeployments(ctx context.Context, root string, headRefOID string) ([]GitPullRequestDeployment, error) {
+func (s *GitService) getPullRequestDeployments(ctx context.Context, root string, headRefOID string) ([]GitPullRequestDeployment, error) {
 	if strings.TrimSpace(headRefOID) == "" {
 		return []GitPullRequestDeployment{}, nil
 	}
@@ -195,7 +196,7 @@ func getPullRequestDeployments(ctx context.Context, root string, headRefOID stri
 		NameWithOwner string `json:"nameWithOwner"`
 	}
 	repo := ghRepo{}
-	if err := ghJSON(ctx, root, &repo, "api", "repos/{owner}/{repo}"); err != nil {
+	if err := s.ghJSON(ctx, root, &repo, "api", "repos/{owner}/{repo}"); err != nil {
 		return nil, err
 	}
 	if strings.TrimSpace(repo.NameWithOwner) == "" {
@@ -212,7 +213,7 @@ func getPullRequestDeployments(ctx context.Context, root string, headRefOID stri
 	}
 
 	deployments := make([]ghDeployment, 0)
-	if err := ghJSON(ctx, root, &deployments,
+	if err := s.ghJSON(ctx, root, &deployments,
 		"api",
 		fmt.Sprintf("repos/%s/deployments", repo.NameWithOwner),
 		"-f", "sha="+headRefOID,
@@ -221,28 +222,49 @@ func getPullRequestDeployments(ctx context.Context, root string, headRefOID stri
 		return nil, err
 	}
 
-	result := make([]GitPullRequestDeployment, 0, len(deployments))
-	for _, deployment := range deployments {
-		status, envURL, statusDescription, err := getDeploymentStatus(ctx, root, repo.NameWithOwner, deployment.ID)
+	result := make([]GitPullRequestDeployment, len(deployments))
+	errs := make([]error, len(deployments))
+
+	// Fetch each deployment's status concurrently with a semaphore of 4 to
+	// avoid spawning too many gh subprocesses simultaneously.
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 4)
+	for i, deployment := range deployments {
+		wg.Add(1)
+		go func(i int, d ghDeployment) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			status, envURL, statusDescription, err := s.getDeploymentStatus(ctx, root, repo.NameWithOwner, d.ID)
+			if err != nil {
+				errs[i] = err
+				return
+			}
+			result[i] = GitPullRequestDeployment{
+				ID:              d.ID,
+				Environment:     d.Environment,
+				State:           status,
+				Description:     coalesceNonEmpty(statusDescription, d.Description),
+				EnvironmentURL:  envURL,
+				CreatedAt:       d.CreatedAt,
+				UpdatedAt:       d.UpdatedAt,
+				OriginalPayload: d.OriginalPayload,
+			}
+		}(i, deployment)
+	}
+	wg.Wait()
+
+	for _, err := range errs {
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, GitPullRequestDeployment{
-			ID:              deployment.ID,
-			Environment:     deployment.Environment,
-			State:           status,
-			Description:     coalesceNonEmpty(statusDescription, deployment.Description),
-			EnvironmentURL:  envURL,
-			CreatedAt:       deployment.CreatedAt,
-			UpdatedAt:       deployment.UpdatedAt,
-			OriginalPayload: deployment.OriginalPayload,
-		})
 	}
 
 	return result, nil
 }
 
-func getDeploymentStatus(ctx context.Context, root string, repo string, deploymentID int64) (state string, environmentURL string, description string, err error) {
+func (s *GitService) getDeploymentStatus(ctx context.Context, root string, repo string, deploymentID int64) (state string, environmentURL string, description string, err error) {
 	type ghDeploymentStatus struct {
 		State          string `json:"state"`
 		EnvironmentURL string `json:"environment_url"`
@@ -250,7 +272,7 @@ func getDeploymentStatus(ctx context.Context, root string, repo string, deployme
 	}
 
 	statuses := make([]ghDeploymentStatus, 0)
-	err = ghJSON(ctx, root, &statuses,
+	err = s.ghJSON(ctx, root, &statuses,
 		"api",
 		fmt.Sprintf("repos/%s/deployments/%d/statuses", repo, deploymentID),
 		"-f", "per_page=1",

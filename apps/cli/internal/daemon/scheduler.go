@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
@@ -223,7 +224,6 @@ func runAgent(agentKind, prompt, model, command string) (output string, err erro
 	}
 
 	args := []string{"run", "--prompt", prompt}
-
 	if model != "" {
 		args = append(args, "--model", model)
 	}
@@ -231,30 +231,31 @@ func runAgent(agentKind, prompt, model, command string) (output string, err erro
 		args = append(args, "--command", command)
 	}
 
-	cmd := exec.Command(binary, args...)
+	// exec.CommandContext kills the process when the context deadline fires,
+	// eliminating the time.After goroutine leak that occurred on every job
+	// that completed before the timeout.
+	ctx, cancel := context.WithTimeout(context.Background(), agentExecTimeout)
+	defer cancel()
 
+	cmd := exec.CommandContext(ctx, binary, args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	done := make(chan error, 1)
-	if startErr := cmd.Start(); startErr != nil {
-		return "", fmt.Errorf("failed to start agent: %w", startErr)
-	}
-	go func() { done <- cmd.Wait() }()
-
-	select {
-	case waitErr := <-done:
+	if err := cmd.Run(); err != nil {
 		combined := stdout.String()
 		if stderr.Len() > 0 {
 			combined += "\n" + stderr.String()
 		}
-		if waitErr != nil {
-			return combined, fmt.Errorf("agent exited with error: %w", waitErr)
+		if ctx.Err() == context.DeadlineExceeded {
+			return combined, fmt.Errorf("agent timed out after %s", agentExecTimeout)
 		}
-		return combined, nil
-	case <-time.After(agentExecTimeout):
-		_ = cmd.Process.Kill()
-		return stdout.String(), fmt.Errorf("agent timed out after %s", agentExecTimeout)
+		return combined, fmt.Errorf("agent exited with error: %w", err)
 	}
+
+	combined := stdout.String()
+	if stderr.Len() > 0 {
+		combined += "\n" + stderr.String()
+	}
+	return combined, nil
 }
