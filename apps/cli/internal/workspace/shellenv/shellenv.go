@@ -1,14 +1,18 @@
 package shellenv
 
 import (
+	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 )
 
 const ManagedRuntimeRootDirName = ".yishan"
 const ManagedRuntimeOrigZdotdirEnvKey = "YISHAN_ORIG_ZDOTDIR"
+const loginShellPathTimeout = 1500 * time.Millisecond
 
 func ResolveUserShell(shellEnv string) string {
 	if resolved := strings.TrimSpace(shellEnv); resolved != "" {
@@ -111,6 +115,20 @@ func EnsurePathHasExistingDirectories(env []string, directories []string) []stri
 	return UpsertEnv(env, "PATH", newPath)
 }
 
+func ResolveEnvWithUserPath(env []string, shellCommand string) []string {
+	pathValues := []string{EnvValueOrDefault(env, "PATH", os.Getenv("PATH"))}
+
+	if runtime.GOOS != "windows" {
+		if loginPath := readLoginShellPath(shellCommand, loginShellPathTimeout); strings.TrimSpace(loginPath) != "" {
+			pathValues = append(pathValues, loginPath)
+		}
+	}
+
+	mergedPath := strings.Join(pathValues, string(os.PathListSeparator))
+	withMergedPath := UpsertEnv(env, "PATH", mergedPath)
+	return EnsurePathHasExistingDirectories(withMergedPath, CommonUserBinDirectories())
+}
+
 func CommonUserBinDirectories() []string {
 	directories := []string{"/opt/homebrew/bin", "/usr/local/bin"}
 	homeDir, err := os.UserHomeDir()
@@ -126,6 +144,25 @@ func CommonUserBinDirectories() []string {
 		filepath.Join(homeDir, "go", "bin"),
 		filepath.Join(homeDir, ".cargo", "bin"),
 	)
+}
+
+func readLoginShellPath(shellCommand string, timeout time.Duration) string {
+	shellPath := ResolveUserShell(shellCommand)
+	if strings.TrimSpace(shellPath) == "" {
+		return ""
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	command := exec.CommandContext(ctx, shellPath, "-lic", `printf %s "$PATH"`)
+	command.Stdin = nil
+	output, err := command.Output()
+	if err != nil {
+		return ""
+	}
+
+	return strings.TrimSpace(string(output))
 }
 
 func resolveOrigZdotdir(env []string, managedZshDir string, homeDir string) string {

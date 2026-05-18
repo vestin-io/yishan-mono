@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"yishan/apps/cli/internal/workspace/shellenv"
 )
 
 const managedBinDirEnvKey = "MANAGED_BIN_DIR"
@@ -207,73 +209,12 @@ func resetAgentDetectionCacheForTest() {
 }
 
 func resolveDetectionPathValue() string {
-	pathValues := []string{os.Getenv("PATH")}
-
-	if runtime.GOOS != "windows" {
-		pathValues = append(pathValues, readLoginShellPath(loginShellPathTimeout))
-		pathValues = append(pathValues, commonUserBinDirectories()...)
-	}
-
-	return strings.Join(pathValues, string(os.PathListSeparator))
+	resolvedEnv := shellenv.ResolveEnvWithUserPath(os.Environ(), os.Getenv("SHELL"))
+	return shellenv.EnvValueOrDefault(resolvedEnv, "PATH", os.Getenv("PATH"))
 }
 
-func readLoginShellPath(timeout time.Duration) string {
-	shellPath := resolveUserShell()
-	if shellPath == "" {
-		return ""
-	}
-
-	// Use -il (interactive login) so that both login profile files (.zprofile)
-	// and interactive config files (.zshrc/.bashrc) are sourced. Many tools
-	// like nvm, pyenv, and rbenv add their PATH entries in .zshrc which is
-	// only loaded for interactive shells.
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	command := exec.CommandContext(ctx, shellPath, "-lic", `printf %s "$PATH"`)
-	command.Stdin = nil
-	output, err := command.Output()
-	if err != nil {
-		return ""
-	}
-
-	return strings.TrimSpace(string(output))
-}
-
-// resolveUserShell returns the user's login shell path. It checks the SHELL
-// environment variable first, then falls back to well-known shell paths on
-// macOS/Linux. This fallback is essential when the daemon is launched from a
-// packaged Electron app (e.g. via macOS Dock/Finder) which inherits a minimal
-// environment without SHELL set.
 func resolveUserShell() string {
-	if shellPath := strings.TrimSpace(os.Getenv("SHELL")); shellPath != "" {
-		return shellPath
-	}
-
-	// On macOS/Linux, try well-known shell paths in preference order.
-	for _, candidate := range []string{"/bin/zsh", "/bin/bash", "/bin/sh"} {
-		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
-			return candidate
-		}
-	}
-
-	return ""
-}
-
-func commonUserBinDirectories() []string {
-	directories := []string{"/opt/homebrew/bin", "/usr/local/bin"}
-	homeDir, err := os.UserHomeDir()
-	if err != nil || strings.TrimSpace(homeDir) == "" {
-		return directories
-	}
-
-	return append(directories,
-		filepath.Join(homeDir, ".opencode", "bin"),
-		filepath.Join(homeDir, ".local", "bin"),
-		filepath.Join(homeDir, ".bun", "bin"),
-		filepath.Join(homeDir, ".npm-global", "bin"),
-		filepath.Join(homeDir, "go", "bin"),
-	)
+	return shellenv.ResolveUserShell(os.Getenv("SHELL"))
 }
 
 func listAgentCLIDetectionStatusesWithOptions(options agentDetectionOptions) []AgentCLIDetectionStatus {

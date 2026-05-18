@@ -1151,7 +1151,7 @@ func gitCommandCombined(ctx context.Context, cwd string, args ...string) (string
 func ghCommand(ctx context.Context, cwd string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "gh", args...)
 	cmd.Dir = cwd
-	cmd.Env = shellenv.EnsurePathHasExistingDirectories(os.Environ(), shellenv.CommonUserBinDirectories())
+	cmd.Env = shellenv.ResolveEnvWithUserPath(os.Environ(), os.Getenv("SHELL"))
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
