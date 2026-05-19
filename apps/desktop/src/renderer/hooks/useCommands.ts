@@ -65,6 +65,14 @@ import {
   loadWorkspaceFromBackend as loadWorkspaceFromBackendCommand,
   updateProjectConfig as updateProjectConfigCommand,
 } from "../commands/projectCommands";
+import {
+  createScheduledJob as createScheduledJobCommand,
+  disableScheduledJob as disableScheduledJobCommand,
+  loadScheduledJobs as loadScheduledJobsCommand,
+  pauseScheduledJob as pauseScheduledJobCommand,
+  resumeScheduledJob as resumeScheduledJobCommand,
+  updateScheduledJob as updateScheduledJobCommand,
+} from "../commands/scheduledJobCommands";
 import { setSelectedRepo, setSelectedWorkspace } from "../commands/selectionCommands";
 import {
   closeAllTabs as closeAllTabsCommand,
@@ -122,6 +130,12 @@ export type Commands = {
   setSelectedRepoId: (repoId: string) => void;
   setSelectedWorkspaceId: (workspaceId: string) => void;
   listAgentDetectionStatuses: typeof listAgentDetectionStatusesCommand;
+  loadScheduledJobs: typeof loadScheduledJobsCommand;
+  createScheduledJob: typeof createScheduledJobCommand;
+  updateScheduledJob: typeof updateScheduledJobCommand;
+  disableScheduledJob: typeof disableScheduledJobCommand;
+  pauseScheduledJob: typeof pauseScheduledJobCommand;
+  resumeScheduledJob: typeof resumeScheduledJobCommand;
   listCLIToolStatuses: typeof listCLIToolStatusesCommand;
   checkGitHubConnectionStatus: typeof checkGitHubConnectionStatusCommand;
   setDisplayRepoIds: typeof setDisplayRepoIdsCommand;
@@ -238,6 +252,12 @@ export function useCommands(): Commands {
       setSelectedRepoId: setSelectedRepo,
       setSelectedWorkspaceId: setSelectedWorkspace,
       listAgentDetectionStatuses: listAgentDetectionStatusesCommand,
+      loadScheduledJobs: loadScheduledJobsCommand,
+      createScheduledJob: createScheduledJobCommand,
+      updateScheduledJob: updateScheduledJobCommand,
+      disableScheduledJob: disableScheduledJobCommand,
+      pauseScheduledJob: pauseScheduledJobCommand,
+      resumeScheduledJob: resumeScheduledJobCommand,
       listCLIToolStatuses: listCLIToolStatusesCommand,
       checkGitHubConnectionStatus: checkGitHubConnectionStatusCommand,
       setDisplayRepoIds: setDisplayRepoIdsCommand,
