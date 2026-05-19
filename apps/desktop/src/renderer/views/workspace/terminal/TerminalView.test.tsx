@@ -177,11 +177,18 @@ vi.mock("@xterm/xterm", () => {
   class FakeTerminal {
     cols = 120;
     rows = 30;
+    textarea: HTMLTextAreaElement;
     private onDataHandler: ((data: string) => void) | undefined;
     private onDataHandlerIndex: number | undefined;
     private onTitleChangeHandlerIndex: number | undefined;
 
-    open() {}
+    constructor() {
+      this.textarea = document.createElement("textarea");
+    }
+
+    open(parent: HTMLElement) {
+      parent.appendChild(this.textarea);
+    }
     reset() {}
     clear() {
       mocked.xtermClear();
@@ -195,6 +202,7 @@ vi.mock("@xterm/xterm", () => {
     }
     dispose() {}
     focus() {
+      this.textarea.focus();
       mocked.xtermFocus();
     }
     attachCustomKeyEventHandler(handler: (event: KeyboardEvent) => boolean) {
@@ -801,9 +809,10 @@ describe("TerminalView", () => {
 
     vi.stubGlobal("ResizeObserver", MockResizeObserver);
 
-    const view = render(<TerminalView tabId="terminal-tab-1" />);
-    const host = view.container.firstElementChild as HTMLElement;
-    fireEvent.keyDown(host, { key: "f", ctrlKey: true });
+    render(<TerminalView tabId="terminal-tab-1" />);
+    const terminalInput = document.querySelector("textarea");
+    terminalInput?.focus();
+    fireEvent.keyDown(document, { key: "f", ctrlKey: true });
 
     const searchInput = await screen.findByLabelText("Search terminal output");
     fireEvent.change(searchInput, { target: { value: "error" } });
