@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"yishan/apps/cli/internal/workspace/shellenv"
+	"yishan/apps/cli/internal/runtime/shellenv"
 )
 
 type Runner struct {
