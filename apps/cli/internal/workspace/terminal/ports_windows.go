@@ -43,7 +43,7 @@ func listListeningTCPPorts(pids []int) ([]listeningPort, error) {
 }
 
 func parseWindowsProcessCSV(out []byte) []processInfo {
-	lines := bytes.Split(out, []byte{'
+	lines := bytes.Split(out, []byte{'\n'})
 	processes := make([]processInfo, 0, len(lines))
 	for _, line := range lines {
 		fields := parseCSVLine(strings.TrimSpace(string(line)))

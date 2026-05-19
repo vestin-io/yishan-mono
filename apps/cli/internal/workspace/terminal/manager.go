@@ -10,6 +10,8 @@ import (
 	"os/exec"
 	"runtime"
 	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -18,12 +20,20 @@ import (
 )
 
 const maxSessionOutputBytes = 2 * 1024 * 1024
+const portScanInterval = 3 * time.Second
+
+type portsChangedListener func([]DetectedPort)
 
 type Manager struct {
-	mu        sync.RWMutex
-	nextID    atomic.Uint64
-	nextSubID atomic.Uint64
-	sessions  map[string]*session
+	mu                  sync.RWMutex
+	nextID              atomic.Uint64
+	nextSubID           atomic.Uint64
+	sessions            map[string]*session
+	portsListenerMu     sync.RWMutex
+	onPortsChanged      portsChangedListener
+	portLoopStartOnce   sync.Once
+	portSnapshotMu      sync.Mutex
+	lastPortSnapshotKey string
 }
 
 type session struct {
@@ -43,6 +53,12 @@ type session struct {
 
 func NewManager() *Manager {
 	return &Manager{sessions: make(map[string]*session)}
+}
+
+func (m *Manager) SetPortsChangedListener(listener portsChangedListener) {
+	m.portsListenerMu.Lock()
+	m.onPortsChanged = listener
+	m.portsListenerMu.Unlock()
 }
 
 func (m *Manager) Start(_ context.Context, cwd string, req StartRequest) (StartResponse, error) {
@@ -65,6 +81,7 @@ func (m *Manager) Start(_ context.Context, cwd string, req StartRequest) (StartR
 	m.mu.Lock()
 	m.sessions[id] = s
 	m.mu.Unlock()
+	m.ensurePortScanLoop()
 
 	go s.capture()
 	go func() {
@@ -130,6 +147,10 @@ func (m *Manager) ListSessions(req ListSessionsRequest) []SessionSummary {
 }
 
 func (m *Manager) ListDetectedPorts() []DetectedPort {
+	return m.collectDetectedPorts()
+}
+
+func (m *Manager) collectDetectedPorts() []DetectedPort {
 	m.mu.RLock()
 	sessions := make([]*session, 0, len(m.sessions))
 	for _, s := range m.sessions {
@@ -194,6 +215,71 @@ func (m *Manager) ListDetectedPorts() []DetectedPort {
 		return out[i].PID < out[j].PID
 	})
 	return out
+}
+
+func (m *Manager) ensurePortScanLoop() {
+	m.portLoopStartOnce.Do(func() {
+		go m.runPortScanLoop()
+	})
+}
+
+func (m *Manager) runPortScanLoop() {
+	ticker := time.NewTicker(portScanInterval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		ports := m.collectDetectedPorts()
+		if !m.shouldPublishPortsUpdate(ports) {
+			continue
+		}
+		m.publishPortsChanged(ports)
+	}
+}
+
+func (m *Manager) shouldPublishPortsUpdate(ports []DetectedPort) bool {
+	key := buildPortSnapshotKey(ports)
+
+	m.portSnapshotMu.Lock()
+	defer m.portSnapshotMu.Unlock()
+	if key == m.lastPortSnapshotKey {
+		return false
+	}
+	m.lastPortSnapshotKey = key
+	return true
+}
+
+func buildPortSnapshotKey(ports []DetectedPort) string {
+	if len(ports) == 0 {
+		return ""
+	}
+
+	var builder strings.Builder
+	for _, port := range ports {
+		builder.WriteString(port.SessionID)
+		builder.WriteByte('|')
+		builder.WriteString(port.WorkspaceID)
+		builder.WriteByte('|')
+		builder.WriteString(strconv.Itoa(port.PID))
+		builder.WriteByte('|')
+		builder.WriteString(strconv.Itoa(port.Port))
+		builder.WriteByte('|')
+		builder.WriteString(port.Address)
+		builder.WriteByte('|')
+		builder.WriteString(port.ProcessName)
+		builder.WriteByte('\n')
+	}
+
+	return builder.String()
+}
+
+func (m *Manager) publishPortsChanged(ports []DetectedPort) {
+	m.portsListenerMu.RLock()
+	listener := m.onPortsChanged
+	m.portsListenerMu.RUnlock()
+	if listener == nil {
+		return
+	}
+	listener(ports)
 }
 
 func (m *Manager) Send(req SendRequest) (SendResponse, error) {
