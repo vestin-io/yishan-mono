@@ -157,7 +157,12 @@ func (m *Manager) ListDetectedPorts() []DetectedPort {
 	}
 	pidToRoot := buildPIDToRootMap(rootPIDs, processes)
 
-	listeningPorts, err := listListeningTCPPorts()
+	trackedPIDs := make([]int, 0, len(pidToRoot))
+	for pid := range pidToRoot {
+		trackedPIDs = append(trackedPIDs, pid)
+	}
+
+	listeningPorts, err := listListeningTCPPorts(trackedPIDs)
 	if err != nil {
 		return nil
 	}
@@ -320,12 +325,17 @@ func stopListeningProcessesForSession(s *session) error {
 		return err
 	}
 
-	listeningPorts, err := listListeningTCPPorts()
+	pidToRoot := buildPIDToRootMap([]int{s.cmd.Process.Pid}, processes)
+	trackedPIDs := make([]int, 0, len(pidToRoot))
+	for pid := range pidToRoot {
+		trackedPIDs = append(trackedPIDs, pid)
+	}
+
+	listeningPorts, err := listListeningTCPPorts(trackedPIDs)
 	if err != nil {
 		return err
 	}
 
-	pidToRoot := buildPIDToRootMap([]int{s.cmd.Process.Pid}, processes)
 	listeningPIDs := make(map[int]struct{})
 	for _, port := range listeningPorts {
 		rootPID, ok := pidToRoot[port.PID]
