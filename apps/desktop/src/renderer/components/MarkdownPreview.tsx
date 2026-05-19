@@ -6,7 +6,7 @@ import { openLink } from "../commands/appCommands";
 import { buildWorkspaceFileUrl } from "../commands/fileCommands";
 import { tabStore } from "../store/tabStore";
 import { enqueueWorkspaceErrorNotice } from "../store/workspaceLifecycleNoticeStore";
-import { markdownWorkerService } from "./markdownWorkerService";
+import { markdownService } from "./markdownService";
 import { MermaidBlock } from "./MermaidBlock";
 
 const MARKDOWN_RENDER_DEBOUNCE_MS = 400;
@@ -323,7 +323,7 @@ const MemoizedMarkdownRenderer = memo(function MemoizedMarkdownRenderer({
 
     let cancelled = false;
 
-    markdownWorkerService.parse(content).then((result) => {
+    markdownService.parse(content).then((result) => {
       if (!cancelled) {
         setHtml(result);
       }
