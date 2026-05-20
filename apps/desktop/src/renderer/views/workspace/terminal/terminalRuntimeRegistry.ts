@@ -91,7 +91,7 @@ export function setTerminalReattachHandler(handler: (tabId: string) => void): vo
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
 const TERMINAL_OPTIONS = {
-  cursorBlink: true,
+  cursorBlink: false,
   convertEol: true,
   allowProposedApi: true,
   fontFamily: '"MesloLGS NF", "JetBrains Mono", "SF Mono", Menlo, monospace',

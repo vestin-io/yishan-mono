@@ -296,6 +296,10 @@ export type TerminalListSessionsInput = {
   includeExited?: boolean;
 };
 
+export type SetActiveWorkspaceInput = {
+  workspaceId?: string;
+};
+
 export type WorkspaceListResponse = DaemonWorkspace[];
 
 export type WorkspaceCreateResponse = {
@@ -431,6 +435,10 @@ export type TerminalCreateSessionResponse = {
 
 export type TerminalMutationOkResponse = {
   ok: true;
+};
+
+export type SetActiveWorkspaceResponse = {
+  updated: boolean;
 };
 
 export type TerminalReadOutputResponse = {

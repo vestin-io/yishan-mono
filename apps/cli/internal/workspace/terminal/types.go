@@ -70,6 +70,14 @@ type DetectedPort struct {
 	ProcessName string `json:"processName"`
 }
 
+type SetActiveWorkspaceRequest struct {
+	WorkspaceID string `json:"workspaceId,omitempty"`
+}
+
+type SetActiveWorkspaceResponse struct {
+	Updated bool `json:"updated"`
+}
+
 type ResizeRequest struct {
 	SessionID string `json:"sessionId"`
 	Cols      uint16 `json:"cols"`

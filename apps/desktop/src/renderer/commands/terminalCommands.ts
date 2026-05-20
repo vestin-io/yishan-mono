@@ -71,6 +71,12 @@ export async function listDetectedPorts(): Promise<TerminalDetectedPort[]> {
   return await client.terminal.listDetectedPorts();
 }
 
+/** Sets daemon active workspace context for background optimizations. */
+export async function setActiveWorkspace(params: { workspaceId?: string }): Promise<{ updated: boolean }> {
+  const client = await getDaemonClient();
+  return await client.terminal.setActiveWorkspace({ workspaceId: params.workspaceId });
+}
+
 /** Returns one snapshot of terminal CPU/memory usage and subprocess metrics. */
 export async function getTerminalResourceUsage(): Promise<TerminalResourceUsageSnapshot> {
   const client = await getDaemonClient();

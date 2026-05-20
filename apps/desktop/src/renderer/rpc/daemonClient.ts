@@ -126,6 +126,7 @@ export class DaemonClient {
     killProcess: (input: Rpc.TerminalKillProcessInput) => this._terminalClient.killProcess(input),
     readOutput: (input: Rpc.TerminalReadOutputInput) => this._terminalClient.readOutput(input),
     listDetectedPorts: () => this._terminalClient.listDetectedPorts(),
+    setActiveWorkspace: (input: Rpc.SetActiveWorkspaceInput) => this._terminalClient.setActiveWorkspace(input),
     getResourceUsage: () => this._terminalClient.getResourceUsage(),
     listSessions: (input?: Rpc.TerminalListSessionsInput) => this._terminalClient.listSessions(input),
   };

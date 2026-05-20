@@ -20,40 +20,46 @@ import (
 )
 
 const maxSessionOutputBytes = 2 * 1024 * 1024
-const portScanInterval = 3 * time.Second
+const portScanActiveInterval = 3 * time.Second
+const portScanIdleInterval = 60 * time.Second
+const portScanActivityWindow = 15 * time.Second
+const portScanHintDebounce = 500 * time.Millisecond
 
 type portsChangedListener func([]DetectedPort)
 
 type Manager struct {
-	mu                  sync.RWMutex
-	nextID              atomic.Uint64
-	nextSubID           atomic.Uint64
-	sessions            map[string]*session
-	portsListenerMu     sync.RWMutex
-	onPortsChanged      portsChangedListener
-	portLoopMu          sync.Mutex
-	portLoopRunning     bool
-	portSnapshotMu      sync.Mutex
-	lastPortSnapshotKey string
+	mu                   sync.RWMutex
+	nextID               atomic.Uint64
+	nextSubID            atomic.Uint64
+	sessions             map[string]*session
+	portsListenerMu      sync.RWMutex
+	onPortsChanged       portsChangedListener
+	portLoopMu           sync.Mutex
+	portLoopRunning      bool
+	portSnapshotMu       sync.Mutex
+	lastPortSnapshotKey  string
+	portScopeWorkspaceID string
+	portScanHintCh       chan struct{}
 }
 
 type session struct {
-	id               string
-	workspaceID      string
-	cmd              *exec.Cmd
-	pty              *os.File
-	output           bytes.Buffer
-	outputMu         sync.Mutex
-	running          atomic.Bool
-	exitCode         atomic.Int32
-	startedAt        time.Time
-	exitedAtUnixNano atomic.Int64
-	subsMu           sync.Mutex
-	subs             map[uint64]chan Event
+	id                   string
+	workspaceID          string
+	cmd                  *exec.Cmd
+	pty                  *os.File
+	output               bytes.Buffer
+	outputMu             sync.Mutex
+	running              atomic.Bool
+	exitCode             atomic.Int32
+	startedAt            time.Time
+	exitedAtUnixNano     atomic.Int64
+	lastActivityUnixNano atomic.Int64
+	subsMu               sync.Mutex
+	subs                 map[uint64]chan Event
 }
 
 func NewManager() *Manager {
-	return &Manager{sessions: make(map[string]*session)}
+	return &Manager{sessions: make(map[string]*session), portScanHintCh: make(chan struct{}, 1)}
 }
 
 func (m *Manager) SetPortsChangedListener(listener portsChangedListener) {
@@ -78,6 +84,7 @@ func (m *Manager) Start(_ context.Context, cwd string, req StartRequest) (StartR
 	s := &session{id: id, workspaceID: req.WorkspaceID, cmd: cmd, pty: ptyFile, startedAt: time.Now().UTC(), subs: make(map[uint64]chan Event)}
 	s.running.Store(true)
 	s.exitCode.Store(-1)
+	s.lastActivityUnixNano.Store(time.Now().UTC().UnixNano())
 
 	m.mu.Lock()
 	m.sessions[id] = s
@@ -148,18 +155,18 @@ func (m *Manager) ListSessions(req ListSessionsRequest) []SessionSummary {
 }
 
 func (m *Manager) ListDetectedPorts() []DetectedPort {
-	return m.collectDetectedPorts()
+	return m.collectDetectedPortsForWindow(0, m.currentPortScopeWorkspaceID())
 }
 
 func (m *Manager) collectDetectedPorts() []DetectedPort {
-	m.mu.RLock()
-	sessions := make([]*session, 0, len(m.sessions))
-	for _, s := range m.sessions {
-		if s.running.Load() && s.cmd.Process != nil {
-			sessions = append(sessions, s)
-		}
+	return m.collectDetectedPortsForWindow(0, m.currentPortScopeWorkspaceID())
+}
+
+func (m *Manager) collectDetectedPortsForWindow(recentWindow time.Duration, workspaceScopeID string) []DetectedPort {
+	sessions := m.listRunningSessions(recentWindow, workspaceScopeID)
+	if len(sessions) == 0 && recentWindow > 0 {
+		sessions = m.listRunningSessions(0, workspaceScopeID)
 	}
-	m.mu.RUnlock()
 
 	if len(sessions) == 0 {
 		return nil
@@ -218,6 +225,33 @@ func (m *Manager) collectDetectedPorts() []DetectedPort {
 	return out
 }
 
+func (m *Manager) listRunningSessions(recentWindow time.Duration, workspaceScopeID string) []*session {
+	var threshold int64
+	if recentWindow > 0 {
+		threshold = time.Now().UTC().Add(-recentWindow).UnixNano()
+	}
+	workspaceScopeID = strings.TrimSpace(workspaceScopeID)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	sessions := make([]*session, 0, len(m.sessions))
+	for _, currentSession := range m.sessions {
+		if !currentSession.running.Load() || currentSession.cmd.Process == nil {
+			continue
+		}
+		if workspaceScopeID != "" && currentSession.workspaceID != workspaceScopeID {
+			continue
+		}
+		if threshold > 0 && currentSession.lastActivityUnixNano.Load() < threshold {
+			continue
+		}
+		sessions = append(sessions, currentSession)
+	}
+
+	return sessions
+}
+
 func (m *Manager) ensurePortScanLoop() {
 	m.portLoopMu.Lock()
 	if m.portLoopRunning {
@@ -237,10 +271,21 @@ func (m *Manager) runPortScanLoop() {
 		m.portLoopMu.Unlock()
 	}()
 
-	ticker := time.NewTicker(portScanInterval)
+	ticker := time.NewTicker(portScanActiveInterval)
 	defer ticker.Stop()
 
-	for range ticker.C {
+	var lastHintScanAt time.Time
+
+	for {
+		select {
+		case <-ticker.C:
+		case <-m.portScanHintCh:
+			if !lastHintScanAt.IsZero() && time.Since(lastHintScanAt) < portScanHintDebounce {
+				continue
+			}
+			lastHintScanAt = time.Now().UTC()
+		}
+
 		if !m.hasActiveSessions() {
 			if m.shouldPublishPortsUpdate(nil) {
 				m.publishPortsChanged(nil)
@@ -248,12 +293,63 @@ func (m *Manager) runPortScanLoop() {
 			return
 		}
 
-		ports := m.collectDetectedPorts()
+		recentWindow := time.Duration(0)
+		workspaceScopeID := m.currentPortScopeWorkspaceID()
+		if m.hasRecentlyActiveSessions(portScanActivityWindow) {
+			recentWindow = portScanActivityWindow
+		}
+
+		ports := m.collectDetectedPortsForWindow(recentWindow, workspaceScopeID)
 		if !m.shouldPublishPortsUpdate(ports) {
+			ticker.Reset(m.nextPortScanInterval())
 			continue
 		}
 		m.publishPortsChanged(ports)
+		ticker.Reset(m.nextPortScanInterval())
 	}
+}
+
+func (m *Manager) requestPortScanHint() {
+	select {
+	case m.portScanHintCh <- struct{}{}:
+	default:
+	}
+}
+
+func (m *Manager) SetActiveWorkspace(req SetActiveWorkspaceRequest) (SetActiveWorkspaceResponse, error) {
+	m.portSnapshotMu.Lock()
+	m.portScopeWorkspaceID = strings.TrimSpace(req.WorkspaceID)
+	m.lastPortSnapshotKey = ""
+	m.portSnapshotMu.Unlock()
+	return SetActiveWorkspaceResponse{Updated: true}, nil
+}
+
+func (m *Manager) currentPortScopeWorkspaceID() string {
+	m.portSnapshotMu.Lock()
+	defer m.portSnapshotMu.Unlock()
+	return m.portScopeWorkspaceID
+}
+
+func (m *Manager) nextPortScanInterval() time.Duration {
+	if m.hasRecentlyActiveSessions(portScanActivityWindow) {
+		return portScanActiveInterval
+	}
+	return portScanIdleInterval
+}
+
+func (m *Manager) hasRecentlyActiveSessions(window time.Duration) bool {
+	threshold := time.Now().UTC().Add(-window).UnixNano()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, currentSession := range m.sessions {
+		if !currentSession.running.Load() || currentSession.cmd.Process == nil {
+			continue
+		}
+		if currentSession.lastActivityUnixNano.Load() >= threshold {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Manager) hasActiveSessions() bool {
@@ -327,6 +423,10 @@ func (m *Manager) Send(req SendRequest) (SendResponse, error) {
 	if err != nil {
 		return SendResponse{}, err
 	}
+	s.lastActivityUnixNano.Store(time.Now().UTC().UnixNano())
+	if strings.ContainsRune(req.Input, rune(0x03)) {
+		m.requestPortScanHint()
+	}
 	return SendResponse{Written: n}, nil
 }
 
@@ -339,6 +439,13 @@ func (m *Manager) SendRaw(sessionID string, data []byte) {
 	}
 	if !s.running.Load() {
 		return
+	}
+	s.lastActivityUnixNano.Store(time.Now().UTC().UnixNano())
+	for _, currentByte := range data {
+		if currentByte == 0x03 {
+			m.requestPortScanHint()
+			break
+		}
 	}
 	_, _ = s.pty.Write(data)
 }
@@ -384,6 +491,7 @@ func (m *Manager) Stop(req StopRequest) (StopResponse, error) {
 	m.mu.Lock()
 	delete(m.sessions, s.id)
 	m.mu.Unlock()
+	m.requestPortScanHint()
 
 	return StopResponse{Stopped: true}, nil
 }
@@ -428,6 +536,7 @@ func (m *Manager) KillProcess(req KillProcessRequest) (KillProcessResponse, erro
 	if err := stopProcessByPID(req.PID); err != nil {
 		return KillProcessResponse{}, err
 	}
+	m.requestPortScanHint()
 
 	return KillProcessResponse{Killed: true}, nil
 }
@@ -575,6 +684,7 @@ func (s *session) capture() {
 	for {
 		n, err := s.pty.Read(buf)
 		if n > 0 {
+			s.lastActivityUnixNano.Store(time.Now().UTC().UnixNano())
 			// Copy the raw bytes for binary delivery before converting to string.
 			raw := make([]byte, n)
 			copy(raw, buf[:n])
