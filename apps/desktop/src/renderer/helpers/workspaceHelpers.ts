@@ -67,10 +67,9 @@ export function applyCreatedWorkspaceState(
     }
   } else {
     state.workspaces.push(nextWorkspace);
+    state.selectedProjectId = input.projectId;
+    state.selectedWorkspaceId = nextWorkspaceId;
   }
-
-  state.selectedProjectId = input.projectId;
-  state.selectedWorkspaceId = nextWorkspaceId;
 }
 
 /** Removes one workspace from draft state and recalculates selection. */
