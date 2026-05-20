@@ -311,6 +311,9 @@ export function WorkspaceView() {
     selectedWorkspaceWorktreePath,
     workspaceGitRefreshVersion,
   });
+  useEffect(() => {
+    void cmd.setActiveWorkspace({ workspaceId: selectedWorkspaceId || undefined });
+  }, [cmd, selectedWorkspaceId]);
 
   const leftSep = leftCollapsed ? 0 : SEPARATOR_PX;
   const rightSep = rightCollapsed ? 0 : SEPARATOR_PX;

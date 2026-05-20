@@ -7,6 +7,7 @@ const (
 	MethodList                     = "list"
 	MethodWorkspaceCreate          = "workspace.create"
 	MethodWorkspaceClose           = "workspace.close"
+	MethodWorkspaceSetActive       = "workspace.setActive"
 	MethodWorkspaceSyncContextLink = "workspace.syncContextLink"
 
 	MethodAgentListDetectionStatuses = "agent.listDetectionStatuses"

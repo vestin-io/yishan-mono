@@ -511,6 +511,10 @@ func (m *Manager) TerminalListDetectedPorts() []TerminalDetectedPort {
 	return m.terminals.ListDetectedPorts()
 }
 
+func (m *Manager) SetActiveWorkspace(req SetActiveWorkspaceRequest) (SetActiveWorkspaceResponse, error) {
+	return m.terminals.SetActiveWorkspace(req)
+}
+
 func (m *Manager) TerminalRead(req TerminalReadRequest) (TerminalReadResponse, error) {
 	return m.terminals.Read(req)
 }

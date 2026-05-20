@@ -90,6 +90,7 @@ import {
   getTerminalResourceUsage as getTerminalResourceUsageCommand,
   killTerminalProcess as killTerminalProcessCommand,
   listDetectedPorts as listDetectedPortsCommand,
+  setActiveWorkspace as setActiveWorkspaceCommand,
   listTerminalSessions as listTerminalSessionsCommand,
   readTerminalOutput as readTerminalOutputCommand,
   resizeTerminal as resizeTerminalCommand,
@@ -185,6 +186,7 @@ export type Commands = {
   resizeTerminal: typeof resizeTerminalCommand;
   readTerminalOutput: typeof readTerminalOutputCommand;
   listDetectedPorts: typeof listDetectedPortsCommand;
+  setActiveWorkspace: typeof setActiveWorkspaceCommand;
   getTerminalResourceUsage: typeof getTerminalResourceUsageCommand;
   listTerminalSessions: typeof listTerminalSessionsCommand;
   subscribeTerminalOutput: typeof subscribeTerminalOutputCommand;
@@ -301,6 +303,7 @@ export function useCommands(): Commands {
       resizeTerminal: resizeTerminalCommand,
       readTerminalOutput: readTerminalOutputCommand,
       listDetectedPorts: listDetectedPortsCommand,
+      setActiveWorkspace: setActiveWorkspaceCommand,
       getTerminalResourceUsage: getTerminalResourceUsageCommand,
       listTerminalSessions: listTerminalSessionsCommand,
       subscribeTerminalOutput: subscribeTerminalOutputCommand,

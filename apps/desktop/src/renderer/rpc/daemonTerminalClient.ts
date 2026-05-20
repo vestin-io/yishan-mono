@@ -148,6 +148,13 @@ export class DaemonTerminalClient {
     });
   }
 
+  async setActiveWorkspace(input: Rpc.SetActiveWorkspaceInput): Promise<Rpc.SetActiveWorkspaceResponse> {
+    const record = asRecord(input);
+    return (await this.invoke("workspace.setActive", {
+      workspaceId: readOptionalString(record?.workspaceId),
+    })) as Rpc.SetActiveWorkspaceResponse;
+  }
+
   async getResourceUsage(): Promise<Rpc.TerminalResourceUsageSnapshot> {
     return { processes: [] };
   }
