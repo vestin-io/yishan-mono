@@ -131,7 +131,7 @@ function readWorkspaceStoreState(): WorkspaceStoreState {
 }
 
 async function completeVisibleCreateProgressSteps(workspaceId: string): Promise<void> {
-  for (const step of ["update", "worktree", "context", "setup"] as const) {
+  for (const step of ["worktree", "context", "setup"] as const) {
     const currentStep = workspaceCreateProgressStore
       .getState()
       .progressByWorkspaceId[workspaceId]?.steps.find((item) => item.id === step);
@@ -208,14 +208,6 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<stri
   });
   tabStore.getState().setSelectedWorkspaceId(workspaceId);
 
-  workspaceCreateProgressStore.getState().applyWorkspaceCreateProgressEvent({
-    workspaceId,
-    stepId: "update",
-    label: "Fetch repository",
-    status: "running",
-    createdAt: new Date().toISOString(),
-  });
-
   void (async () => {
     let backendWorkspace: BackendWorkspace | undefined;
     const client = await getDaemonClient();
@@ -258,6 +250,22 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<stri
         worktreePath: created.worktreePath,
       };
     } catch (error) {
+      // Mark any step still showing as "running" as failed so the UI doesn't
+      // stay stuck with a spinning indicator forever.
+      const progressState = workspaceCreateProgressStore.getState().progressByWorkspaceId[workspaceId];
+      if (progressState) {
+        for (const step of progressState.steps) {
+          if (step.status === "running") {
+            workspaceCreateProgressStore.getState().applyWorkspaceCreateProgressEvent({
+              workspaceId,
+              stepId: step.id,
+              label: step.label,
+              status: "failed",
+              createdAt: new Date().toISOString(),
+            });
+          }
+        }
+      }
       workspaceCreateProgressStore.getState().applyWorkspaceCreateProgressEvent({
         workspaceId,
         stepId: "complete",

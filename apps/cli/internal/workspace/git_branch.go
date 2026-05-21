@@ -230,22 +230,38 @@ func (s *GitService) RefExists(ctx context.Context, root string, ref string) boo
 	return err == nil
 }
 
+// resolveRemote returns the preferred remote name for the given repo root.
+// It prefers "origin"; if absent it falls back to the first available remote.
+// Returns an empty string when no remotes are configured.
+func resolveRemote(ctx context.Context, root string) (string, error) {
+	out, err := gitCommand(ctx, root, "remote")
+	if err != nil {
+		return "", err
+	}
+	remotes := splitNonEmptyLines(out)
+	if len(remotes) == 0 {
+		return "", nil
+	}
+	if slices.Contains(remotes, "origin") {
+		return "origin", nil
+	}
+	return remotes[0], nil
+}
+
+// FetchRefShallow fetches a single ref from the remote using a shallow fetch
+// with --filter=blob:none so that only tree and commit objects are transferred.
+// Blobs are lazy-fetched on demand by git, which is dramatically faster for
+// large repositories.
 func (s *GitService) FetchRefShallow(ctx context.Context, root string, ref string) error {
-	remotesOut, err := gitCommand(ctx, root, "remote")
+	remote, err := resolveRemote(ctx, root)
 	if err != nil {
 		return err
 	}
-	remotes := splitNonEmptyLines(remotesOut)
-	if len(remotes) == 0 {
+	if remote == "" {
 		return nil
 	}
 
-	remote := "origin"
-	if !slices.Contains(remotes, "origin") {
-		remote = remotes[0]
-	}
-
-	args := []string{"fetch", remote, "--quiet", "--no-tags", "--depth=1"}
+	args := []string{"fetch", remote, "--quiet", "--no-tags", "--depth=1", "--filter=blob:none"}
 	if strings.TrimSpace(ref) != "" && ref != "HEAD" {
 		args = append(args, ref)
 	}
@@ -255,21 +271,15 @@ func (s *GitService) FetchRefShallow(ctx context.Context, root string, ref strin
 }
 
 func (s *GitService) FetchRef(ctx context.Context, root string, ref string) error {
-	remotesOut, err := gitCommand(ctx, root, "remote")
+	remote, err := resolveRemote(ctx, root)
 	if err != nil {
 		return err
 	}
-	remotes := splitNonEmptyLines(remotesOut)
-	if len(remotes) == 0 {
+	if remote == "" {
 		return nil
 	}
 
-	remote := "origin"
-	if !slices.Contains(remotes, "origin") {
-		remote = remotes[0]
-	}
-
-	args := []string{"fetch", remote, "--quiet", "--no-tags"}
+	args := []string{"fetch", remote, "--quiet", "--no-tags", "--filter=blob:none"}
 	if strings.TrimSpace(ref) != "" && ref != "HEAD" {
 		args = append(args, ref)
 	}

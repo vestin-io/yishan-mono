@@ -25,8 +25,7 @@ type WorkspaceCreateProgressStoreState = {
 };
 
 const DEFAULT_CREATE_STEPS: WorkspaceCreateProgressStep[] = [
-  { id: "update", label: "Fetch repository", status: "pending" },
-  { id: "worktree", label: "Create local worktree", status: "pending" },
+  { id: "worktree", label: "Fetch & create worktree", status: "pending" },
   { id: "context", label: "Link project context", status: "pending" },
   { id: "setup", label: "Run setup script", status: "pending" },
   { id: "complete", label: "Prepare workspace", status: "pending" },

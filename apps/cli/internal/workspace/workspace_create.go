@@ -163,28 +163,32 @@ func resolveCreatePaths(req CreateRequest) (resolvedCreatePaths, error) {
 }
 
 // makeWorktreeStep returns the step that creates the local git worktree.
-// It tries worktree add first (cheap, uses existing local objects). Only when
-// the ref is missing does it do a narrow shallow fetch of just that branch.
+// It checks whether the source ref exists locally first. If it does, it runs
+// worktree add directly (fast path, no network). If the ref is missing it
+// fetches it with a shallow, blobless fetch before creating the worktree.
 func makeWorktreeStep(m *Manager, req CreateRequest, paths resolvedCreatePaths) createProgressStep {
 	return createProgressStep{
 		ID:      "worktree",
-		Label:   "Create local worktree",
+		Label:   "Fetch & create worktree",
 		Timeout: defaultCreateStepTimeouts["worktree"],
 		Run: func(stepCtx context.Context) (CreateProgressStatus, string, error) {
-			err := m.gits.CreateWorktree(stepCtx, paths.sourcePath, req.TargetBranch, paths.worktreePath, true, strings.TrimSpace(req.SourceBranch))
-			if err == nil {
+			sourceBranch := strings.TrimSpace(req.SourceBranch)
+
+			// Fast path: ref already available locally — no network round-trip.
+			if m.gits.RefExists(stepCtx, paths.sourcePath, sourceBranch) {
+				err := m.gits.CreateWorktree(stepCtx, paths.sourcePath, req.TargetBranch, paths.worktreePath, true, sourceBranch)
+				if err != nil {
+					return CreateProgressFailed, err.Error(), err
+				}
 				return CreateProgressCompleted, paths.worktreePath, nil
 			}
 
-			if !isMissingRefError(err) {
-				return CreateProgressFailed, err.Error(), err
-			}
-
-			if fetchErr := m.gits.FetchRefShallow(stepCtx, paths.sourcePath, strings.TrimSpace(req.SourceBranch)); fetchErr != nil {
+			// Slow path: fetch the ref (shallow + blobless) then create the worktree.
+			if fetchErr := m.gits.FetchRefShallow(stepCtx, paths.sourcePath, sourceBranch); fetchErr != nil {
 				return CreateProgressFailed, fetchErr.Error(), fetchErr
 			}
 
-			if err := m.gits.CreateWorktree(stepCtx, paths.sourcePath, req.TargetBranch, paths.worktreePath, true, strings.TrimSpace(req.SourceBranch)); err != nil {
+			if err := m.gits.CreateWorktree(stepCtx, paths.sourcePath, req.TargetBranch, paths.worktreePath, true, sourceBranch); err != nil {
 				return CreateProgressFailed, err.Error(), err
 			}
 			return CreateProgressCompleted, paths.worktreePath, nil
@@ -298,16 +302,4 @@ func safeRelativePath(input string, field string) (string, error) {
 		return "", NewRPCError(-32602, field+" must not escape .yishan")
 	}
 	return cleaned, nil
-}
-
-func isMissingRefError(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := err.Error()
-	return strings.Contains(msg, "not a valid object name") ||
-		strings.Contains(msg, "unknown revision") ||
-		strings.Contains(msg, "fatal: bad revision") ||
-		strings.Contains(msg, "Invalid object name") ||
-		strings.Contains(msg, "ambiguous argument")
 }
