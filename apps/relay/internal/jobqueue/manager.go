@@ -496,7 +496,7 @@ func (m *Manager) attemptDispatch(run *PendingRun) DispatchResult {
 		m.metrics.TotalSkippedOffline++
 		m.mu.Unlock()
 		log.Warn().Str("runId", run.RunID).Str("nodeId", run.NodeID).Msg("dispatch failed: node unreachable")
-		return DispatchResult{Reason: "dispatch_failed", ErrorDetail: "node unreachable"}
+		return DispatchResult{Reason: "node_offline", RunID: run.RunID, ErrorDetail: "node unreachable"}
 	}
 
 	m.startAckTimer(run)

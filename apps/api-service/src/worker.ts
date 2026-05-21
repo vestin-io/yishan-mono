@@ -34,9 +34,10 @@ export default {
         runWithScheduledDb(env, "queue-consumer", async (db) => {
           const jobEvaluatorService = new JobEvaluatorService(db);
           await handleDispatchMessage(jobEvaluatorService, env, message.body);
+          return true;
         })
           .then((result) => {
-            if (result === undefined) {
+            if (result !== true) {
               throw new Error("queue-consumer database is not available");
             }
             message.ack();

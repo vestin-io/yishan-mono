@@ -176,15 +176,15 @@ func TestDispatch_NodeOffline(t *testing.T) {
 	}
 }
 
-func TestDispatch_SendFailure(t *testing.T) {
+func TestDispatch_SendFailure_ReturnsNodeOffline(t *testing.T) {
 	tr := newStubTransport("node-1")
 	tr.sendFail = true
 	m := newTestManager(tr)
 
 	result := dispatchRun(m, "run-1", "job-1", "node-1")
 
-	if result.Reason != "dispatch_failed" {
-		t.Errorf("expected dispatch_failed, got %q", result.Reason)
+	if result.Reason != "node_offline" {
+		t.Errorf("expected node_offline, got %q", result.Reason)
 	}
 
 	run := m.GetRun("run-1")
