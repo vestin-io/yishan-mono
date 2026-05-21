@@ -1,9 +1,11 @@
 import {
   BiBell,
+  BiBot,
   BiChip,
   type BiCog,
   BiDesktop,
   BiGitBranch,
+  BiGroup,
   BiLinkExternal,
   BiPalette,
   BiPlug,
@@ -26,6 +28,7 @@ export type SettingsTab =
   | "integrations"
   | "keybindings"
   | "links"
+  | "members"
   | "nodes"
   | "notifications"
   | "terminal"
@@ -52,27 +55,30 @@ export type SettingsSearchCatalogItem = {
 
 export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
   {
-    titleKey: "settings.sections.account",
-    items: [{ tab: "account", labelKey: "settings.items.account", icon: BiUser }],
-  },
-  {
-    titleKey: "settings.sections.app",
+    titleKey: "settings.sections.profile",
     items: [
+      { tab: "account", labelKey: "settings.items.account", icon: BiUser },
       { tab: "appearance", labelKey: "settings.items.appearance", icon: BiPalette },
-      { tab: "integrations", labelKey: "settings.items.integrations", icon: BiPlug },
-      { tab: "links", labelKey: "settings.items.links", icon: BiLinkExternal },
-      { tab: "nodes", labelKey: "settings.items.nodes", icon: BiDesktop },
       { tab: "notifications", labelKey: "settings.items.notifications", icon: BiBell },
-      { tab: "terminal", labelKey: "settings.items.terminal", icon: BiTerminal },
       { tab: "keybindings", labelKey: "settings.items.keybindings", icon: BiSolidKeyboard },
-      { tab: "agents", labelKey: "settings.items.agents", icon: BiChip },
+      { tab: "links", labelKey: "settings.items.links", icon: BiLinkExternal },
     ],
   },
   {
-    titleKey: "settings.sections.advanced",
+    titleKey: "settings.sections.organization",
+    items: [
+      { tab: "integrations", labelKey: "settings.items.integrations", icon: BiPlug },
+      { tab: "members", labelKey: "settings.items.members", icon: BiGroup },
+      { tab: "nodes", labelKey: "settings.items.nodes", icon: BiDesktop },
+    ],
+  },
+  {
+    titleKey: "settings.sections.system",
     items: [
       { tab: "workspace", labelKey: "settings.items.workspace", icon: BiGitBranch },
+      { tab: "terminal", labelKey: "settings.items.terminal", icon: BiTerminal },
       { tab: "daemon", labelKey: "settings.items.daemon", icon: BiChip },
+      { tab: "agents", labelKey: "settings.items.agents", icon: BiBot },
     ],
   },
 ];
@@ -226,6 +232,25 @@ const NODES_SEARCH_ITEMS: SettingsSearchCatalogItem[] = [
   },
 ];
 
+const MEMBERS_SEARCH_ITEMS: SettingsSearchCatalogItem[] = [
+  {
+    id: "members-list",
+    tab: "members",
+    icon: BiGroup,
+    labelKey: "settings.members.title",
+    sectionLabelKey: "settings.items.members",
+    keywordKeys: [
+      "settings.members.description",
+      "settings.members.columns.member",
+      "settings.members.columns.email",
+      "settings.members.columns.role",
+      "settings.members.columns.userId",
+      "settings.members.empty",
+      "settings.members.loadError",
+    ],
+  },
+];
+
 const KEYBINDINGS_SEARCH_ITEMS: SettingsSearchCatalogItem[] = [
   {
     id: "keybindings-list",
@@ -259,7 +284,7 @@ const AGENT_SEARCH_ITEMS: SettingsSearchCatalogItem[] = [
   {
     id: "agent-settings",
     tab: "agents",
-    icon: BiChip,
+    icon: BiBot,
     labelKey: "settings.agents.title",
     sectionLabelKey: "settings.items.agents",
     keywordKeys: [
@@ -274,7 +299,7 @@ const AGENT_SEARCH_ITEMS: SettingsSearchCatalogItem[] = [
   ...SUPPORTED_DESKTOP_AGENT_KINDS.map((agentKind) => ({
     id: `agent-item-${agentKind}`,
     tab: "agents" as const,
-    icon: BiChip,
+    icon: BiBot,
     labelKey: AGENT_SETTINGS_LABEL_KEY_BY_KIND[agentKind],
     sectionLabelKey: "settings.items.agents",
     keywordKeys: ["settings.agents.inUse", "settings.agents.status.detected", "settings.agents.status.notDetected"],
@@ -318,6 +343,7 @@ export const SETTINGS_SEARCH_CATALOG: SettingsSearchCatalogItem[] = [
   ...INTEGRATION_SEARCH_ITEMS,
   ...LANGUAGE_SEARCH_ITEMS,
   ...LINKS_SEARCH_ITEMS,
+  ...MEMBERS_SEARCH_ITEMS,
   ...NODES_SEARCH_ITEMS,
   ...KEYBINDINGS_SEARCH_ITEMS,
   ...DAEMON_SEARCH_ITEMS,
