@@ -85,6 +85,7 @@ func (s *NodeSession) SendJSON(v any) error {
 	if s.conn == nil {
 		return ErrNodeOffline
 	}
+	_ = s.conn.SetWriteDeadline(time.Now().Add(writeDeadline))
 	return s.conn.WriteJSON(v)
 }
 
@@ -100,6 +101,7 @@ func (s *NodeSession) SendMessage(msgType int, payload []byte) error {
 	if s.conn == nil {
 		return ErrNodeOffline
 	}
+	_ = s.conn.SetWriteDeadline(time.Now().Add(writeDeadline))
 	return s.conn.WriteMessage(msgType, payload)
 }
 
@@ -108,6 +110,7 @@ func (s *NodeSession) Close(code int, reason string) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 	if s.conn != nil {
+		_ = s.conn.SetWriteDeadline(time.Now().Add(writeDeadline))
 		_ = s.conn.WriteMessage(
 			websocket.CloseMessage,
 			websocket.FormatCloseMessage(code, reason),
