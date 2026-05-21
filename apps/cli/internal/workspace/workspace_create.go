@@ -169,7 +169,7 @@ func resolveCreatePaths(req CreateRequest) (resolvedCreatePaths, error) {
 func makeWorktreeStep(m *Manager, req CreateRequest, paths resolvedCreatePaths) createProgressStep {
 	return createProgressStep{
 		ID:      "worktree",
-		Label:   "Create local worktree",
+		Label:   "Fetch & create worktree",
 		Timeout: defaultCreateStepTimeouts["worktree"],
 		Run: func(stepCtx context.Context) (CreateProgressStatus, string, error) {
 			sourceBranch := strings.TrimSpace(req.SourceBranch)
