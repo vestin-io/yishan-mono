@@ -54,30 +54,30 @@ export type SettingsSearchCatalogItem = {
 
 export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
   {
-    titleKey: "settings.sections.personal",
+    titleKey: "settings.sections.profile",
     items: [
       { tab: "account", labelKey: "settings.items.account", icon: BiUser },
       { tab: "appearance", labelKey: "settings.items.appearance", icon: BiPalette },
       { tab: "notifications", labelKey: "settings.items.notifications", icon: BiBell },
-      { tab: "terminal", labelKey: "settings.items.terminal", icon: BiTerminal },
       { tab: "keybindings", labelKey: "settings.items.keybindings", icon: BiSolidKeyboard },
-      { tab: "agents", labelKey: "settings.items.agents", icon: BiChip },
+      { tab: "links", labelKey: "settings.items.links", icon: BiLinkExternal },
     ],
   },
   {
     titleKey: "settings.sections.organization",
     items: [
       { tab: "integrations", labelKey: "settings.items.integrations", icon: BiPlug },
-      { tab: "links", labelKey: "settings.items.links", icon: BiLinkExternal },
       { tab: "members", labelKey: "settings.items.members", icon: BiGroup },
       { tab: "nodes", labelKey: "settings.items.nodes", icon: BiDesktop },
     ],
   },
   {
-    titleKey: "settings.sections.workspaceSystem",
+    titleKey: "settings.sections.system",
     items: [
       { tab: "workspace", labelKey: "settings.items.workspace", icon: BiGitBranch },
+      { tab: "terminal", labelKey: "settings.items.terminal", icon: BiTerminal },
       { tab: "daemon", labelKey: "settings.items.daemon", icon: BiChip },
+      { tab: "agents", labelKey: "settings.items.agents", icon: BiChip },
     ],
   },
 ];

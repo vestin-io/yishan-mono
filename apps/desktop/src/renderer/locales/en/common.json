@@ -68,9 +68,9 @@
     "searchPlaceholder": "Search settings...",
     "searchNoResults": "No matching settings.",
     "sections": {
-      "personal": "Personal",
+      "profile": "Profile",
       "organization": "Organization",
-      "workspaceSystem": "Workspace & System"
+      "system": "System"
     },
     "items": {
       "account": "Account",

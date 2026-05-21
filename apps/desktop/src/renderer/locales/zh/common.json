@@ -68,9 +68,9 @@
     "searchPlaceholder": "搜索设置...",
     "searchNoResults": "没有匹配的设置项。",
     "sections": {
-      "personal": "个人",
+      "profile": "个人资料",
       "organization": "组织",
-      "workspaceSystem": "工作区与系统"
+      "system": "系统"
     },
     "items": {
       "account": "账号",
