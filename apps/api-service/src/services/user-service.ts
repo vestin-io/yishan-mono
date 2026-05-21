@@ -26,6 +26,20 @@ export class UserService {
     return rows[0] ?? null;
   }
 
+  /**
+   * Looks up a user by their unique email address.
+   * Returns `null` when no matching user exists.
+   */
+  async getByEmail(email: string) {
+    const rows = await this.db
+      .select({ id: users.id, email: users.email, name: users.name, avatarUrl: users.avatarUrl })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+
+    return rows[0] ?? null;
+  }
+
   async resolveUserIdForOAuthProfile(profile: OAuthProfile): Promise<string> {
     return this.db.transaction(async (tx) => {
       let userId: string | null = null;

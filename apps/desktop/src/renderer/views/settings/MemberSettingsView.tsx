@@ -1,11 +1,24 @@
-import { Alert, Avatar, Box, Stack, Table, TableBody, TableCell, TableHead, TableRow, Typography } from "@mui/material";
-import { useEffect, useState } from "react";
+import {
+  Alert,
+  Avatar,
+  Box,
+  Button,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  Typography,
+} from "@mui/material";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../../api/client";
 import type { OrganizationMemberRecord } from "../../api/types";
 import { CenteredSpinner } from "../../components/CenteredSpinner";
 import { SettingsCard, SettingsSectionHeader } from "../../components/settings";
 import { sessionStore } from "../../store/sessionStore";
+import { AddOrgMemberDialog } from "./AddOrgMemberDialog";
 
 function getMemberInitials(member: OrganizationMemberRecord): string {
   const displayName = member.name?.trim() || member.email?.trim() || member.userId.trim();
@@ -22,7 +35,10 @@ function getMemberInitials(member: OrganizationMemberRecord): string {
     .toUpperCase();
 }
 
-function resolveOrganizationId(selectedOrganizationId: string | undefined, organizationIds: string[]): string | undefined {
+function resolveOrganizationId(
+  selectedOrganizationId: string | undefined,
+  organizationIds: string[],
+): string | undefined {
   if (selectedOrganizationId && organizationIds.includes(selectedOrganizationId)) {
     return selectedOrganizationId;
   }
@@ -37,10 +53,34 @@ export function MemberSettingsView() {
   const [isLoading, setIsLoading] = useState(true);
   const [hasLoadError, setHasLoadError] = useState(false);
   const [members, setMembers] = useState<OrganizationMemberRecord[]>([]);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const organizationId = resolveOrganizationId(
     selectedOrganizationId,
     organizations.map((organization) => organization.id),
   );
+
+  const loadMembers = useCallback(async (orgId: string, signal: { cancelled: boolean }) => {
+    setIsLoading(true);
+    setHasLoadError(false);
+
+    try {
+      const nextMembers = await api.org.listMembers(orgId);
+      if (signal.cancelled) {
+        return;
+      }
+      setMembers(nextMembers);
+    } catch (error) {
+      console.error("[MemberSettingsView] Failed to load organization members", error);
+      if (!signal.cancelled) {
+        setMembers([]);
+        setHasLoadError(true);
+      }
+    } finally {
+      if (!signal.cancelled) {
+        setIsLoading(false);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (!organizationId) {
@@ -50,41 +90,31 @@ export function MemberSettingsView() {
       return;
     }
 
-    let cancelled = false;
-
-    const loadMembers = async () => {
-      setIsLoading(true);
-      setHasLoadError(false);
-
-      try {
-        const nextMembers = await api.org.listMembers(organizationId);
-        if (cancelled) {
-          return;
-        }
-        setMembers(nextMembers);
-      } catch (error) {
-        console.error("[MemberSettingsView] Failed to load organization members", error);
-        if (!cancelled) {
-          setMembers([]);
-          setHasLoadError(true);
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    void loadMembers();
+    const signal = { cancelled: false };
+    void loadMembers(organizationId, signal);
 
     return () => {
-      cancelled = true;
+      signal.cancelled = true;
     };
-  }, [organizationId]);
+  }, [organizationId, loadMembers]);
+
+  const handleAddDialogSuccess = useCallback(() => {
+    if (organizationId) {
+      void loadMembers(organizationId, { cancelled: false });
+    }
+  }, [organizationId, loadMembers]);
 
   return (
     <Box>
-      <SettingsSectionHeader title={t("settings.members.title")} description={t("settings.members.description")} />
+      <SettingsSectionHeader
+        title={t("settings.members.title")}
+        description={t("settings.members.description")}
+        action={
+          <Button size="small" variant="outlined" onClick={() => setIsAddDialogOpen(true)}>
+            {t("settings.members.addMember")}
+          </Button>
+        }
+      />
       <SettingsCard>
         {isLoading ? (
           <CenteredSpinner />
@@ -133,7 +163,11 @@ export function MemberSettingsView() {
                       <TableRow key={member.userId}>
                         <TableCell>
                           <Stack direction="row" spacing={1.25} alignItems="center" sx={{ minWidth: 0 }}>
-                            <Avatar src={member.avatarUrl ?? undefined} alt={avatarAlt} sx={{ width: 28, height: 28, fontSize: 12 }}>
+                            <Avatar
+                              src={member.avatarUrl ?? undefined}
+                              alt={avatarAlt}
+                              sx={{ width: 28, height: 28, fontSize: 12 }}
+                            >
                               {getMemberInitials(member)}
                             </Avatar>
                             <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
@@ -163,6 +197,11 @@ export function MemberSettingsView() {
           </>
         )}
       </SettingsCard>
+      <AddOrgMemberDialog
+        isOpen={isAddDialogOpen}
+        onClose={() => setIsAddDialogOpen(false)}
+        onSuccess={handleAddDialogSuccess}
+      />
     </Box>
   );
 }

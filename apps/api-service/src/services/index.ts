@@ -25,7 +25,7 @@ export type AppServices = {
 
 export function createServices(deps: { db: AppDb; config: ServiceConfig }): AppServices {
   const user = new UserService(deps.db);
-  const organization = new OrganizationService(deps.db);
+  const organization = new OrganizationService(deps.db, user);
   const workspaceProvisioner = new NoopWorkspaceProvisioner();
 
   return {

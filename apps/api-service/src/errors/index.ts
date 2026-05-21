@@ -30,6 +30,13 @@ export function isBusinessError(error: unknown): error is AppError {
   );
 }
 
+export class UserNotFoundByEmailError extends AppError {
+  constructor(email: string) {
+    super("No user found with that email address", StatusCodes.NOT_FOUND, "USER_NOT_FOUND_BY_EMAIL", { email });
+    this.name = "UserNotFoundByEmailError";
+  }
+}
+
 export class InvalidOrganizationMembersError extends AppError {
   constructor(readonly missingUserIds: string[]) {
     super("One or more member users do not exist", StatusCodes.BAD_REQUEST, "INVALID_ORGANIZATION_MEMBERS", {

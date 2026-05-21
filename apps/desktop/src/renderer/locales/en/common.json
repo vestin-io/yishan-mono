@@ -113,9 +113,23 @@
     },
     "members": {
       "title": "Organization members",
-      "description": "Review who belongs to the current organization and what access role each person has.",
+      "description": "Review who belongs to the cur organization and what access role each person has.",
       "loadError": "Failed to load organization members.",
       "empty": "No members are available for this organization.",
+      "addMember": "Add member",
+      "addDialog": {
+        "title": "Add organization member",
+        "emailLabel": "Email address",
+        "emailPlaceholder": "colleague@example.com",
+        "roleLabel": "Role",
+        "roles": {
+          "member": "Member",
+          "admin": "Admin"
+        },
+        "submit": "Add member",
+        "adding": "Adding...",
+        "errorEmailEmpty": "Email address cannot be empty."
+      },
       "columns": {
         "member": "Member",
         "email": "Email",

@@ -9,7 +9,7 @@ export const createOrganizationBodySchema = z.object({
 export { orgIdParamSchema as organizationParamsSchema };
 
 export const addOrganizationMemberBodySchema = z.object({
-  userId: nonEmptyStringSchema,
+  email: z.string().trim().email(),
   role: z.enum(["member", "admin"]).optional().default("member"),
 });
 

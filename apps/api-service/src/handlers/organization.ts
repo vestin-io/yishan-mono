@@ -56,13 +56,13 @@ export async function addOrganizationMemberHandler(
   body: AddOrganizationMemberBodyInput,
 ) {
   const { orgId: organizationId } = params;
-  const { userId, role } = body;
+  const { email, role } = body;
 
   const actorUser = c.get("sessionUser");
   const member = await c.get("services").organization.addOrganizationMember({
     organizationId,
     actorUserId: actorUser.id,
-    memberUserId: userId,
+    memberEmail: email,
     role,
   });
 

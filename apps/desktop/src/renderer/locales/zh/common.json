@@ -116,6 +116,20 @@
       "description": "查看当前组织的成员列表以及每个人的权限角色。",
       "loadError": "加载组织成员失败。",
       "empty": "当前组织没有成员。",
+      "addMember": "添加成员",
+      "addDialog": {
+        "title": "添加组织成员",
+        "emailLabel": "邮箱地址",
+        "emailPlaceholder": "colleague@example.com",
+        "roleLabel": "角色",
+        "roles": {
+          "member": "成员",
+          "admin": "管理员"
+        },
+        "submit": "添加成员",
+        "adding": "添加中...",
+        "errorEmailEmpty": "邮箱地址不能为空。"
+      },
       "columns": {
         "member": "成员",
         "email": "邮箱",
