@@ -10,6 +10,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
+	agentcmd "yishan/apps/cli/internal/daemon/agentcmd"
 	"yishan/apps/cli/internal/api"
 	cliruntime "yishan/apps/cli/internal/runtime"
 )
@@ -75,7 +76,6 @@ func processRelayJob(connState *wsConnState, nodeID string, params jobRunParams)
 	agentKind, _ := params.Payload["agentKind"].(string)
 	prompt, _ := params.Payload["prompt"].(string)
 	model, _ := params.Payload["model"].(string)
-	command, _ := params.Payload["command"].(string)
 	projectPath, _ := params.Payload["projectPath"].(string)
 
 	log.Info().
@@ -83,11 +83,10 @@ func processRelayJob(connState *wsConnState, nodeID string, params jobRunParams)
 		Str("agentKind", agentKind).
 		Str("prompt", prompt).
 		Str("model", model).
-		Str("command", command).
 		Str("projectPath", projectPath).
 		Msg("scheduler: executing agent")
 
-	_, execErr := runAgent(agentKind, prompt, model, command, projectPath)
+	_, execErr := runAgent(agentKind, prompt, model, projectPath)
 	finishedAt := time.Now()
 	durationMs := finishedAt.Sub(startTime).Milliseconds()
 
@@ -192,34 +191,11 @@ func sendJobResult(connState *wsConnState, runID, status string, durationMs int6
 // Agent execution
 // ---------------------------------------------------------------------------
 
-func resolveAgentCommand(agentKind string) string {
-	switch agentKind {
-	case "", "opencode":
-		return "opencode"
-	case "codex":
-		return "codex"
-	case "claude":
-		return "claude"
-	case "gemini":
-		return "gemini"
-	case "pi":
-		return "pi"
-	case "copilot":
-		return "copilot"
-	case "cursor", "cursor-agent":
-		return "cursor"
-	default:
-		return ""
+func runAgent(agentKind, prompt, model, projectPath string) (output string, err error) {
+	runCommand, err := agentcmd.BuildRunCommand(agentKind, prompt, model)
+	if err != nil {
+		return "", err
 	}
-}
-
-func runAgent(agentKind, prompt, model, command, projectPath string) (output string, err error) {
-	binary := resolveAgentCommand(agentKind)
-	if binary == "" {
-		return "", fmt.Errorf("unsupported agent kind: %s", agentKind)
-	}
-
-	args := buildAgentArgs(agentKind, prompt, model, command)
 
 	// exec.CommandContext kills the process when the context deadline fires,
 	// eliminating the time.After goroutine leak that occurred on every job
@@ -227,7 +203,7 @@ func runAgent(agentKind, prompt, model, command, projectPath string) (output str
 	ctx, cancel := context.WithTimeout(context.Background(), agentExecTimeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, binary, args...)
+	cmd := exec.CommandContext(ctx, runCommand.Binary, runCommand.Args...)
 	if projectPath != "" {
 		cmd.Dir = projectPath
 	}
@@ -251,37 +227,4 @@ func runAgent(agentKind, prompt, model, command, projectPath string) (output str
 		combined += "\n" + stderr.String()
 	}
 	return combined, nil
-}
-
-func buildAgentArgs(agentKind, prompt, model, command string) []string {
-	if agentKind == "" || agentKind == "opencode" {
-		args := []string{"run", prompt}
-		if model != "" {
-			args = append(args, "--model", model)
-		}
-		if command != "" {
-			args = append(args, "--command", command)
-		}
-		return args
-	}
-
-	if agentKind == "claude" {
-		args := []string{"-p", prompt}
-		if model != "" {
-			args = append(args, "--model", model)
-		}
-		if command != "" {
-			args = append(args, "--command", command)
-		}
-		return args
-	}
-
-	args := []string{"run", "--prompt", prompt}
-	if model != "" {
-		args = append(args, "--model", model)
-	}
-	if command != "" {
-		args = append(args, "--command", command)
-	}
-	return args
 }
