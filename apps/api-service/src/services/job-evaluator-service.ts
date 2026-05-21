@@ -1,7 +1,7 @@
-import { and, eq, lte } from "drizzle-orm";
+import { and, desc, eq, lte } from "drizzle-orm";
 
 import type { AppDb } from "@/db/client";
-import { scheduledJobRuns, scheduledJobs } from "@/db/schema";
+import { scheduledJobRuns, scheduledJobs, workspaces } from "@/db/schema";
 import { ScheduledJobInvalidCronError, ScheduledJobInvalidTimezoneError } from "@/errors";
 import { newId } from "@/lib/id";
 import { computeNextRunAt, ensureTimezoneSupported, parseCronExpression } from "@/scheduled/cron";
@@ -169,6 +169,65 @@ export class JobEvaluatorService {
       .returning({ id: scheduledJobRuns.id });
 
     return rows.length;
+  }
+
+  async getPendingRunForDispatch(input: {
+    runId: string;
+    jobId: string;
+    nodeId: string;
+    scheduledFor: Date;
+  }): Promise<{ runId: string } | null> {
+    const rows = await this.db
+      .select({ runId: scheduledJobRuns.id })
+      .from(scheduledJobRuns)
+      .where(
+        and(
+          eq(scheduledJobRuns.id, input.runId),
+          eq(scheduledJobRuns.jobId, input.jobId),
+          eq(scheduledJobRuns.nodeId, input.nodeId),
+          eq(scheduledJobRuns.status, "pending"),
+          eq(scheduledJobRuns.scheduledFor, input.scheduledFor),
+        ),
+      )
+      .limit(1);
+
+    return rows[0] ?? null;
+  }
+
+  async markRunSkippedOffline(input: { runId: string; nodeId: string; reason?: string }): Promise<void> {
+    await this.db
+      .update(scheduledJobRuns)
+      .set({
+        status: "skipped_offline",
+        finishedAt: new Date(),
+        errorCode: "NODE_OFFLINE",
+        errorMessage: input.reason ?? "node offline",
+      })
+      .where(
+        and(
+          eq(scheduledJobRuns.id, input.runId),
+          eq(scheduledJobRuns.nodeId, input.nodeId),
+          eq(scheduledJobRuns.status, "pending"),
+        ),
+      );
+  }
+
+  async findProjectPathForNode(input: { projectId: string; nodeId: string }): Promise<string | null> {
+    const rows = await this.db
+      .select({ localPath: workspaces.localPath })
+      .from(workspaces)
+      .where(
+        and(
+          eq(workspaces.projectId, input.projectId),
+          eq(workspaces.nodeId, input.nodeId),
+          eq(workspaces.kind, "primary"),
+          eq(workspaces.status, "active"),
+        ),
+      )
+      .orderBy(desc(workspaces.updatedAt))
+      .limit(1);
+
+    return rows[0]?.localPath ?? null;
   }
 
   /** Records that a node has started executing a scheduled run. */

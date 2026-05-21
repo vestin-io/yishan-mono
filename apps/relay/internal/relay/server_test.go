@@ -22,7 +22,7 @@ type testTransport struct {
 }
 
 func (t *testTransport) IsOnline(nodeID string) bool      { return t.online[nodeID] }
-func (t *testTransport) SendNotification(string, string, any) bool { return true }
+func (t *testTransport) SendNotificationWithError(string, string, any) error { return nil }
 
 // ---------------------------------------------------------------------------
 // Server test helpers
@@ -249,17 +249,20 @@ func TestHandleDispatch_Accepted(t *testing.T) {
 	w := httptest.NewRecorder()
 	srv.HandleDispatch(w, authorizedRequest(t, http.MethodPost, "/api/v1/dispatch", dispatchBody(t, "run-1", "job-1", "node-1")))
 
-	if w.Code != http.StatusAccepted {
-		t.Fatalf("expected 202, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
-	var result map[string]string
+	var result map[string]any
 	json.Unmarshal(w.Body.Bytes(), &result)
 	if result["runId"] != "run-1" {
 		t.Errorf("expected runId 'run-1', got %v", result)
 	}
+	if result["ok"] != true {
+		t.Errorf("expected ok true, got %v", result)
+	}
 }
 
-func TestHandleDispatch_Duplicate_Returns409(t *testing.T) {
+func TestHandleDispatch_Duplicate_ReturnsReasonPayload(t *testing.T) {
 	transport := &testTransport{online: map[string]bool{"node-1": true}}
 	queue := jobqueue.NewManager(transport, jobqueue.Config{
 		AckTimeout: time.Second, ResultTimeout: time.Second, MaxRetries: 3,
@@ -278,12 +281,18 @@ func TestHandleDispatch_Duplicate_Returns409(t *testing.T) {
 	body2 := dispatchBody(t, "run-2", "job-1", "node-1") // same job same minute → duplicate
 	srv.HandleDispatch(w, authorizedRequest(t, http.MethodPost, "/api/v1/dispatch", body2))
 
-	if w.Code != http.StatusConflict {
-		t.Errorf("expected 409, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var result map[string]any
+	json.Unmarshal(w.Body.Bytes(), &result)
+	if result["ok"] != false || result["reason"] != "duplicate" {
+		t.Errorf("expected duplicate payload, got %v", result)
 	}
 }
 
-func TestHandleDispatch_NodeOffline_Returns503(t *testing.T) {
+func TestHandleDispatch_NodeOffline_ReturnsReasonPayload(t *testing.T) {
 	transport := &testTransport{online: map[string]bool{}} // node offline
 	queue := jobqueue.NewManager(transport, jobqueue.Config{
 		AckTimeout: time.Second, ResultTimeout: time.Second, MaxRetries: 3,
@@ -298,8 +307,14 @@ func TestHandleDispatch_NodeOffline_Returns503(t *testing.T) {
 	w := httptest.NewRecorder()
 	srv.HandleDispatch(w, authorizedRequest(t, http.MethodPost, "/api/v1/dispatch", dispatchBody(t, "run-1", "job-1", "node-1")))
 
-	if w.Code != http.StatusServiceUnavailable {
-		t.Errorf("expected 503, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var result map[string]any
+	json.Unmarshal(w.Body.Bytes(), &result)
+	if result["ok"] != false || result["reason"] != "node_offline" {
+		t.Errorf("expected node_offline payload, got %v", result)
 	}
 }
 

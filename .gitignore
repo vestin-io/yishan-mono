@@ -9,6 +9,7 @@ coverage/
 playwright-report/
 test-results/
 .env
+.dev.vars
 .wrangler
 apps/desktop/release/
 apps/cli/bin/

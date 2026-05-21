@@ -5,11 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"time"
 
 	"github.com/rs/zerolog/log"
 
+	agentcmd "yishan/apps/cli/internal/daemon/agentcmd"
 	"yishan/apps/cli/internal/api"
 	cliruntime "yishan/apps/cli/internal/runtime"
 )
@@ -75,17 +77,17 @@ func processRelayJob(connState *wsConnState, nodeID string, params jobRunParams)
 	agentKind, _ := params.Payload["agentKind"].(string)
 	prompt, _ := params.Payload["prompt"].(string)
 	model, _ := params.Payload["model"].(string)
-	command, _ := params.Payload["command"].(string)
+	projectPath, _ := params.Payload["projectPath"].(string)
 
 	log.Info().
 		Str("runId", params.RunID).
 		Str("agentKind", agentKind).
 		Str("prompt", prompt).
 		Str("model", model).
-		Str("command", command).
+		Str("projectPath", projectPath).
 		Msg("scheduler: executing agent")
 
-	output, execErr := runAgent(agentKind, prompt, model, command)
+	_, execErr := runAgent(agentKind, prompt, model, projectPath)
 	finishedAt := time.Now()
 	durationMs := finishedAt.Sub(startTime).Milliseconds()
 
@@ -99,14 +101,8 @@ func processRelayJob(connState *wsConnState, nodeID string, params jobRunParams)
 		apiInput.Status = "failed"
 		apiInput.ErrorCode = agentExecErrorCode
 		apiInput.ErrorMessage = execErr.Error()
-		if output != "" {
-			apiInput.ResponseBody = output
-		}
 	} else {
 		apiInput.Status = "succeeded"
-		if output != "" {
-			apiInput.ResponseBody = output
-		}
 	}
 
 	_, reportErr := client.CompleteScheduledJobRun(nodeID, apiInput)
@@ -196,39 +192,10 @@ func sendJobResult(connState *wsConnState, runID, status string, durationMs int6
 // Agent execution
 // ---------------------------------------------------------------------------
 
-func resolveAgentCommand(agentKind string) string {
-	switch agentKind {
-	case "", "opencode":
-		return "opencode"
-	case "codex":
-		return "codex"
-	case "claude":
-		return "claude"
-	case "gemini":
-		return "gemini"
-	case "pi":
-		return "pi"
-	case "copilot":
-		return "copilot"
-	case "cursor", "cursor-agent":
-		return "cursor"
-	default:
-		return ""
-	}
-}
-
-func runAgent(agentKind, prompt, model, command string) (output string, err error) {
-	binary := resolveAgentCommand(agentKind)
-	if binary == "" {
-		return "", fmt.Errorf("unsupported agent kind: %s", agentKind)
-	}
-
-	args := []string{"run", "--prompt", prompt}
-	if model != "" {
-		args = append(args, "--model", model)
-	}
-	if command != "" {
-		args = append(args, "--command", command)
+func runAgent(agentKind, prompt, model, projectPath string) (output string, err error) {
+	runCommand, err := agentcmd.BuildRunCommand(agentKind, prompt, model)
+	if err != nil {
+		return "", err
 	}
 
 	// exec.CommandContext kills the process when the context deadline fires,
@@ -237,7 +204,21 @@ func runAgent(agentKind, prompt, model, command string) (output string, err erro
 	ctx, cancel := context.WithTimeout(context.Background(), agentExecTimeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, binary, args...)
+	cmd := exec.CommandContext(ctx, runCommand.Binary, runCommand.Args...)
+	if projectPath != "" {
+		cmd.Dir = projectPath
+	}
+	// Scheduled jobs should not emit desktop hook notifications. The managed
+	// notify bridge only forwards events when these YISHAN_* hook context vars
+	// are present, so we explicitly clear them for scheduler-spawned agent runs.
+	cmd.Env = append(
+		os.Environ(),
+		"YISHAN_WORKSPACE_ID=",
+		"YISHAN_TAB_ID=",
+		"YISHAN_PANE_ID=",
+		"YISHAN_HOOK_INGRESS_URL=",
+		"YISHAN_OBSERVER_TOKEN=",
+	)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

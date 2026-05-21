@@ -322,21 +322,30 @@ func (s *Server) HandleDispatch(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case result.OK:
-		writeJSON(w, http.StatusAccepted, map[string]string{"runId": result.RunID, "status": "dispatched"})
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok":     true,
+			"runId":  result.RunID,
+			"status": "dispatched",
+		})
 	case result.Reason == "duplicate":
-		writeJSON(w, http.StatusConflict, map[string]any{
-			"error":         "duplicate dispatch",
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok":            false,
+			"reason":        "duplicate",
+			"detail":        "duplicate dispatch",
 			"existingRunId": result.ExistingRunID,
 		})
 	case result.Reason == "node_offline":
-		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
-			"error":  "node offline",
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok":     false,
+			"reason": "node_offline",
 			"runId":  result.RunID,
 			"status": "skipped_offline",
+			"detail": "node is offline",
 		})
 	default:
-		writeJSON(w, http.StatusInternalServerError, map[string]any{
-			"error":  result.Reason,
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok":     false,
+			"reason": result.Reason,
 			"detail": result.ErrorDetail,
 		})
 	}

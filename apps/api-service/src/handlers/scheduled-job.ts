@@ -2,7 +2,8 @@ import { StatusCodes } from "http-status-codes";
 import { HTTPException } from "hono/http-exception";
 
 import type { AppContext } from "@/hono";
-import { publishViaQStash } from "@/scheduled/qstash";
+import type { DispatchMessage } from "@/scheduled/queue";
+import { publishViaQueue } from "@/scheduled/queue";
 import type { NodeParamsInput } from "@/validation/node";
 import type {
   CompleteScheduledJobRunBodyInput,
@@ -154,20 +155,17 @@ export async function runScheduledJobNowHandler(c: AppContext, params: Scheduled
     jobId: params.jobId,
   });
 
-  const config = c.get("config");
-  const bindings = c.env as Record<string, string | undefined>;
-  const published = await publishViaQStash(
+  const bindings = c.env as { SCHEDULED_JOB_QUEUE?: Queue<DispatchMessage> };
+  const published = await publishViaQueue(
     {
-      QSTASH_TOKEN: bindings.QSTASH_TOKEN,
-      QSTASH_URL: bindings.QSTASH_URL,
-      RELAY_URL: config.relayUrl,
-      RELAY_API_TOKEN: config.relayApiToken,
+      SCHEDULED_JOB_QUEUE: bindings.SCHEDULED_JOB_QUEUE,
     },
     [
       {
         runId: pendingRun.runId,
         nodeId: pendingRun.job.nodeId,
         jobId: pendingRun.job.id,
+        projectId: pendingRun.job.projectId,
         agentKind: pendingRun.job.agentKind,
         prompt: pendingRun.job.prompt,
         model: pendingRun.job.model ?? "",
@@ -183,7 +181,28 @@ export async function runScheduledJobNowHandler(c: AppContext, params: Scheduled
     });
   }
 
-  return c.json({ ok: true, runId: pendingRun.runId }, StatusCodes.ACCEPTED);
+  return c.json(
+    {
+      ok: true,
+      run: {
+        id: pendingRun.runId,
+        jobId: pendingRun.job.id,
+        organizationId: pendingRun.job.organizationId,
+        projectId: pendingRun.job.projectId,
+        nodeId: pendingRun.job.nodeId,
+        scheduledFor: pendingRun.scheduledFor,
+        startedAt: null,
+        finishedAt: null,
+        status: "pending",
+        responseBody: null,
+        errorCode: null,
+        errorMessage: null,
+        errorDetails: null,
+        createdAt: new Date(),
+      },
+    },
+    StatusCodes.ACCEPTED,
+  );
 }
 
 export async function startScheduledJobRunHandler(

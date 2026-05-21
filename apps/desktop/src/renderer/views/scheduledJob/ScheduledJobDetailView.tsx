@@ -1,5 +1,5 @@
 import { Box, Button, CircularProgress, Divider, IconButton, Stack, Tooltip, Typography } from "@mui/material";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -10,6 +10,7 @@ import {
   LuPause,
   LuPencil,
   LuPlay,
+  LuPanelLeft,
   LuRefreshCw,
   LuTrash2,
   LuZap,
@@ -19,6 +20,7 @@ import type { ScheduledJobRecord, ScheduledJobRunRecord } from "../../api/schedu
 import { AgentIcon } from "../../components/AgentIcon";
 import { ConfirmationDialog } from "../../components/ConfirmationDialog";
 import { PaneHeader } from "../../components/PaneHeader";
+import { PaneToggleButton } from "../../components/PaneToggleButton";
 import { SplitPaneLayout } from "../../components/SplitPaneLayout";
 import { renderProjectIcon } from "../../components/projectIcons";
 import { isDesktopAgentKind } from "../../helpers/agentSettings";
@@ -26,6 +28,7 @@ import { getErrorMessage } from "../../helpers/errorHelpers";
 import { getRendererPlatform } from "../../helpers/platform";
 import { useCommands } from "../../hooks/useCommands";
 import { useWorkspacePaneVisibilityContext } from "../../hooks/useWorkspacePaneVisibility";
+import { getShortcutDisplayLabelById } from "../../shortcuts/shortcutDisplay";
 import { scheduledJobStore } from "../../store/scheduledJobStore";
 import { sessionStore } from "../../store/sessionStore";
 import { workspaceStore } from "../../store/workspaceStore";
@@ -183,6 +186,13 @@ function RunsSidebar({ orgId, jobId, job }: { orgId: string; jobId: string; job:
     queryKey: ["scheduled-job-runs", orgId, jobId],
     queryFn: () => api.scheduledJob.listRuns(orgId, jobId, 20),
     enabled: Boolean(orgId && jobId),
+    refetchInterval: (query) => {
+      const runs = query.state.data;
+      if (!runs || runs.length === 0) {
+        return false;
+      }
+      return runs.some((run) => run.status === "pending" || run.status === "running") ? 10_000 : false;
+    },
   });
 
   return (
@@ -265,7 +275,9 @@ function RunsSidebar({ orgId, jobId, job }: { orgId: string; jobId: string; job:
 /** Renders the detail view for one scheduled job with a runs history sidebar. */
 export function ScheduledJobDetailView({ job, onBack }: ScheduledJobDetailViewProps) {
   const { t } = useTranslation();
-  const { leftCollapsed } = useWorkspacePaneVisibilityContext();
+  const { leftCollapsed, onToggleLeftPane } = useWorkspacePaneVisibilityContext();
+  const toggleLeftShortcutLabel = getShortcutDisplayLabelById("toggle-left-pane", getRendererPlatform());
+  const toggleLeftTooltipLabel = `${t("layout.toggleLeftSidebar")} (${toggleLeftShortcutLabel})`;
   const shouldReserveMacInset = getRendererPlatform() === "darwin" && leftCollapsed;
   const isPending = scheduledJobStore((state) => state.pendingActionIds.includes(job.id));
   const orgId = sessionStore((state) => state.selectedOrganizationId ?? "");
@@ -276,6 +288,7 @@ export function ScheduledJobDetailView({ job, onBack }: ScheduledJobDetailViewPr
     enabled: Boolean(orgId),
   });
   const { pauseScheduledJob, resumeScheduledJob, runScheduledJobNow, deleteScheduledJob } = useCommands();
+  const queryClient = useQueryClient();
   const [runsPaneWidth, setRunsPaneWidth] = useState(RUNS_PANE_DEFAULT_WIDTH);
   const dragRef = useRef({ startX: 0, startWidth: 0 });
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -313,6 +326,19 @@ export function ScheduledJobDetailView({ job, onBack }: ScheduledJobDetailViewPr
     }
   }, [deleteScheduledJob, job.id, onBack]);
 
+  const handleRunNow = useCallback(async () => {
+    const run = await runScheduledJobNow(job.id);
+    if (!run) {
+      return;
+    }
+    queryClient.setQueryData<ScheduledJobRunRecord[]>(["scheduled-job-runs", orgId, job.id], (previous = []) => {
+      if (previous.some((item) => item.id === run.id)) {
+        return previous;
+      }
+      return [run, ...previous].slice(0, 20);
+    });
+  }, [job.id, orgId, queryClient, runScheduledJobNow]);
+
   const primaryAction = job.status === "active" ? "pause" : job.status === "paused" ? "resume" : null;
   const canRunNow = !isPending;
 
@@ -324,6 +350,14 @@ export function ScheduledJobDetailView({ job, onBack }: ScheduledJobDetailViewPr
       {/* Header */}
       <PaneHeader justifyContent="space-between" showMacInset={shouldReserveMacInset}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, minWidth: 0, flex: 1 }}>
+          {leftCollapsed ? (
+            <PaneToggleButton
+              tooltipLabel={toggleLeftTooltipLabel}
+              ariaLabel={t("layout.toggleLeftSidebar")}
+              icon={<LuPanelLeft size={16} />}
+              onClick={onToggleLeftPane}
+            />
+          ) : null}
           <Box className="electron-webkit-app-region-no-drag" sx={{ display: "inline-flex" }}>
             <IconButton size="small" onClick={onBack} aria-label={t("scheduledJob.detail.back")}>
               <LuArrowLeft size={16} />
@@ -356,7 +390,7 @@ export function ScheduledJobDetailView({ job, onBack }: ScheduledJobDetailViewPr
                 size="small"
                 variant="text"
                 startIcon={<LuZap size={13} />}
-                onClick={() => void runScheduledJobNow(job.id)}
+                onClick={() => void handleRunNow()}
                 disabled={!canRunNow}
                 sx={{ textTransform: "none", color: "text.secondary", px: 1.5 }}
               >
