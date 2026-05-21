@@ -171,6 +171,47 @@ export class JobEvaluatorService {
     return rows.length;
   }
 
+  async getPendingRunForDispatch(input: {
+    runId: string;
+    jobId: string;
+    nodeId: string;
+    scheduledFor: Date;
+  }): Promise<{ runId: string } | null> {
+    const rows = await this.db
+      .select({ runId: scheduledJobRuns.id })
+      .from(scheduledJobRuns)
+      .where(
+        and(
+          eq(scheduledJobRuns.id, input.runId),
+          eq(scheduledJobRuns.jobId, input.jobId),
+          eq(scheduledJobRuns.nodeId, input.nodeId),
+          eq(scheduledJobRuns.status, "pending"),
+          eq(scheduledJobRuns.scheduledFor, input.scheduledFor),
+        ),
+      )
+      .limit(1);
+
+    return rows[0] ?? null;
+  }
+
+  async markRunSkippedOffline(input: { runId: string; nodeId: string; reason?: string }): Promise<void> {
+    await this.db
+      .update(scheduledJobRuns)
+      .set({
+        status: "skipped_offline",
+        finishedAt: new Date(),
+        errorCode: "NODE_OFFLINE",
+        errorMessage: input.reason ?? "node offline",
+      })
+      .where(
+        and(
+          eq(scheduledJobRuns.id, input.runId),
+          eq(scheduledJobRuns.nodeId, input.nodeId),
+          eq(scheduledJobRuns.status, "pending"),
+        ),
+      );
+  }
+
   /** Records that a node has started executing a scheduled run. */
   async markRunStarted(input: {
     runId: string;

@@ -2,7 +2,8 @@ import { StatusCodes } from "http-status-codes";
 import { HTTPException } from "hono/http-exception";
 
 import type { AppContext } from "@/hono";
-import { publishViaQStash } from "@/scheduled/qstash";
+import type { DispatchMessage } from "@/scheduled/queue";
+import { publishViaQueue } from "@/scheduled/queue";
 import type { NodeParamsInput } from "@/validation/node";
 import type {
   CompleteScheduledJobRunBodyInput,
@@ -154,14 +155,10 @@ export async function runScheduledJobNowHandler(c: AppContext, params: Scheduled
     jobId: params.jobId,
   });
 
-  const config = c.get("config");
-  const bindings = c.env as Record<string, string | undefined>;
-  const published = await publishViaQStash(
+  const bindings = c.env as { SCHEDULED_JOB_QUEUE?: Queue<DispatchMessage> };
+  const published = await publishViaQueue(
     {
-      QSTASH_TOKEN: bindings.QSTASH_TOKEN,
-      QSTASH_URL: bindings.QSTASH_URL,
-      RELAY_URL: config.relayUrl,
-      RELAY_API_TOKEN: config.relayApiToken,
+      SCHEDULED_JOB_QUEUE: bindings.SCHEDULED_JOB_QUEUE,
     },
     [
       {
