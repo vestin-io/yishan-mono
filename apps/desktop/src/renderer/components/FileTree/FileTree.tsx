@@ -67,6 +67,7 @@ export function FileTree({
     return set;
   }, [gitChangesByPathResolved]);
 
+  const [loadingPaths, setLoadingPaths] = useState<Set<string>>(new Set());
   const [editingEntry, setEditingEntry] = useState<EditingEntry | null>(null);
   const [editingName, setEditingName] = useState("");
   const [selectedEntryPath, setSelectedEntryPath] = useState("");
@@ -538,6 +539,7 @@ export function FileTree({
                 hasDescendantGitChange={hasDescendantGitChange}
                 isIgnored={isIgnored}
                 isExpanded={isExpanded}
+                isLoading={loadingPaths.has(row.path)}
                 isDraggable={Boolean(worktreePath)}
                 absolutePath={worktreePath ? `${worktreePath}/${row.path}` : row.path}
                 isDropTarget={dropTargetPath != null && row.isDirectory && row.path === dropTargetPath}
@@ -547,7 +549,20 @@ export function FileTree({
                 }}
                 onToggle={() => {
                   if (row.isDirectory) {
-                    void onEnsurePathLoaded?.(row.path);
+                    const isCurrentlyExpanded = expandedPathSet.has(row.path);
+                    if (!isCurrentlyExpanded && onEnsurePathLoaded) {
+                      const result = onEnsurePathLoaded(row.path);
+                      if (result instanceof Promise) {
+                        setLoadingPaths((prev) => new Set([...prev, row.path]));
+                        result.finally(() => {
+                          setLoadingPaths((prev) => {
+                            const next = new Set(prev);
+                            next.delete(row.path);
+                            return next;
+                          });
+                        });
+                      }
+                    }
                   }
                   setExpandedItems((items) => {
                     const isCurrentlyExpanded = items.includes(row.path);
@@ -556,7 +571,19 @@ export function FileTree({
                 }}
                 onOpen={() => {
                   if (row.isDirectory) {
-                    void onEnsurePathLoaded?.(row.path);
+                    if (onEnsurePathLoaded) {
+                      const result = onEnsurePathLoaded(row.path);
+                      if (result instanceof Promise) {
+                        setLoadingPaths((prev) => new Set([...prev, row.path]));
+                        result.finally(() => {
+                          setLoadingPaths((prev) => {
+                            const next = new Set(prev);
+                            next.delete(row.path);
+                            return next;
+                          });
+                        });
+                      }
+                    }
                     setExpandedItems((items) => [...new Set([...items, row.path])]);
                   } else {
                     onOpenEntry?.({ path: row.path, isDirectory: false });
