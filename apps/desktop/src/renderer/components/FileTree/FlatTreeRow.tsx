@@ -1,4 +1,4 @@
-import { Box, TextField } from "@mui/material";
+import { Box, CircularProgress, TextField } from "@mui/material";
 import { MdOutlineKeyboardArrowRight } from "react-icons/md";
 import type { DragEvent, KeyboardEvent, MouseEvent } from "react";
 import { getFileTreeIcon } from "../fileTreeIcons";
@@ -32,6 +32,8 @@ export type FlatTreeRowProps = {
   hasDescendantGitChange: boolean;
   isIgnored: boolean;
   isExpanded: boolean;
+  /** When true, shows a loading spinner in place of the expand arrow. */
+  isLoading: boolean;
   /** When true, the row is draggable and will emit file path data on drag start. */
   isDraggable: boolean;
   /** Absolute file path used as the drag payload. */
@@ -61,6 +63,7 @@ export function FlatTreeRow({
   gitChangeKind,
   isIgnored,
   isExpanded,
+  isLoading,
   isDraggable,
   absolutePath,
   isDropTarget,
@@ -199,12 +202,16 @@ export function FlatTreeRow({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
+            transform: !isLoading && isExpanded ? "rotate(90deg)" : "rotate(0deg)",
             color: "text.secondary",
             "& svg": { display: "block" },
           }}
         >
-          <MdOutlineKeyboardArrowRight size={16} />
+          {isLoading ? (
+            <CircularProgress size={12} color="inherit" />
+          ) : (
+            <MdOutlineKeyboardArrowRight size={16} />
+          )}
         </Box>
       ) : (
         <Box sx={{ width: 16, flexShrink: 0 }} />
