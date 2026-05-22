@@ -82,6 +82,19 @@ var workspaceFindCmd = &cobra.Command{
 var workspaceCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create project workspace",
+	Long: `Create a new workspace inside a project.
+
+Workspace kinds:
+  primary   A full checkout of the project. Requires --local-path.
+  worktree  A git worktree branched from an existing primary workspace.
+            Requires --branch. --source-branch defaults to the primary branch.
+
+Examples:
+  # Create a primary workspace at a local path
+  yishan workspace create --project-id <id> --local-path /path/to/repo
+
+  # Create a worktree workspace on a new branch
+  yishan workspace create --project-id <id> --kind worktree --branch feature/foo`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		orgID, err := resolveOrgID(cmd)
 		if err != nil {
@@ -191,6 +204,60 @@ var workspaceCloseCmd = &cobra.Command{
 	},
 }
 
+var workspacePRUpsertCmd = &cobra.Command{
+	Use:   "upsert",
+	Short: "Upsert a pull request record on a workspace",
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		orgID, err := resolveOrgID(cmd)
+		if err != nil {
+			return err
+		}
+		projectID, err := cmd.Flags().GetString("project-id")
+		if err != nil {
+			return err
+		}
+		workspaceID, err := cmd.Flags().GetString("workspace-id")
+		if err != nil {
+			return err
+		}
+		prID, err := cmd.Flags().GetString("pr-id")
+		if err != nil {
+			return err
+		}
+		state, err := cmd.Flags().GetString("state")
+		if err != nil {
+			return err
+		}
+		detectedAt, err := cmd.Flags().GetString("detected-at")
+		if err != nil {
+			return err
+		}
+		title, _ := cmd.Flags().GetString("title")
+		url, _ := cmd.Flags().GetString("url")
+		branch, _ := cmd.Flags().GetString("branch")
+		baseBranch, _ := cmd.Flags().GetString("base-branch")
+		resolvedAt, _ := cmd.Flags().GetString("resolved-at")
+
+		response, err := cliruntime.APIClient().UpsertWorkspacePullRequest(orgID, projectID, workspaceID, api.UpsertWorkspacePullRequestInput{
+			PrID:       prID,
+			Title:      title,
+			URL:        url,
+			Branch:     branch,
+			BaseBranch: baseBranch,
+			State:      state,
+			DetectedAt: detectedAt,
+			ResolvedAt: resolvedAt,
+		})
+		if err != nil {
+			return err
+		}
+
+		return output.PrintAny(response)
+	},
+}
+
+var workspacePRCmd = &cobra.Command{Use: "pr", Short: "Workspace pull request operations"}
+
 var workspaceCmd = &cobra.Command{Use: "workspace", Short: "Workspace operations"}
 
 func init() {
@@ -199,6 +266,8 @@ func init() {
 	workspaceCmd.AddCommand(workspaceFindCmd)
 	workspaceCmd.AddCommand(workspaceCreateCmd)
 	workspaceCmd.AddCommand(workspaceCloseCmd)
+	workspaceCmd.AddCommand(workspacePRCmd)
+	workspacePRCmd.AddCommand(workspacePRUpsertCmd)
 
 	addOrgIDFlag(workspaceListCmd)
 	workspaceListCmd.Flags().String("project-id", "", "project ID")
@@ -224,6 +293,23 @@ func init() {
 	workspaceCloseCmd.Flags().String("workspace-id", "", "workspace ID")
 	cobra.CheckErr(workspaceCloseCmd.MarkFlagRequired("project-id"))
 	cobra.CheckErr(workspaceCloseCmd.MarkFlagRequired("workspace-id"))
+
+	addOrgIDFlag(workspacePRUpsertCmd)
+	workspacePRUpsertCmd.Flags().String("project-id", "", "project ID")
+	workspacePRUpsertCmd.Flags().String("workspace-id", "", "workspace ID")
+	workspacePRUpsertCmd.Flags().String("pr-id", "", "pull request ID")
+	workspacePRUpsertCmd.Flags().String("state", "", "pull request state (open|closed|merged)")
+	workspacePRUpsertCmd.Flags().String("detected-at", "", "ISO 8601 timestamp when the PR was detected")
+	workspacePRUpsertCmd.Flags().String("title", "", "pull request title")
+	workspacePRUpsertCmd.Flags().String("url", "", "pull request URL")
+	workspacePRUpsertCmd.Flags().String("branch", "", "pull request head branch")
+	workspacePRUpsertCmd.Flags().String("base-branch", "", "pull request base branch")
+	workspacePRUpsertCmd.Flags().String("resolved-at", "", "ISO 8601 timestamp when the PR was resolved")
+	cobra.CheckErr(workspacePRUpsertCmd.MarkFlagRequired("project-id"))
+	cobra.CheckErr(workspacePRUpsertCmd.MarkFlagRequired("workspace-id"))
+	cobra.CheckErr(workspacePRUpsertCmd.MarkFlagRequired("pr-id"))
+	cobra.CheckErr(workspacePRUpsertCmd.MarkFlagRequired("state"))
+	cobra.CheckErr(workspacePRUpsertCmd.MarkFlagRequired("detected-at"))
 }
 
 func validateWorkspaceKind(kind string) error {

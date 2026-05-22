@@ -41,7 +41,7 @@ func init() {
 	rootCmd.PersistentFlags().String("profile", "default", "runtime profile name (default, dev, ...)")
 	rootCmd.PersistentFlags().String("log-level", "", "log level (debug, info, warn, error)")
 	rootCmd.PersistentFlags().String("log-format", "", "log format (pretty, json)")
-	rootCmd.PersistentFlags().String("output", "default", "output format (default, json)")
+	rootCmd.PersistentFlags().StringP("output", "o", "default", "output format (default, json)")
 	rootCmd.PersistentFlags().String("api-base-url", "https://api.yishan.io", "API service base URL")
 	rootCmd.PersistentFlags().String("api-token", "", "API access token (Bearer)")
 	cobra.CheckErr(viper.BindPFlag("profile", rootCmd.PersistentFlags().Lookup("profile")))

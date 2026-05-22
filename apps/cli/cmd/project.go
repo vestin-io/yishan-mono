@@ -69,12 +69,35 @@ var projectCreateCmd = &cobra.Command{
 	},
 }
 
+var projectDeleteCmd = &cobra.Command{
+	Use:   "delete",
+	Short: "Delete organization project",
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		orgID, err := resolveOrgID(cmd)
+		if err != nil {
+			return err
+		}
+		projectID, err := cmd.Flags().GetString("project-id")
+		if err != nil {
+			return err
+		}
+
+		response, err := cliruntime.APIClient().DeleteProject(orgID, projectID)
+		if err != nil {
+			return err
+		}
+
+		return output.PrintAny(response)
+	},
+}
+
 var projectCmd = &cobra.Command{Use: "project", Short: "Project operations"}
 
 func init() {
 	rootCmd.AddCommand(projectCmd)
 	projectCmd.AddCommand(projectListCmd)
 	projectCmd.AddCommand(projectCreateCmd)
+	projectCmd.AddCommand(projectDeleteCmd)
 
 	addOrgIDFlag(projectListCmd)
 
@@ -85,4 +108,8 @@ func init() {
 	projectCreateCmd.Flags().String("node-id", "", "node ID")
 	projectCreateCmd.Flags().String("local-path", "", "local path")
 	cobra.CheckErr(projectCreateCmd.MarkFlagRequired("name"))
+
+	addOrgIDFlag(projectDeleteCmd)
+	projectDeleteCmd.Flags().String("project-id", "", "project ID")
+	cobra.CheckErr(projectDeleteCmd.MarkFlagRequired("project-id"))
 }

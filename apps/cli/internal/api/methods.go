@@ -143,6 +143,12 @@ func (c *Client) RegisterNode(input RegisterNodeInput) (RegisterNodeResponse, er
 	return response, err
 }
 
+func (c *Client) DeleteProject(orgID string, projectID string) (OKResponse, error) {
+	var response OKResponse
+	err := c.DoDecode("DELETE", "/orgs/"+orgID+"/projects/"+projectID, nil, &response)
+	return response, err
+}
+
 func (c *Client) ListProjects(orgID string) (ListProjectsResponse, error) {
 	var response ListProjectsResponse
 	err := c.DoDecode("GET", "/orgs/"+orgID+"/projects", nil, &response)

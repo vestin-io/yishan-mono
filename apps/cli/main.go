@@ -11,7 +11,8 @@ import (
 func main() {
 	if err := cmd.Execute(); err != nil {
 		log.Error().Err(err).Msg("command failed")
-		output.PrintError(err, cmd.ClassifyError(err))
-		os.Exit(1)
+		code := cmd.ClassifyError(err)
+		output.PrintError(err, code)
+		os.Exit(output.CodeToExitCode(code))
 	}
 }

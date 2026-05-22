@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -124,11 +125,34 @@ var orgCmd = &cobra.Command{Use: "org", Short: "Organization operations"}
 var orgMemberCmd = &cobra.Command{Use: "member", Short: "Organization member operations"}
 
 var orgUseCmd = &cobra.Command{
-	Use:   "use <org-id>",
+	Use:   "use",
 	Short: "Set current organization",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(_ *cobra.Command, args []string) error {
-		orgID := args[0]
+	Long: `Set the current organization used by all commands that accept --org-id.
+
+Preferred usage:
+  yishan org use --org-id <org-id>
+
+Passing the org ID as a positional argument is deprecated and will be removed
+in a future release:
+  yishan org use <org-id>   # deprecated`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		flagOrgID, err := cmd.Flags().GetString("org-id")
+		if err != nil {
+			return err
+		}
+
+		var orgID string
+		switch {
+		case strings.TrimSpace(flagOrgID) != "":
+			orgID = strings.TrimSpace(flagOrgID)
+		case len(args) == 1:
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Warning: passing org-id as a positional argument is deprecated. Use --org-id instead.\n")
+			orgID = args[0]
+		default:
+			return fmt.Errorf("org-id is required: use --org-id <org-id>")
+		}
+
 		if err := config.UpdateFile(appConfig.ConfigPath, func(cfg *viper.Viper) {
 			cfg.Set(config.KeyCurrentOrgID, orgID)
 		}); err != nil {
@@ -207,6 +231,8 @@ func init() {
 	cobra.CheckErr(orgCreateCmd.MarkFlagRequired("name"))
 
 	addOrgIDFlag(orgDeleteCmd)
+
+	orgUseCmd.Flags().String("org-id", "", "organization ID to activate")
 
 	addOrgIDFlag(orgMemberAddCmd)
 	orgMemberAddCmd.Flags().String("user-id", "", "member user ID")
