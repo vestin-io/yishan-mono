@@ -15,6 +15,8 @@ import {
   OrganizationOwnerRequiredError,
 } from "@/errors";
 import { newId } from "@/lib/id";
+import type { OrganizationInviteService, OrganizationInviteView } from "@/services/organization-invite-service";
+import type { UserService } from "@/services/user-service";
 
 type CreateOrganizationInput = {
   name: string;
@@ -30,6 +32,15 @@ export type OrganizationMemberView = {
   avatarUrl: string | null;
 };
 
+/**
+ * Discriminated result from `addOrganizationMember`.
+ * When the target email is not yet registered, an invite is sent instead and
+ * `kind` is `"invited"`.
+ */
+export type AddOrganizationMemberResult =
+  | { kind: "added"; member: OrganizationMemberView }
+  | { kind: "invited"; invite: OrganizationInviteView };
+
 type OrganizationView = {
   id: string;
   name: string;
@@ -39,7 +50,11 @@ type OrganizationView = {
 };
 
 export class OrganizationService {
-  constructor(private readonly db: AppDb) {}
+  constructor(
+    private readonly db: AppDb,
+    private readonly userService: UserService,
+    private readonly inviteService: OrganizationInviteService,
+  ) {}
 
   // ── Private helpers ────────────────────────────────────────────────────────
 
@@ -114,11 +129,25 @@ export class OrganizationService {
   async addOrganizationMember(input: {
     organizationId: string;
     actorUserId: string;
-    memberUserId: string;
+    memberEmail: string;
     role: "member" | "admin";
-  }): Promise<OrganizationMemberView> {
+  }): Promise<AddOrganizationMemberResult> {
     await this.assertOrganizationExists(input.organizationId);
-    return this.db.transaction(async (tx) => {
+
+    // Resolve email → user. If the user does not yet have an account, send an
+    // invite email so they can register and be auto-joined on signup.
+    const targetUser = await this.userService.getByEmail(input.memberEmail);
+    if (!targetUser) {
+      const invite = await this.inviteService.createInvite({
+        organizationId: input.organizationId,
+        actorUserId: input.actorUserId,
+        email: input.memberEmail,
+        role: input.role,
+      });
+      return { kind: "invited", invite };
+    }
+
+    const member = await this.db.transaction(async (tx) => {
       const actorMembershipRows = await tx
         .select({ role: organizationMembers.role })
         .from(organizationMembers)
@@ -139,38 +168,25 @@ export class OrganizationService {
         throw new InvalidOrganizationMemberRoleError(input.role);
       }
 
-      // Fetch user details needed for the return value — also validates the user exists.
-      const targetUserRows = await tx
-        .select({ id: users.id, email: users.email, name: users.name, avatarUrl: users.avatarUrl })
-        .from(users)
-        .where(eq(users.id, input.memberUserId))
-        .limit(1);
-
-      if (targetUserRows.length === 0) {
-        throw new InvalidOrganizationMembersError([input.memberUserId]);
-      }
-
-      const targetUser = targetUserRows[0]!;
-
       const existingMembershipRows = await tx
         .select({ userId: organizationMembers.userId })
         .from(organizationMembers)
         .where(
           and(
             eq(organizationMembers.organizationId, input.organizationId),
-            eq(organizationMembers.userId, input.memberUserId),
+            eq(organizationMembers.userId, targetUser.id),
           ),
         )
         .limit(1);
 
       if (existingMembershipRows.length > 0) {
-        throw new OrganizationMemberAlreadyExistsError(input.memberUserId);
+        throw new OrganizationMemberAlreadyExistsError(targetUser.id);
       }
 
       await tx.insert(organizationMembers).values({
         id: newId(),
         organizationId: input.organizationId,
-        userId: input.memberUserId,
+        userId: targetUser.id,
         role: input.role,
       });
 
@@ -183,6 +199,8 @@ export class OrganizationService {
         avatarUrl: targetUser.avatarUrl,
       };
     });
+
+    return { kind: "added", member };
   }
 
   async removeOrganizationMember(input: {

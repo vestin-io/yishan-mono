@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../../api/client";
 import { sessionStore } from "../../store/sessionStore";
@@ -16,8 +16,13 @@ vi.mock("../../api/client", () => ({
   api: {
     org: {
       listMembers: vi.fn(),
+      addMember: vi.fn(),
     },
   },
+}));
+
+vi.mock("../../commands/orgCommands", () => ({
+  addOrgMember: vi.fn(),
 }));
 
 describe("MemberSettingsView", () => {
@@ -109,5 +114,22 @@ describe("MemberSettingsView", () => {
       expect(api.org.listMembers).toHaveBeenCalledWith("org-2");
     });
     expect(screen.getByText("Member User")).toBeTruthy();
+  });
+
+  it("renders the Add member button", async () => {
+    vi.mocked(api.org.listMembers).mockResolvedValue([]);
+    render(<MemberSettingsView />);
+    await waitFor(() => expect(screen.getByText("settings.members.empty")).toBeTruthy());
+    expect(screen.getByText("settings.members.addMember")).toBeTruthy();
+  });
+
+  it("opens the add-member dialog when the Add member button is clicked", async () => {
+    vi.mocked(api.org.listMembers).mockResolvedValue([]);
+    render(<MemberSettingsView />);
+    await waitFor(() => expect(screen.getByText("settings.members.empty")).toBeTruthy());
+
+    fireEvent.click(screen.getByText("settings.members.addMember"));
+
+    expect(screen.getByText("settings.members.addDialog.title")).toBeTruthy();
   });
 });

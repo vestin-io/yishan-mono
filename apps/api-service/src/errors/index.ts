@@ -30,6 +30,32 @@ export function isBusinessError(error: unknown): error is AppError {
   );
 }
 
+export class UserNotFoundByEmailError extends AppError {
+  constructor(email: string) {
+    super("No user found with that email address", StatusCodes.NOT_FOUND, "USER_NOT_FOUND_BY_EMAIL", { email });
+    this.name = "UserNotFoundByEmailError";
+  }
+}
+
+export class OrganizationInviteAlreadyPendingError extends AppError {
+  constructor(email: string) {
+    super(
+      "An invitation for this email address is already pending",
+      StatusCodes.CONFLICT,
+      "ORGANIZATION_INVITE_ALREADY_PENDING",
+      { email },
+    );
+    this.name = "OrganizationInviteAlreadyPendingError";
+  }
+}
+
+export class OrganizationInviteNotFoundError extends AppError {
+  constructor() {
+    super("Organization invitation not found", StatusCodes.NOT_FOUND, "ORGANIZATION_INVITE_NOT_FOUND");
+    this.name = "OrganizationInviteNotFoundError";
+  }
+}
+
 export class InvalidOrganizationMembersError extends AppError {
   constructor(readonly missingUserIds: string[]) {
     super("One or more member users do not exist", StatusCodes.BAD_REQUEST, "INVALID_ORGANIZATION_MEMBERS", {
