@@ -9,6 +9,9 @@ import (
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print CLI version",
+	Long:  `Print the current CLI version string.`,
+	Example: `  yishan version
+  yishan version --output json`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		return output.PrintAny(map[string]string{"version": buildinfo.Version})
 	},

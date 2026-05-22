@@ -15,6 +15,9 @@ import (
 var orgListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List organizations",
+	Long:  `List all organizations the authenticated user is a member of.`,
+	Example: `  yishan org list
+  yishan org list --output json`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		response, err := cliruntime.APIClient().ListOrganizations()
 		if err != nil {
@@ -33,6 +36,9 @@ var orgListCmd = &cobra.Command{
 var orgCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create organization",
+	Long:  `Create a new Yishan organization. The authenticated user becomes the first admin member.`,
+	Example: `  yishan org create --name "My Org"
+  yishan org create --name "My Org" --member-user-id uid1 --member-user-id uid2`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		name, err := cmd.Flags().GetString("name")
 		if err != nil {
@@ -58,6 +64,8 @@ var orgCreateCmd = &cobra.Command{
 var orgDeleteCmd = &cobra.Command{
 	Use:   "delete",
 	Short: "Delete organization",
+	Long:  `Permanently delete an organization and all its projects and workspaces. This action cannot be undone.`,
+	Example: `  yishan org delete --org-id <org-id>`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		orgID, err := resolveOrgID(cmd)
 		if err != nil {
@@ -76,6 +84,9 @@ var orgDeleteCmd = &cobra.Command{
 var orgMemberAddCmd = &cobra.Command{
 	Use:   "add",
 	Short: "Add organization member",
+	Long:  `Add a user to the current organization. Role defaults to "member".`,
+	Example: `  yishan org member add --user-id <uid>
+  yishan org member add --user-id <uid> --role admin`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		orgID, err := resolveOrgID(cmd)
 		if err != nil {
@@ -102,6 +113,8 @@ var orgMemberAddCmd = &cobra.Command{
 var orgMemberRemoveCmd = &cobra.Command{
 	Use:   "remove",
 	Short: "Remove organization member",
+	Long:  `Remove a user from the current organization.`,
+	Example: `  yishan org member remove --user-id <uid>`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		orgID, err := resolveOrgID(cmd)
 		if err != nil {
@@ -121,8 +134,17 @@ var orgMemberRemoveCmd = &cobra.Command{
 	},
 }
 
-var orgCmd = &cobra.Command{Use: "org", Short: "Organization operations"}
-var orgMemberCmd = &cobra.Command{Use: "member", Short: "Organization member operations"}
+var orgCmd = &cobra.Command{
+	Use:   "org",
+	Short: "Organization operations",
+	Long:  `Create, list, delete, and manage membership for Yishan organizations.`,
+}
+
+var orgMemberCmd = &cobra.Command{
+	Use:   "member",
+	Short: "Organization member operations",
+	Long:  `Add and remove members from a Yishan organization.`,
+}
 
 var orgUseCmd = &cobra.Command{
 	Use:   "use",

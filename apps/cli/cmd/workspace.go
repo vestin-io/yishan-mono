@@ -19,6 +19,9 @@ import (
 var workspaceListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List project workspaces",
+	Long:  `List all workspaces belonging to a project.`,
+	Example: `  yishan workspace list --project-id <id>
+  yishan workspace list --project-id <id> --output json`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		orgID, err := resolveOrgID(cmd)
 		if err != nil {
@@ -41,6 +44,9 @@ var workspaceListCmd = &cobra.Command{
 var workspaceFindCmd = &cobra.Command{
 	Use:   "find",
 	Short: "Find workspace by project and workspace ID",
+	Long:  `Look up a specific workspace by its ID within a project.`,
+	Example: `  yishan workspace find --project-id <id> --workspace-id <id>
+  yishan workspace find --project-id <id> --workspace-id <id> --output json`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		orgID, err := resolveOrgID(cmd)
 		if err != nil {
@@ -53,10 +59,6 @@ var workspaceFindCmd = &cobra.Command{
 		workspaceID, err := cmd.Flags().GetString("workspace-id")
 		if err != nil {
 			return err
-		}
-		workspaceID = strings.TrimSpace(workspaceID)
-		if workspaceID == "" {
-			return fmt.Errorf("workspace-id is required")
 		}
 
 		response, err := cliruntime.APIClient().ListWorkspaces(orgID, projectID)
@@ -155,6 +157,8 @@ Examples:
 var workspaceCloseCmd = &cobra.Command{
 	Use:   "close",
 	Short: "Close project workspace",
+	Long:  `Close a workspace, stopping any associated processes and releasing compute resources.`,
+	Example: `  yishan workspace close --project-id <id> --workspace-id <id>`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		orgID, err := resolveOrgID(cmd)
 		if err != nil {
@@ -167,10 +171,6 @@ var workspaceCloseCmd = &cobra.Command{
 		workspaceID, err := cmd.Flags().GetString("workspace-id")
 		if err != nil {
 			return err
-		}
-		workspaceID = strings.TrimSpace(workspaceID)
-		if workspaceID == "" {
-			return fmt.Errorf("workspace-id is required")
 		}
 
 		workspaces, err := cliruntime.APIClient().ListWorkspaces(orgID, projectID)
@@ -204,7 +204,11 @@ var workspaceCloseCmd = &cobra.Command{
 	},
 }
 
-var workspaceCmd = &cobra.Command{Use: "workspace", Short: "Workspace operations"}
+var workspaceCmd = &cobra.Command{
+	Use:   "workspace",
+	Short: "Workspace operations",
+	Long:  `Create, list, find, and close workspaces within a Yishan project.`,
+}
 
 func init() {
 	rootCmd.AddCommand(workspaceCmd)

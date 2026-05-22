@@ -7,9 +7,18 @@ import (
 	cliruntime "yishan/apps/cli/internal/runtime"
 )
 
+var nodeCmd = &cobra.Command{
+	Use:   "node",
+	Short: "Node operations",
+	Long:  `Create, list, and delete compute nodes registered to a Yishan organization.`,
+}
+
 var nodeListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List organization nodes",
+	Long:  `List all nodes registered to the current organization.`,
+	Example: `  yishan node list
+  yishan node list --output json`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		orgID, err := resolveOrgID(cmd)
 		if err != nil {
@@ -28,6 +37,9 @@ var nodeListCmd = &cobra.Command{
 var nodeCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create organization node",
+	Long:  `Register a new compute node with the organization. Scope "private" means only the creating user can use the node; "shared" makes it available to all org members.`,
+	Example: `  yishan node create --name my-server --scope shared
+  yishan node create --name my-server --scope private --endpoint https://my.host:8080`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		orgID, err := resolveOrgID(cmd)
 		if err != nil {
@@ -82,6 +94,8 @@ var nodeCreateCmd = &cobra.Command{
 var nodeDeleteCmd = &cobra.Command{
 	Use:   "delete",
 	Short: "Delete organization node",
+	Long:  `Deregister a node from the organization. Any workspaces currently assigned to the node will lose their compute backend.`,
+	Example: `  yishan node delete --node-id <node-id>`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		orgID, err := resolveOrgID(cmd)
 		if err != nil {
@@ -100,8 +114,6 @@ var nodeDeleteCmd = &cobra.Command{
 		return output.PrintAny(response)
 	},
 }
-
-var nodeCmd = &cobra.Command{Use: "node", Short: "Node operations"}
 
 func init() {
 	rootCmd.AddCommand(nodeCmd)

@@ -21,6 +21,13 @@ import (
 var loginCmd = &cobra.Command{
 	Use:   "login",
 	Short: "Login via OAuth in browser",
+	Long: `Authenticate with Yishan via an OAuth browser flow.
+
+Opens your default browser to complete authentication with the selected
+provider. On success the access and refresh tokens are persisted to the
+local credential file and the local daemon node is registered with the API.`,
+	Example: `  yishan login
+  yishan login --provider github`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		provider, err := cmd.Flags().GetString("provider")
 		if err != nil {

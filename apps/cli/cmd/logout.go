@@ -15,6 +15,13 @@ import (
 var logoutCmd = &cobra.Command{
 	Use:   "logout",
 	Short: "Logout and clear local auth credentials",
+	Long: `Revoke the active refresh token on the server and remove local credentials.
+
+If token revocation fails (e.g. due to a network error) local credentials are
+cleared anyway. Environment-variable credentials (YISHAN_API_TOKEN,
+YISHAN_API_REFRESH_TOKEN) are not affected — unset them manually to fully
+sign out of the current shell.`,
+	Example: `  yishan logout`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		return executeLogout(func(refreshToken string) error {
 			_, err := cliruntime.APIClient().RevokeToken(refreshToken)
