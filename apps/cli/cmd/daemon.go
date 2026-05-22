@@ -18,14 +18,7 @@ import (
 var daemonCmd = &cobra.Command{
 	Use:   "daemon",
 	Short: "Manage workspace daemon service",
-	Long: `Manage the workspace daemon service that serves operations over WebSocket JSON-RPC.
-
-Subcommands:
-  start    Start the daemon in the background (idempotent — safe to call if already running)
-  run      Run the daemon in the foreground (useful for debugging)
-  stop     Stop a running daemon
-  restart  Stop then start the daemon
-  status   Show the running state, PID, address, and uptime`,
+	Long:  `Manage the workspace daemon service that serves operations over WebSocket JSON-RPC.`,
 }
 
 var daemonStartCmd = &cobra.Command{
