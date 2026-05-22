@@ -8,6 +8,7 @@ import { ProjectService } from "@/services/project-service";
 import { ResendEmailService } from "@/services/resend-email-service";
 import { ScheduledJobService } from "@/services/scheduled-job-service";
 import { UserService } from "@/services/user-service";
+import { VoiceTranscriptionService } from "@/services/voice-transcription-service";
 import { NoopWorkspaceProvisioner } from "@/services/workspace-provisioner";
 import { WorkspacePullRequestService } from "@/services/workspace-pull-request-service";
 import { WorkspaceService } from "@/services/workspace-service";
@@ -24,6 +25,7 @@ export type AppServices = {
   jobEvaluator: JobEvaluatorService;
   workspace: WorkspaceService;
   workspacePullRequest: WorkspacePullRequestService;
+  voiceTranscription: VoiceTranscriptionService;
 };
 
 export function createServices(deps: { db: AppDb; config: ServiceConfig }): AppServices {
@@ -48,5 +50,6 @@ export function createServices(deps: { db: AppDb; config: ServiceConfig }): AppS
     jobEvaluator: new JobEvaluatorService(deps.db),
     workspace: new WorkspaceService(deps.db, organization, workspaceProvisioner),
     workspacePullRequest: new WorkspacePullRequestService(deps.db, organization),
+    voiceTranscription: new VoiceTranscriptionService(deps.db, deps.config, organization),
   };
 }

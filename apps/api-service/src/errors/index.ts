@@ -324,3 +324,38 @@ export class ScheduledJobRunNotFoundError extends AppError {
     this.name = "ScheduledJobRunNotFoundError";
   }
 }
+
+export class SpeechToTextInvalidAudioError extends AppError {
+  constructor() {
+    super("Audio file is required", StatusCodes.BAD_REQUEST, "SPEECH_TO_TEXT_INVALID_AUDIO");
+    this.name = "SpeechToTextInvalidAudioError";
+  }
+}
+
+export class SpeechToTextTranscriptionFailedError extends AppError {
+  constructor() {
+    super("Failed to transcribe audio", StatusCodes.BAD_GATEWAY, "SPEECH_TO_TEXT_TRANSCRIPTION_FAILED");
+    this.name = "SpeechToTextTranscriptionFailedError";
+  }
+}
+
+export class SpeechToTextOptimizationFailedError extends AppError {
+  constructor() {
+    super("Failed to optimize transcript", StatusCodes.BAD_GATEWAY, "SPEECH_TO_TEXT_OPTIMIZATION_FAILED");
+    this.name = "SpeechToTextOptimizationFailedError";
+  }
+}
+
+export class VoiceTranscriptionPlanRequiredError extends AppError {
+  constructor() {
+    super("Voice transcription is not available on the free plan", StatusCodes.FORBIDDEN, "VOICE_TRANSCRIPTION_PLAN_REQUIRED");
+    this.name = "VoiceTranscriptionPlanRequiredError";
+  }
+}
+
+export class VoiceTranscriptionQuotaExceededError extends AppError {
+  constructor(details: Record<string, unknown>) {
+    super("Voice transcription quota exceeded", StatusCodes.PAYMENT_REQUIRED, "VOICE_TRANSCRIPTION_QUOTA_EXCEEDED", details);
+    this.name = "VoiceTranscriptionQuotaExceededError";
+  }
+}
