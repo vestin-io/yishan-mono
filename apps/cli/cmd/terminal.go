@@ -21,6 +21,15 @@ var terminalListCmd = &cobra.Command{
   yishan terminal list --include-exited
   yishan terminal list --output json`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
+		showAll, err := cmd.Flags().GetBool("all")
+		if err != nil {
+			return err
+		}
+		verbose, err := cmd.Flags().GetBool("verbose")
+		if err != nil {
+			return err
+		}
+
 		includeExited, err := cmd.Flags().GetBool("include-exited")
 		if err != nil {
 			return err
@@ -39,7 +48,7 @@ var terminalListCmd = &cobra.Command{
 			return err
 		}
 
-		return output.PrintAny(map[string]any{"sessions": result})
+		return output.PrintRenderData(renderTerminalSessionsList(result, showAll || verbose))
 	},
 }
 
@@ -113,6 +122,15 @@ var terminalPortsCmd = &cobra.Command{
 	Example: `  yishan terminal ports
   yishan terminal ports --output json`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
+		showAll, err := cmd.Flags().GetBool("all")
+		if err != nil {
+			return err
+		}
+		verbose, err := cmd.Flags().GetBool("verbose")
+		if err != nil {
+			return err
+		}
+
 		client, err := resolveDaemonClient()
 		if err != nil {
 			return err
@@ -123,7 +141,7 @@ var terminalPortsCmd = &cobra.Command{
 			return err
 		}
 
-		return output.PrintAny(map[string]any{"ports": result})
+		return output.PrintRenderData(renderTerminalPortsList(result, showAll || verbose))
 	},
 }
 
@@ -135,6 +153,8 @@ func init() {
 	terminalCmd.AddCommand(terminalPortsCmd)
 
 	terminalListCmd.Flags().Bool("include-exited", false, "include already-exited sessions")
+	terminalListCmd.Flags().Bool("all", false, "show full response fields")
+	terminalListCmd.Flags().BoolP("verbose", "v", false, "show full response fields")
 
 	terminalStartCmd.Flags().String("workspace-id", "", "workspace ID")
 	terminalStartCmd.Flags().String("command", "", "command to run (defaults to workspace shell)")
@@ -142,4 +162,7 @@ func init() {
 
 	terminalStopCmd.Flags().String("session-id", "", "terminal session ID")
 	cobra.CheckErr(terminalStopCmd.MarkFlagRequired("session-id"))
+
+	terminalPortsCmd.Flags().Bool("all", false, "show full response fields")
+	terminalPortsCmd.Flags().BoolP("verbose", "v", false, "show full response fields")
 }

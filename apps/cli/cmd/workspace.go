@@ -23,6 +23,15 @@ var workspaceListCmd = &cobra.Command{
 	Example: `  yishan workspace list --project-id <id>
   yishan workspace list --project-id <id> --output json`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
+		showAll, err := cmd.Flags().GetBool("all")
+		if err != nil {
+			return err
+		}
+		verbose, err := cmd.Flags().GetBool("verbose")
+		if err != nil {
+			return err
+		}
+
 		orgID, err := resolveOrgID(cmd)
 		if err != nil {
 			return err
@@ -37,7 +46,7 @@ var workspaceListCmd = &cobra.Command{
 			return err
 		}
 
-		return output.PrintAny(response)
+		return output.PrintRenderData(renderWorkspacesList(response, showAll || verbose))
 	},
 }
 
@@ -155,9 +164,9 @@ Examples:
 }
 
 var workspaceCloseCmd = &cobra.Command{
-	Use:   "close",
-	Short: "Close project workspace",
-	Long:  `Close a workspace, stopping any associated processes and releasing compute resources.`,
+	Use:     "close",
+	Short:   "Close project workspace",
+	Long:    `Close a workspace, stopping any associated processes and releasing compute resources.`,
 	Example: `  yishan workspace close --project-id <id> --workspace-id <id>`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		orgID, err := resolveOrgID(cmd)
@@ -218,6 +227,8 @@ func init() {
 	workspaceCmd.AddCommand(workspaceCloseCmd)
 
 	addOrgIDFlag(workspaceListCmd)
+	workspaceListCmd.Flags().Bool("all", false, "show full response fields")
+	workspaceListCmd.Flags().BoolP("verbose", "v", false, "show full response fields")
 	workspaceListCmd.Flags().String("project-id", "", "project ID")
 	cobra.CheckErr(workspaceListCmd.MarkFlagRequired("project-id"))
 
