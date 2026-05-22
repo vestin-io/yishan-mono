@@ -5,13 +5,6 @@ type CreateOrganizationInput struct {
 	MemberUserIDs []string
 }
 
-type CreateNodeInput struct {
-	Name     string
-	Scope    string
-	Endpoint string
-	Metadata map[string]any
-}
-
 type CreateProjectInput struct {
 	Name           string
 	SourceTypeHint string
@@ -96,23 +89,6 @@ func (c *Client) RemoveOrganizationMember(orgID string, userID string) (OKRespon
 func (c *Client) ListNodes(orgID string) (ListNodesResponse, error) {
 	var response ListNodesResponse
 	err := c.DoDecode("GET", "/orgs/"+orgID+"/nodes", nil, &response)
-	return response, err
-}
-
-func (c *Client) CreateNode(orgID string, input CreateNodeInput) (CreateNodeResponse, error) {
-	payload := map[string]any{
-		"name":  input.Name,
-		"scope": input.Scope,
-	}
-	if input.Endpoint != "" {
-		payload["endpoint"] = input.Endpoint
-	}
-	if len(input.Metadata) > 0 {
-		payload["metadata"] = input.Metadata
-	}
-
-	var response CreateNodeResponse
-	err := c.DoDecode("POST", "/orgs/"+orgID+"/nodes", payload, &response)
 	return response, err
 }
 

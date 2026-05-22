@@ -10,7 +10,7 @@ import (
 var nodeCmd = &cobra.Command{
 	Use:   "node",
 	Short: "Node operations",
-	Long:  `Create, list, and delete compute nodes registered to a Yishan organization.`,
+	Long:  `Register, list, and delete compute nodes in a Yishan organization.`,
 }
 
 var nodeListCmd = &cobra.Command{
@@ -34,14 +34,20 @@ var nodeListCmd = &cobra.Command{
 	},
 }
 
-var nodeCreateCmd = &cobra.Command{
-	Use:   "create",
-	Short: "Create organization node",
-	Long:  `Register a new compute node with the organization. Scope "private" means only the creating user can use the node; "shared" makes it available to all org members.`,
-	Example: `  yishan node create --name my-server --scope shared
-  yishan node create --name my-server --scope private --endpoint https://my.host:8080`,
+var nodeRegisterCmd = &cobra.Command{
+	Use:   "register",
+	Short: "Register a node with the organization",
+	Long: `Register (or update) a compute node by its stable node ID.
+
+Unlike a plain create, this call is idempotent — if a node with the same
+node ID already exists it is updated when --update-if-exists is set.
+Scope "private" limits the node to the registering user; "shared" makes
+it available to all org members.`,
+	Example: `  yishan node register --node-id <id> --name my-server
+  yishan node register --node-id <id> --name my-server --scope private --update-if-exists
+  yishan node register --node-id <id> --name my-server --endpoint https://my.host:8080`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		orgID, err := resolveOrgID(cmd)
+		nodeID, err := cmd.Flags().GetString("node-id")
 		if err != nil {
 			return err
 		}
@@ -65,11 +71,17 @@ var nodeCreateCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		updateIfExists, err := cmd.Flags().GetBool("update-if-exists")
+		if err != nil {
+			return err
+		}
 
-		input := api.CreateNodeInput{
-			Name:     name,
-			Scope:    scope,
-			Endpoint: endpoint,
+		input := api.RegisterNodeInput{
+			NodeID:         nodeID,
+			Name:           name,
+			Scope:          scope,
+			Endpoint:       endpoint,
+			UpdateIfExists: &updateIfExists,
 		}
 		if metadataOS != "" || metadataVersion != "" {
 			metadata := map[string]any{}
@@ -82,7 +94,7 @@ var nodeCreateCmd = &cobra.Command{
 			input.Metadata = metadata
 		}
 
-		response, err := cliruntime.APIClient().CreateNode(orgID, input)
+		response, err := cliruntime.APIClient().RegisterNode(input)
 		if err != nil {
 			return err
 		}
@@ -118,18 +130,20 @@ var nodeDeleteCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(nodeCmd)
 	nodeCmd.AddCommand(nodeListCmd)
-	nodeCmd.AddCommand(nodeCreateCmd)
+	nodeCmd.AddCommand(nodeRegisterCmd)
 	nodeCmd.AddCommand(nodeDeleteCmd)
 
 	addOrgIDFlag(nodeListCmd)
 
-	addOrgIDFlag(nodeCreateCmd)
-	nodeCreateCmd.Flags().String("name", "", "node name")
-	nodeCreateCmd.Flags().String("scope", "shared", "node scope (private|shared)")
-	nodeCreateCmd.Flags().String("endpoint", "", "node endpoint URL")
-	nodeCreateCmd.Flags().String("metadata-os", "", "node OS metadata")
-	nodeCreateCmd.Flags().String("metadata-version", "", "node version metadata")
-	cobra.CheckErr(nodeCreateCmd.MarkFlagRequired("name"))
+	nodeRegisterCmd.Flags().String("node-id", "", "stable node ID (e.g. daemon ID)")
+	nodeRegisterCmd.Flags().String("name", "", "node name")
+	nodeRegisterCmd.Flags().String("scope", "private", "node scope (private|shared)")
+	nodeRegisterCmd.Flags().String("endpoint", "", "node endpoint URL")
+	nodeRegisterCmd.Flags().String("metadata-os", "", "node OS metadata")
+	nodeRegisterCmd.Flags().String("metadata-version", "", "node version metadata")
+	nodeRegisterCmd.Flags().Bool("update-if-exists", false, "update the node if it already exists")
+	cobra.CheckErr(nodeRegisterCmd.MarkFlagRequired("node-id"))
+	cobra.CheckErr(nodeRegisterCmd.MarkFlagRequired("name"))
 
 	addOrgIDFlag(nodeDeleteCmd)
 	nodeDeleteCmd.Flags().String("node-id", "", "node ID")
