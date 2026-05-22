@@ -1,15 +1,13 @@
-import { Alert, Button, CircularProgress, Typography } from "@mui/material";
+import { Alert, Box, Button, CircularProgress, Typography } from "@mui/material";
 import { useTranslation } from "react-i18next";
-import { LuRefreshCw } from "react-icons/lu";
+import { BiTerminal } from "react-icons/bi";
 import {
   SettingsCard,
   SettingsControlRow,
   SettingsRows,
-  SettingsSectionHeader,
 } from "../../components/settings";
 import { MONOSPACE_SX } from "../../helpers/styles";
 import { CenteredSpinner } from "../../components/CenteredSpinner";
-import { StatusIndicator } from "../../components/StatusIndicator";
 
 type CliStatus = {
   isAvailableInPath: boolean;
@@ -23,32 +21,22 @@ type DaemonCliInstallCardProps = {
   status: CliStatus | null;
   isLoading: boolean;
   isInstalling: boolean;
+  isUninstalling: boolean;
   error: string | null;
-  onRefresh: () => void;
   onInstall: () => void;
+  onUninstall: () => void;
 };
 
 export function DaemonCliInstallCard(props: DaemonCliInstallCardProps) {
   const { t } = useTranslation();
-  const { status, isLoading, isInstalling, error, onRefresh, onInstall } = props;
+  const { status, isLoading, isInstalling, isUninstalling, error, onInstall, onUninstall } = props;
+  const isInstalled = Boolean(status?.isAvailableInPath);
+  const statusLabel = isInstalled
+    ? status?.resolvedPath || t("settings.daemon.values.unknown")
+    : t("settings.daemon.cli.status.notInstalled");
 
   return (
     <>
-      <SettingsSectionHeader
-        title={t("settings.daemon.cli.title")}
-        description={t("settings.daemon.cli.description")}
-        action={
-          <Button
-            size="small"
-            variant="text"
-            onClick={onRefresh}
-            disabled={isLoading || isInstalling}
-            startIcon={isLoading ? <CircularProgress size={14} /> : <LuRefreshCw />}
-          >
-            {t("settings.daemon.actions.refresh")}
-          </Button>
-        }
-      />
       <SettingsCard>
         {isLoading ? (
           <CenteredSpinner />
@@ -61,22 +49,36 @@ export function DaemonCliInstallCard(props: DaemonCliInstallCardProps) {
             ) : null}
             <SettingsRows>
               <SettingsControlRow
-                title={t("settings.daemon.cli.rows.status")}
-                control={
-                  <StatusIndicator
-                    label={
-                      status?.isAvailableInPath
-                        ? t("settings.daemon.cli.status.installed")
-                        : t("settings.daemon.cli.status.notInstalled")
-                    }
-                    color={status?.isAvailableInPath ? "success" : "disabled"}
-                  />
+                title={
+                  <Typography variant="body2" component="div" sx={{ display: "inline-flex", alignItems: "center", gap: 1 }}>
+                    <BiTerminal size={18} />
+                    <Box component="span">{t("settings.daemon.cli.title")}</Box>
+                  </Typography>
                 }
+                description={t("settings.daemon.cli.description")}
+                control={<Box component="span" />}
               />
-              {!status?.isAvailableInPath ? (
-                <SettingsControlRow
-                  title={t("settings.daemon.cli.install.action")}
-                  control={
+              <SettingsControlRow
+                title={
+                  <Typography variant="body2" sx={isInstalled ? MONOSPACE_SX : undefined}>
+                    {statusLabel}
+                  </Typography>
+                }
+                control={
+                  isInstalled ? (
+                    <Button
+                      size="small"
+                      variant="text"
+                      color="error"
+                      disabled={isUninstalling}
+                      onClick={onUninstall}
+                      startIcon={isUninstalling ? <CircularProgress size={14} color="inherit" /> : undefined}
+                    >
+                      {isUninstalling
+                        ? t("settings.daemon.cli.uninstall.inProgress")
+                        : t("settings.daemon.cli.uninstall.action")}
+                    </Button>
+                  ) : (
                     <Button
                       size="small"
                       variant="text"
@@ -88,39 +90,9 @@ export function DaemonCliInstallCard(props: DaemonCliInstallCardProps) {
                         ? t("settings.daemon.cli.install.inProgress")
                         : t("settings.daemon.cli.install.action")}
                     </Button>
-                  }
-                />
-              ) : null}
-              <SettingsControlRow
-                title={t("settings.daemon.cli.rows.detectedPath")}
-                control={
-                  <Typography variant="body2" sx={MONOSPACE_SX}>
-                    {status?.resolvedPath || t("settings.daemon.values.unknown")}
-                  </Typography>
+                  )
                 }
               />
-              {status?.isManagedInstall ? (
-                <SettingsControlRow
-                  title={t("settings.daemon.cli.rows.installPath")}
-                  control={
-                    <Typography variant="body2" sx={MONOSPACE_SX}>
-                      {status.installPath}
-                    </Typography>
-                  }
-                />
-              ) : null}
-              {status?.isAvailableInPath ? (
-                <SettingsControlRow
-                  title={t("settings.daemon.cli.rows.mode")}
-                  control={
-                    <Typography variant="body2">
-                      {status.isManagedInstall
-                        ? t("settings.daemon.cli.mode.managed")
-                        : t("settings.daemon.cli.mode.external")}
-                    </Typography>
-                  }
-                />
-              ) : null}
             </SettingsRows>
           </>
         )}

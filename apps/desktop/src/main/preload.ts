@@ -30,6 +30,7 @@ const bridge: DesktopBridge = {
     getDaemonJwt: () => ipcRenderer.invoke(HOST_IPC_CHANNELS.getDaemonJwt),
     getDesktopCliInstallStatus: () => ipcRenderer.invoke(HOST_IPC_CHANNELS.getDesktopCliInstallStatus),
     installDesktopCli: () => ipcRenderer.invoke(HOST_IPC_CHANNELS.installDesktopCli),
+    uninstallDesktopCli: () => ipcRenderer.invoke(HOST_IPC_CHANNELS.uninstallDesktopCli),
   },
   events: {
     subscribe: (listener: (envelope: DesktopRpcEventEnvelope) => void) => {

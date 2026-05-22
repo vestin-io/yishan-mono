@@ -339,6 +339,10 @@
         "install": {
           "action": "安装",
           "inProgress": "安装中..."
+        },
+        "uninstall": {
+          "action": "卸载",
+          "inProgress": "卸载中..."
         }
       }
     },

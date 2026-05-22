@@ -152,6 +152,11 @@ export async function installDesktopCli(): Promise<DesktopCliInstallResult> {
   return await getDesktopHostBridge().installDesktopCli();
 }
 
+/** Uninstalls desktop-managed CLI symlink from terminal PATH location. */
+export async function uninstallDesktopCli(): Promise<DesktopCliInstallResult> {
+  return await getDesktopHostBridge().uninstallDesktopCli();
+}
+
 /** Runs one desktop login flow through main-process IPC. */
 export async function login() {
   const result = await getDesktopHostBridge().login();

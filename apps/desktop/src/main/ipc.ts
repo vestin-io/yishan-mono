@@ -177,6 +177,7 @@ export type DesktopHostBridge = {
   getDaemonJwt: () => Promise<string>;
   getDesktopCliInstallStatus: () => Promise<DesktopCliInstallStatusResult>;
   installDesktopCli: () => Promise<DesktopCliInstallResult>;
+  uninstallDesktopCli: () => Promise<DesktopCliInstallResult>;
 };
 
 export type DesktopRpcEventBridge = {
@@ -219,4 +220,5 @@ export const HOST_IPC_CHANNELS = {
   getDaemonJwt: "desktop:host/get-daemon-jwt",
   getDesktopCliInstallStatus: "desktop:host/get-desktop-cli-install-status",
   installDesktopCli: "desktop:host/install-desktop-cli",
+  uninstallDesktopCli: "desktop:host/uninstall-desktop-cli",
 } as const;

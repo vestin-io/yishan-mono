@@ -97,3 +97,16 @@ export async function installDesktopCli(): Promise<DesktopCliInstallStatus> {
   await symlink(bundledCliPath, installPath);
   return await getDesktopCliInstallStatus();
 }
+
+export async function uninstallDesktopCli(): Promise<DesktopCliInstallStatus> {
+  const installPath = getInstallPath();
+  if (process.platform === "win32") {
+    throw new Error("Desktop-assisted CLI uninstall is not supported on Windows yet.");
+  }
+
+  try {
+    await unlink(installPath);
+  } catch {}
+
+  return await getDesktopCliInstallStatus();
+}
