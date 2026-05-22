@@ -199,6 +199,6 @@ describe("MemberSettingsView", () => {
     });
 
     const removeButtons = screen.getAllByLabelText("settings.members.removeAriaLabel");
-    expect(removeButtons[1]).toBeDisabled();
+    expect(removeButtons[1]).toHaveProperty("disabled", true);
   });
 });
