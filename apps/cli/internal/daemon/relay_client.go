@@ -21,6 +21,7 @@ import (
 const relayMethodPing = "relay.ping"
 const relayMethodPong = "relay.pong"
 const relayMethodJobRun = "job.run"
+const relayMethodWorkspaceSnapshotChanged = "workspace.snapshot.changed"
 
 const relayReconnectInitialDelay = 2 * time.Second
 const relayReconnectMaxDelay = 30 * time.Second
@@ -292,9 +293,43 @@ func handleRelayMessage(connState *wsConnState, nodeID string, payload []byte) b
 	case relayMethodJobRun:
 		handleJobRun(connState, nodeID, msg.Params)
 		return true
+	case relayMethodWorkspaceSnapshotChanged:
+		publishWorkspaceSnapshotChanged(connState, msg.Params)
+		return true
 	default:
 		return false
 	}
+}
+
+func publishWorkspaceSnapshotChanged(connState *wsConnState, params json.RawMessage) {
+	var payload map[string]any
+	if len(params) > 0 {
+		if err := json.Unmarshal(params, &payload); err != nil {
+			log.Warn().Err(err).Msg("relay: invalid workspace snapshot change params")
+			return
+		}
+	}
+	if payload == nil {
+		payload = map[string]any{}
+	}
+
+	organizationID, _ := payload["organizationId"].(string)
+	resource, _ := payload["resource"].(string)
+	change, _ := payload["change"].(string)
+	projectID, _ := payload["projectId"].(string)
+	workspaceID, _ := payload["workspaceId"].(string)
+	log.Info().
+		Str("organizationId", strings.TrimSpace(organizationID)).
+		Str("resource", strings.TrimSpace(resource)).
+		Str("change", strings.TrimSpace(change)).
+		Str("projectId", strings.TrimSpace(projectID)).
+		Str("workspaceId", strings.TrimSpace(workspaceID)).
+		Msg("relay: workspace snapshot change received")
+
+	_ = connState.Notify(MethodFrontendEventsStream, map[string]any{
+		"topic":   "workspaceSnapshotChanged",
+		"payload": payload,
+	})
 }
 
 func mintRelayToken(nodeID string) (string, time.Time, error) {
