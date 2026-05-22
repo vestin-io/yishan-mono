@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
+	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"yishan/apps/cli/internal/api"
@@ -18,13 +20,22 @@ var orgListCmd = &cobra.Command{
 	Long:  `List all organizations the authenticated user is a member of.`,
 	Example: `  yishan org list
   yishan org list --output json`,
-	RunE: func(_ *cobra.Command, _ []string) error {
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		showAll, err := cmd.Flags().GetBool("all")
+		if err != nil {
+			return err
+		}
+		verbose, err := cmd.Flags().GetBool("verbose")
+		if err != nil {
+			return err
+		}
+
 		response, err := cliruntime.APIClient().ListOrganizations()
 		if err != nil {
 			return err
 		}
 
-		renderData, err := toOrgListRenderData(response)
+		renderData, err := toOrgListRenderData(response, showAll || verbose)
 		if err != nil {
 			return err
 		}
@@ -62,9 +73,9 @@ var orgCreateCmd = &cobra.Command{
 }
 
 var orgDeleteCmd = &cobra.Command{
-	Use:   "delete",
-	Short: "Delete organization",
-	Long:  `Permanently delete an organization and all its projects and workspaces. This action cannot be undone.`,
+	Use:     "delete",
+	Short:   "Delete organization",
+	Long:    `Permanently delete an organization and all its projects and workspaces. This action cannot be undone.`,
 	Example: `  yishan org delete --org-id <org-id>`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		orgID, err := resolveOrgID(cmd)
@@ -111,9 +122,9 @@ var orgMemberAddCmd = &cobra.Command{
 }
 
 var orgMemberRemoveCmd = &cobra.Command{
-	Use:   "remove",
-	Short: "Remove organization member",
-	Long:  `Remove a user from the current organization.`,
+	Use:     "remove",
+	Short:   "Remove organization member",
+	Long:    `Remove a user from the current organization.`,
 	Example: `  yishan org member remove --user-id <uid>`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		orgID, err := resolveOrgID(cmd)
@@ -172,7 +183,11 @@ in a future release:
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Warning: passing org-id as a positional argument is deprecated. Use --org-id instead.\n")
 			orgID = args[0]
 		default:
-			return fmt.Errorf("org-id is required: use --org-id <org-id>")
+			selectedOrgID, selectionErr := selectOrganizationInteractive(cmd)
+			if selectionErr != nil {
+				return selectionErr
+			}
+			orgID = selectedOrgID
 		}
 
 		if err := config.UpdateFile(appConfig.ConfigPath, func(cfg *viper.Viper) {
@@ -182,8 +197,45 @@ in a future release:
 		}
 
 		appConfig.CurrentOrgID = orgID
+		if !output.IsJSONOutput() {
+			fmt.Printf("Active organization: %s\n", orgID)
+			return nil
+		}
+
 		return output.PrintAny(map[string]string{"orgId": orgID, "status": "active"})
 	},
+}
+
+func selectOrganizationInteractive(cmd *cobra.Command) (string, error) {
+	if stat, err := os.Stdin.Stat(); err != nil || (stat.Mode()&os.ModeCharDevice) == 0 {
+		return "", fmt.Errorf("org-id is required: use --org-id <org-id>")
+	}
+
+	response, err := cliruntime.APIClient().ListOrganizations()
+	if err != nil {
+		return "", err
+	}
+	if len(response.Organizations) == 0 {
+		return "", fmt.Errorf("no organizations available for your account")
+	}
+
+	items := make([]string, 0, len(response.Organizations))
+	for _, organization := range response.Organizations {
+		items = append(items, fmt.Sprintf("%s (%s)", organization.Name, organization.ID))
+	}
+
+	prompt := promptui.Select{
+		Label: "Select organization",
+		Items: items,
+		Size:  12,
+	}
+
+	index, _, err := prompt.Run()
+	if err != nil {
+		return "", err
+	}
+
+	return response.Organizations[index].ID, nil
 }
 
 var orgCurrentCmd = &cobra.Command{
@@ -251,6 +303,8 @@ func init() {
 	orgCreateCmd.Flags().String("name", "", "organization name")
 	orgCreateCmd.Flags().StringSlice("member-user-id", []string{}, "additional member user id")
 	cobra.CheckErr(orgCreateCmd.MarkFlagRequired("name"))
+	orgListCmd.Flags().Bool("all", false, "show full response fields")
+	orgListCmd.Flags().BoolP("verbose", "v", false, "show full response fields")
 
 	addOrgIDFlag(orgDeleteCmd)
 

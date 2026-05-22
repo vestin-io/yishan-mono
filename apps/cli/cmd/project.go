@@ -20,6 +20,15 @@ var projectListCmd = &cobra.Command{
 	Example: `  yishan project list
   yishan project list --output json`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
+		showAll, err := cmd.Flags().GetBool("all")
+		if err != nil {
+			return err
+		}
+		verbose, err := cmd.Flags().GetBool("verbose")
+		if err != nil {
+			return err
+		}
+
 		orgID, err := resolveOrgID(cmd)
 		if err != nil {
 			return err
@@ -30,7 +39,7 @@ var projectListCmd = &cobra.Command{
 			return err
 		}
 
-		return output.PrintAny(response)
+		return output.PrintRenderData(renderProjectsList(response, showAll || verbose))
 	},
 }
 
@@ -82,9 +91,9 @@ var projectCreateCmd = &cobra.Command{
 }
 
 var projectDeleteCmd = &cobra.Command{
-	Use:   "delete",
-	Short: "Delete organization project",
-	Long:  `Permanently delete a project and all its workspaces. This action cannot be undone.`,
+	Use:     "delete",
+	Short:   "Delete organization project",
+	Long:    `Permanently delete a project and all its workspaces. This action cannot be undone.`,
 	Example: `  yishan project delete --project-id <project-id>`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		orgID, err := resolveOrgID(cmd)
@@ -112,6 +121,8 @@ func init() {
 	projectCmd.AddCommand(projectDeleteCmd)
 
 	addOrgIDFlag(projectListCmd)
+	projectListCmd.Flags().Bool("all", false, "show full response fields")
+	projectListCmd.Flags().BoolP("verbose", "v", false, "show full response fields")
 
 	addOrgIDFlag(projectCreateCmd)
 	projectCreateCmd.Flags().String("name", "", "project name")

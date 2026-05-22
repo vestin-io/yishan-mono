@@ -23,6 +23,15 @@ var workspaceListCmd = &cobra.Command{
 	Example: `  yishan workspace list --project-id <id>
   yishan workspace list --project-id <id> --output json`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
+		showAll, err := cmd.Flags().GetBool("all")
+		if err != nil {
+			return err
+		}
+		verbose, err := cmd.Flags().GetBool("verbose")
+		if err != nil {
+			return err
+		}
+
 		orgID, err := resolveOrgID(cmd)
 		if err != nil {
 			return err
@@ -32,12 +41,31 @@ var workspaceListCmd = &cobra.Command{
 			return err
 		}
 
-		response, err := cliruntime.APIClient().ListWorkspaces(orgID, projectID)
+		response := api.ListWorkspacesResponse{Workspaces: []api.Workspace{}}
+		projectNames := map[string]string{}
+		if strings.TrimSpace(projectID) != "" {
+			response, err = cliruntime.APIClient().ListWorkspaces(orgID, projectID)
+			if err != nil {
+				return err
+			}
+			return output.PrintRenderData(renderWorkspacesList(response, showAll || verbose, false, projectNames))
+		}
+
+		projectsResponse, err := cliruntime.APIClient().ListProjects(orgID)
 		if err != nil {
 			return err
 		}
 
-		return output.PrintAny(response)
+		for _, project := range projectsResponse.Projects {
+			projectNames[project.ID] = project.Name
+			projectWorkspaces, projectErr := cliruntime.APIClient().ListWorkspaces(orgID, project.ID)
+			if projectErr != nil {
+				return projectErr
+			}
+			response.Workspaces = append(response.Workspaces, projectWorkspaces.Workspaces...)
+		}
+
+		return output.PrintRenderData(renderWorkspacesList(response, showAll || verbose, true, projectNames))
 	},
 }
 
@@ -155,9 +183,9 @@ Examples:
 }
 
 var workspaceCloseCmd = &cobra.Command{
-	Use:   "close",
-	Short: "Close project workspace",
-	Long:  `Close a workspace, stopping any associated processes and releasing compute resources.`,
+	Use:     "close",
+	Short:   "Close project workspace",
+	Long:    `Close a workspace, stopping any associated processes and releasing compute resources.`,
 	Example: `  yishan workspace close --project-id <id> --workspace-id <id>`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		orgID, err := resolveOrgID(cmd)
@@ -218,8 +246,9 @@ func init() {
 	workspaceCmd.AddCommand(workspaceCloseCmd)
 
 	addOrgIDFlag(workspaceListCmd)
-	workspaceListCmd.Flags().String("project-id", "", "project ID")
-	cobra.CheckErr(workspaceListCmd.MarkFlagRequired("project-id"))
+	workspaceListCmd.Flags().Bool("all", false, "show full response fields")
+	workspaceListCmd.Flags().BoolP("verbose", "v", false, "show full response fields")
+	workspaceListCmd.Flags().String("project-id", "", "project ID (optional; if omitted, lists workspaces across all projects)")
 
 	addOrgIDFlag(workspaceFindCmd)
 	workspaceFindCmd.Flags().String("project-id", "", "project ID")

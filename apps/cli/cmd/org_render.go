@@ -3,15 +3,20 @@ package cmd
 import "yishan/apps/cli/internal/output"
 import "yishan/apps/cli/internal/api"
 
-func toOrgListRenderData(response api.ListOrganizationsResponse) (output.RenderData, error) {
+func toOrgListRenderData(response api.ListOrganizationsResponse, includeAll bool) (output.RenderData, error) {
 	rows := make([]map[string]any, 0, len(response.Organizations))
 	for _, organization := range response.Organizations {
-		rows = append(rows, organizationSummaryRow(organization))
+		rows = append(rows, organizationSummaryRow(organization, includeAll))
+	}
+
+	columns := []string{"id", "name", "memberCount"}
+	if includeAll {
+		columns = []string{"id", "name", "memberCount", "createdAt", "updatedAt"}
 	}
 
 	return output.RenderData{
 		Title:   "organizations",
-		Columns: []string{"id", "name", "memberCount", "createdAt", "updatedAt"},
+		Columns: columns,
 		Rows:    rows,
 	}, nil
 }
@@ -20,7 +25,7 @@ func toOrgCurrentRenderData(organization api.Organization) output.RenderData {
 	return output.RenderData{
 		Title:   "organization",
 		Columns: []string{"id", "name", "memberCount", "createdAt", "updatedAt"},
-		Rows:    []map[string]any{organizationSummaryRow(organization)},
+		Rows:    []map[string]any{organizationSummaryRow(organization, true)},
 	}
 }
 
@@ -57,17 +62,21 @@ func toOrgCurrentCombinedObject(organization api.Organization) map[string]any {
 	}
 
 	return map[string]any{
-		"organization": organizationSummaryRow(organization),
+		"organization": organizationSummaryRow(organization, true),
 		"members":      members,
 	}
 }
 
-func organizationSummaryRow(organization api.Organization) map[string]any {
-	return map[string]any{
+func organizationSummaryRow(organization api.Organization, includeAll bool) map[string]any {
+	row := map[string]any{
 		"id":          organization.ID,
 		"name":        organization.Name,
 		"memberCount": len(organization.Members),
-		"createdAt":   organization.CreatedAt,
-		"updatedAt":   organization.UpdatedAt,
 	}
+	if includeAll {
+		row["createdAt"] = organization.CreatedAt
+		row["updatedAt"] = organization.UpdatedAt
+	}
+
+	return row
 }

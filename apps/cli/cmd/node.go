@@ -19,6 +19,15 @@ var nodeListCmd = &cobra.Command{
 	Example: `  yishan node list
   yishan node list --output json`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
+		showAll, err := cmd.Flags().GetBool("all")
+		if err != nil {
+			return err
+		}
+		verbose, err := cmd.Flags().GetBool("verbose")
+		if err != nil {
+			return err
+		}
+
 		orgID, err := resolveOrgID(cmd)
 		if err != nil {
 			return err
@@ -29,14 +38,14 @@ var nodeListCmd = &cobra.Command{
 			return err
 		}
 
-		return output.PrintAny(response)
+		return output.PrintRenderData(renderNodesList(response, showAll || verbose))
 	},
 }
 
 var nodeDeleteCmd = &cobra.Command{
-	Use:   "delete",
-	Short: "Delete organization node",
-	Long:  `Deregister a node from the organization. Any workspaces currently assigned to the node will lose their compute backend.`,
+	Use:     "delete",
+	Short:   "Delete organization node",
+	Long:    `Deregister a node from the organization. Any workspaces currently assigned to the node will lose their compute backend.`,
 	Example: `  yishan node delete --node-id <node-id>`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		orgID, err := resolveOrgID(cmd)
@@ -63,6 +72,8 @@ func init() {
 	nodeCmd.AddCommand(nodeDeleteCmd)
 
 	addOrgIDFlag(nodeListCmd)
+	nodeListCmd.Flags().Bool("all", false, "show full response fields")
+	nodeListCmd.Flags().BoolP("verbose", "v", false, "show full response fields")
 
 	addOrgIDFlag(nodeDeleteCmd)
 	nodeDeleteCmd.Flags().String("node-id", "", "node ID")
