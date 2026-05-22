@@ -3,6 +3,7 @@ package daemon
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 
 	"github.com/rs/zerolog/log"
@@ -130,6 +131,26 @@ func (h *JSONRPCHandler) handleWorkspaceClose(ctx context.Context, params json.R
 		PostHook:      req.PostHook,
 	})
 	if err != nil {
+		if req.ProjectID != "" && shouldFallbackToRemoteWorkspaceClose(err) {
+			if remoteErr := closeRemoteWorkspace(ctx, WorkspaceClose{
+				NodeID:         h.nodeID,
+				OrganizationID: req.OrganizationID,
+				ProjectID:      req.ProjectID,
+				Kind:           workspace.KindWorktree,
+				Branch:         req.Branch,
+				LocalPath:      req.WorktreePath,
+			}); remoteErr != nil {
+				return nil, remoteErr
+			}
+			return map[string]any{
+				"workspace":   map[string]string{"id": req.WorkspaceID, "status": "closed"},
+				"workspaceId": req.WorkspaceID,
+				"warnings": []any{map[string]any{
+					"code":    "workspace_missing_locally",
+					"message": err.Error(),
+				}},
+			}, nil
+		}
 		return nil, err
 	}
 	if wsErr == nil {
@@ -161,6 +182,22 @@ func (h *JSONRPCHandler) handleWorkspaceClose(ctx context.Context, params json.R
 		result["terminalCleanupErrors"] = closeResult.TerminalCleanupErrors
 	}
 	return result, nil
+}
+
+func shouldFallbackToRemoteWorkspaceClose(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var rpcErr *workspace.RPCError
+	if errors.As(err, &rpcErr) {
+		if rpcErr.Code == rpcCodeNotFound {
+			return true
+		}
+	}
+
+	message := strings.ToLower(strings.TrimSpace(err.Error()))
+	return strings.Contains(message, "workspace not found") || strings.Contains(message, "no such file or directory")
 }
 
 // watchAndTrack starts filesystem watching and PR tracking for a workspace path.

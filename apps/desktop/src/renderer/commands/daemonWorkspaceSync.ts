@@ -88,6 +88,22 @@ export async function ensureVisibleWorkspacesOpen(mergedWorkspaceIds?: ReadonlyS
           workspaceId: workspace.id,
           worktreePath,
         });
+        try {
+          await client.workspace.close({
+            workspaceId: workspace.id,
+            workspaceWorktreePath: worktreePath,
+            organizationId: workspace.organizationId,
+            projectId: workspace.projectId,
+            branch: workspace.branch,
+            removeBranch: true,
+          });
+        } catch (error) {
+          console.warn("[daemonWorkspaceSync] failed to close missing workspace", {
+            workspaceId: workspace.id,
+            worktreePath,
+            error,
+          });
+        }
         return;
       }
 

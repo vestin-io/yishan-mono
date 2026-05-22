@@ -71,7 +71,7 @@ type CloseRequest struct {
 
 func (m *Manager) Open(req OpenRequest) (Workspace, error) {
 	if req.ID == "" || req.Path == "" {
-		return Workspace{}, NewRPCError(-32602, "id and path are required")
+		return Workspace{}, NewRPCError(rpcCodeInvalidParams, "id and path are required")
 	}
 
 	absPath, err := filepath.Abs(req.Path)
@@ -84,7 +84,7 @@ func (m *Manager) Open(req OpenRequest) (Workspace, error) {
 		return Workspace{}, err
 	}
 	if !info.IsDir() {
-		return Workspace{}, NewRPCError(-32602, "workspace path must be a directory")
+		return Workspace{}, NewRPCError(rpcCodeInvalidParams, "workspace path must be a directory")
 	}
 
 	ws := Workspace{ID: req.ID, Path: absPath, OrgID: req.OrgID, ProjectID: req.ProjectID}
@@ -184,7 +184,7 @@ func (m *Manager) getWorkspace(id string) (Workspace, error) {
 
 	ws, ok := m.workspaces[id]
 	if !ok {
-		return Workspace{}, NewRPCError(-32004, "workspace not found")
+		return Workspace{}, NewRPCError(rpcCodeNotFound, "workspace not found")
 	}
 	return ws, nil
 }
@@ -217,7 +217,7 @@ func (m *Manager) SetWorkspacePullRequest(workspaceID string, pr *WorkspacePullR
 
 	ws, ok := m.workspaces[workspaceID]
 	if !ok {
-		return NewRPCError(-32004, "workspace not found")
+		return NewRPCError(rpcCodeNotFound, "workspace not found")
 	}
 
 	ws.PullRequest = pr
