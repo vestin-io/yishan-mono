@@ -9,7 +9,7 @@ describe("DaemonManager", () => {
 
     await expect(manager.ensureStarted()).rejects.toThrow("Daemon did not become healthy after start");
 
-    expect(run).toHaveBeenCalledWith(["daemon", "start", "--jwt-required=true"]);
+    expect(run).toHaveBeenCalledWith(["daemon", "start"]);
   });
 
   it("throws when daemon start exits non-zero", async () => {

@@ -199,10 +199,6 @@ func buildRunConfig(logFilePath string) daemon.RunConfig {
 	return daemon.RunConfig{
 		Host:         appConfig.Daemon.Host,
 		Port:         appConfig.Daemon.Port,
-		JWTSecret:    appConfig.Daemon.JWTSecret,
-		JWTIssuer:    appConfig.Daemon.JWTIssuer,
-		JWTAudience:  appConfig.Daemon.JWTAudience,
-		JWTRequired:  appConfig.Daemon.JWTRequired,
 		RelayEnabled: appConfig.Daemon.RelayEnabled,
 		RelayURL:     appConfig.Daemon.RelayURL,
 		LogFilePath:  logFilePath,
@@ -284,20 +280,12 @@ func init() {
 
 	daemonCmd.PersistentFlags().String("host", "127.0.0.1", "daemon listen host")
 	daemonCmd.PersistentFlags().Int("port", 0, "daemon listen port (0 = random)")
-	daemonCmd.PersistentFlags().String("jwt-secret", "", "JWT HMAC secret for daemon access")
-	daemonCmd.PersistentFlags().String("jwt-issuer", "", "required JWT issuer")
-	daemonCmd.PersistentFlags().String("jwt-audience", "", "required JWT audience")
-	daemonCmd.PersistentFlags().Bool("jwt-required", true, "require JWT token for /ws access")
 	daemonCmd.PersistentFlags().Bool("relay-enabled", true, "connect daemon to relay over outbound websocket")
 	daemonCmd.PersistentFlags().String("relay-url", "https://relay.yishan.io", "relay websocket URL (wss://.../ws)")
 	daemonCmd.PersistentFlags().String("log-file", "", "daemon log file path (default: ~/.yishan/profiles/<profile>/logs/daemon.log)")
 
 	cobra.CheckErr(viper.BindPFlag("daemon_host", daemonCmd.PersistentFlags().Lookup("host")))
 	cobra.CheckErr(viper.BindPFlag("daemon_port", daemonCmd.PersistentFlags().Lookup("port")))
-	cobra.CheckErr(viper.BindPFlag("daemon_jwt_secret", daemonCmd.PersistentFlags().Lookup("jwt-secret")))
-	cobra.CheckErr(viper.BindPFlag("daemon_jwt_issuer", daemonCmd.PersistentFlags().Lookup("jwt-issuer")))
-	cobra.CheckErr(viper.BindPFlag("daemon_jwt_audience", daemonCmd.PersistentFlags().Lookup("jwt-audience")))
-	cobra.CheckErr(viper.BindPFlag("daemon_jwt_required", daemonCmd.PersistentFlags().Lookup("jwt-required")))
 	cobra.CheckErr(viper.BindPFlag("daemon_relay_enabled", daemonCmd.PersistentFlags().Lookup("relay-enabled")))
 	cobra.CheckErr(viper.BindPFlag("daemon_relay_url", daemonCmd.PersistentFlags().Lookup("relay-url")))
 	cobra.CheckErr(viper.BindPFlag("daemon_log_file", daemonCmd.PersistentFlags().Lookup("log-file")))

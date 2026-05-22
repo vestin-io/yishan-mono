@@ -14,7 +14,7 @@ import {
   waitForDaemonHealthy,
 } from "./daemonHealthCheck";
 
-const DAEMON_START_ARGS = ["daemon", "start", "--jwt-required=true"];
+const DAEMON_START_ARGS = ["daemon", "start"];
 const DAEMON_DEV_RELAY_URL = "http://127.0.0.1:8788";
 const DAEMON_STOP_ARGS = ["daemon", "stop"];
 const CLI_COMMAND_TIMEOUT_MS = 30_000;
@@ -235,7 +235,7 @@ export class DaemonManager {
 
     const invocation = resolveCliInvocation();
     let output = "";
-    const daemonRunArgs = ["daemon", "run", "--jwt-required=true", "--relay-url", DAEMON_DEV_RELAY_URL];
+    const daemonRunArgs = ["daemon", "run", "--relay-url", DAEMON_DEV_RELAY_URL];
     const child = spawn(invocation.executablePath, [...invocation.prefixArgs, ...daemonRunArgs], {
       stdio: ["ignore", "pipe", "pipe"],
       env: process.env,

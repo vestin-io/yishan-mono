@@ -32,10 +32,6 @@ const detachedEnvKey = "YISHAN_DAEMON_DETACHED"
 type RunConfig struct {
 	Host         string
 	Port         int
-	JWTSecret    string
-	JWTIssuer    string
-	JWTAudience  string
-	JWTRequired  bool
 	RelayEnabled bool
 	RelayURL     string
 	// LogFilePath is the resolved path to the daemon log file.
@@ -95,20 +91,11 @@ func Run(cfg RunConfig, statePath string) error {
 	// ── Phase 3: handler + auth + relay status ─────────────────────────────
 	workspaceManager := workspace.NewManager()
 	handler := NewJSONRPCHandler(workspaceManager, daemonID, cfg.LogFilePath)
-	auth := NewJWTAuth(JWTAuthConfig{
-		Secret:   cfg.JWTSecret,
-		Issuer:   cfg.JWTIssuer,
-		Audience: cfg.JWTAudience,
-		Required: cfg.JWTRequired,
-	})
-	if err := auth.ValidateConfig(); err != nil {
-		return err
-	}
 	relayStatus := NewRelayStatus(cfg.RelayEnabled, cfg.RelayURL)
 
 	// ── Phase 4: HTTP server ───────────────────────────────────────────────
 	mux := http.NewServeMux()
-	mux.Handle("/ws", auth.Middleware(handler))
+	mux.Handle("/ws", handler)
 	mux.HandleFunc(agentHookIngestPath, handler.ServeAgentHook)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -162,7 +149,7 @@ func Run(cfg RunConfig, statePath string) error {
 	if os.Getenv(detachedEnvKey) == "1" {
 		startLog = log.Debug()
 	}
-	startLog.Str("address", actualAddr).Bool("jwt_required", cfg.JWTRequired).Msg("daemon server started")
+	startLog.Str("address", actualAddr).Msg("daemon server started")
 	err = server.Serve(listener)
 	if err != nil && err != http.ErrServerClosed {
 		return fmt.Errorf("daemon server failed: %w", err)
@@ -252,17 +239,7 @@ func StartDetached(cfg StartConfig) (int, error) {
 	args := []string{"daemon", "run"}
 	args = append(args, "--host", cfg.Run.Host)
 	args = append(args, "--port", strconv.Itoa(cfg.Run.Port))
-	args = append(args, "--jwt-required="+strconv.FormatBool(cfg.Run.JWTRequired))
 	args = append(args, "--relay-enabled="+strconv.FormatBool(cfg.Run.RelayEnabled))
-	if cfg.Run.JWTSecret != "" {
-		args = append(args, "--jwt-secret", cfg.Run.JWTSecret)
-	}
-	if cfg.Run.JWTIssuer != "" {
-		args = append(args, "--jwt-issuer", cfg.Run.JWTIssuer)
-	}
-	if cfg.Run.JWTAudience != "" {
-		args = append(args, "--jwt-audience", cfg.Run.JWTAudience)
-	}
 	if cfg.Run.RelayURL != "" {
 		args = append(args, "--relay-url", cfg.Run.RelayURL)
 	}
