@@ -361,7 +361,6 @@ describe("SettingsView", () => {
     expect(screen.getByText("Acme Org")).toBeTruthy();
     expect(screen.getByText("Pro")).toBeTruthy();
     expect(screen.getByText("admin")).toBeTruthy();
-    expect(screen.getByText("settings.account.profile.title")).toBeTruthy();
     expect(screen.getByText("settings.account.organization.title")).toBeTruthy();
     expect(screen.getByText("settings.account.usage.title")).toBeTruthy();
     expect(screen.getByText("settings.account.usage.voiceInput")).toBeTruthy();

@@ -15,9 +15,6 @@ export type VoiceTranscriptionUsageRecord = {
 export type VoiceTranscriptionResponse = {
   transcript: string;
   optimizedText: string;
-  usage: VoiceTranscriptionUsageRecord & {
-    durationSeconds: number;
-  };
 };
 
 export type OrganizationMemberRecord = {

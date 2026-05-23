@@ -168,7 +168,8 @@
         "title": "用户资料"
       },
       "organization": {
-        "title": "组织"
+        "title": "当前组织",
+        "description": "查看当前组织、套餐和成员角色。"
       },
       "fields": {
         "name": "姓名",
@@ -180,6 +181,7 @@
       },
       "usage": {
         "title": "用量",
+        "description": "跟踪账号功能的每月额度和当前用量。",
         "voiceInput": "语音输入",
         "minutes": "{{count}} 分钟",
         "summary": "已使用 {{used}} / {{total}}（{{percent}}%）",

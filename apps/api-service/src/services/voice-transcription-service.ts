@@ -92,7 +92,6 @@ export class VoiceTranscriptionService {
   async transcribe(input: TranscribeInput): Promise<{
     transcript: string;
     optimizedText: string;
-    usage: { durationSeconds: number; quotaMinutes: number; usedSeconds: number; remainingSeconds: number };
   }> {
     if (input.audioData.trim().length === 0) {
       throw new SpeechToTextInvalidAudioError();
@@ -105,7 +104,7 @@ export class VoiceTranscriptionService {
       input.organizationRole,
     );
 
-    const quota = await this.assertQuotaAvailable(input);
+    await this.assertQuotaAvailable(input);
 
     try {
       const transcript = await this.transcribeAudio(input.audioData, input.audioFormat, input.prompt);
@@ -115,12 +114,6 @@ export class VoiceTranscriptionService {
       return {
         transcript,
         optimizedText,
-        usage: {
-          durationSeconds: input.durationSeconds,
-          quotaMinutes: quota.quotaMinutes,
-          usedSeconds: quota.usedSeconds + input.durationSeconds,
-          remainingSeconds: quota.remainingSeconds - input.durationSeconds,
-        },
       };
     } catch (error) {
       await this.recordUsage(input, "failed", error instanceof AppError ? error.code : "VOICE_TRANSCRIPTION_FAILED");

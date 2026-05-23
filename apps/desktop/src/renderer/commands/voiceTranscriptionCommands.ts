@@ -11,7 +11,8 @@ export async function transcribeVoiceForOrganization(input: {
     audio: input.audio,
     durationSeconds: input.durationSeconds,
   });
-  sessionStore.getState().setOrganizationVoiceUsage(input.organizationId, result.usage);
+  const usage = await api.voiceTranscription.getUsage(input.organizationId);
+  sessionStore.getState().setOrganizationVoiceUsage(input.organizationId, usage);
 
   return result;
 }

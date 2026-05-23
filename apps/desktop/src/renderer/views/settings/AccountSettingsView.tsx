@@ -125,53 +125,51 @@ export function AccountSettingsView() {
     <Box>
       <SettingsSectionHeader title={t("settings.account.title")} description={t("settings.account.description")} />
       <Stack spacing={2}>
-        <SettingsCard>
-          <Stack spacing={2} sx={{ py: 1.5 }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-              {t("settings.account.profile.title")}
-            </Typography>
-
-            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-              <Avatar
-                src={currentUser.avatarUrl ?? undefined}
-                alt={avatarAlt}
-                sx={{ width: 64, height: 64, fontSize: 22, bgcolor: "primary.main" }}
-              >
-                {getUserInitials(currentUser)}
-              </Avatar>
-              <Box sx={{ minWidth: 0 }}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.25 }} noWrap>
-                  {displayName}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" noWrap>
-                  {currentUser.email || missingValue}
-                </Typography>
+        <Box>
+          <SettingsCard>
+            <Stack spacing={2} sx={{ py: 1.5 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                <Avatar
+                  src={currentUser.avatarUrl ?? undefined}
+                  alt={avatarAlt}
+                  sx={{ width: 64, height: 64, fontSize: 22, bgcolor: "primary.main" }}
+                >
+                  {getUserInitials(currentUser)}
+                </Avatar>
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.25 }} noWrap>
+                    {displayName}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" noWrap>
+                    {currentUser.email || missingValue}
+                  </Typography>
+                </Box>
               </Box>
-            </Box>
 
-            <SettingsRows>
-              <SettingsControlRow
-                title={t("settings.account.fields.name")}
-                control={<Typography variant="body2">{currentUser.name?.trim() || missingValue}</Typography>}
-              />
-              <SettingsControlRow
-                title={t("settings.account.fields.email")}
-                control={<Typography variant="body2">{currentUser.email || missingValue}</Typography>}
-              />
-              <SettingsControlRow
-                title={t("settings.account.fields.userId")}
-                control={<Typography variant="body2">{currentUser.id || missingValue}</Typography>}
-              />
-            </SettingsRows>
-          </Stack>
-        </SettingsCard>
+              <SettingsRows>
+                <SettingsControlRow
+                  title={t("settings.account.fields.name")}
+                  control={<Typography variant="body2">{currentUser.name?.trim() || missingValue}</Typography>}
+                />
+                <SettingsControlRow
+                  title={t("settings.account.fields.email")}
+                  control={<Typography variant="body2">{currentUser.email || missingValue}</Typography>}
+                />
+                <SettingsControlRow
+                  title={t("settings.account.fields.userId")}
+                  control={<Typography variant="body2">{currentUser.id || missingValue}</Typography>}
+                />
+              </SettingsRows>
+            </Stack>
+          </SettingsCard>
+        </Box>
 
-        <SettingsCard>
-          <Stack spacing={1} sx={{ py: 1.5 }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-              {t("settings.account.organization.title")}
-            </Typography>
-
+        <Box>
+          <SettingsSectionHeader
+            title={t("settings.account.organization.title")}
+            description={t("settings.account.organization.description")}
+          />
+          <SettingsCard>
             <SettingsRows>
               <SettingsControlRow
                 title={t("settings.account.fields.organization")}
@@ -186,15 +184,12 @@ export function AccountSettingsView() {
                 control={<Typography variant="body2">{organizationRole || missingValue}</Typography>}
               />
             </SettingsRows>
-          </Stack>
-        </SettingsCard>
+          </SettingsCard>
+        </Box>
 
-        <SettingsCard>
-          <Stack spacing={1.5} sx={{ py: 1.5 }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-              {t("settings.account.usage.title")}
-            </Typography>
-
+        <Box>
+          <SettingsSectionHeader title={t("settings.account.usage.title")} description={t("settings.account.usage.description")} />
+          <SettingsCard>
             <SettingsRows>
               <SettingsControlRow
                 title={t("settings.account.usage.voiceInput")}
@@ -214,8 +209,8 @@ export function AccountSettingsView() {
                 }
               />
             </SettingsRows>
-          </Stack>
-        </SettingsCard>
+          </SettingsCard>
+        </Box>
       </Stack>
     </Box>
   );

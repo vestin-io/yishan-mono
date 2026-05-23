@@ -186,7 +186,8 @@
         "title": "User profile"
       },
       "organization": {
-        "title": "Organization"
+        "title": "Current Organization",
+        "description": "Review your active organization, plan, and membership role."
       },
       "fields": {
         "name": "Name",
@@ -198,6 +199,7 @@
       },
       "usage": {
         "title": "Usage",
+        "description": "Track monthly quotas and current consumption for account features.",
         "voiceInput": "Voice input",
         "minutes": "{{count}} min",
         "summary": "{{used}} of {{total}} used ({{percent}}%)",

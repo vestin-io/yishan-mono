@@ -132,12 +132,6 @@ describe("VoiceTranscriptionService", () => {
     expect(result).toEqual({
       transcript: "fix the broken tests and commit it",
       optimizedText: "Fix the failing tests, then create a commit with the changes.",
-      usage: {
-        durationSeconds: 120,
-        quotaMinutes: 300,
-        usedSeconds: 120,
-        remainingSeconds: 17_880,
-      },
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[0]?.[0]).toBe("https://openrouter.ai/api/v1/audio/transcriptions");
