@@ -138,12 +138,35 @@ func (h *JSONRPCHandler) handleWorkspaceClose(ctx context.Context, params json.R
 		PostHook:      req.PostHook,
 	}
 	ws, wsErr := h.manager.GetWorkspace(closeReq.WorkspaceID)
+	if wsErr == nil && h.cleanupStore != nil {
+		if err := h.cleanupStore.Add(pendingWorkspaceCleanup{
+			WorkspaceID:   closeReq.WorkspaceID,
+			Path:          ws.Path,
+			Branch:        closeReq.Branch,
+			RemoveBranch:  closeReq.RemoveBranch,
+			ForceWorktree: closeReq.ForceWorktree,
+			ForceBranch:   closeReq.ForceBranch,
+			PostHook:      closeReq.PostHook,
+		}); err != nil {
+			return nil, err
+		}
+	}
 	if wsErr == nil {
 		h.watchers.Unwatch(ws.Path)
 		h.prTracker.StopTracking(ws.ID)
 	}
 	if _, err := h.manager.CloseWorkspace(ctx, closeReq); err != nil {
+		if h.cleanupStore != nil {
+			if markErr := h.cleanupStore.MarkFailure(closeReq.WorkspaceID, err); markErr != nil {
+				log.Warn().Err(markErr).Str("workspaceId", closeReq.WorkspaceID).Msg("failed to mark workspace cleanup failure")
+			}
+		}
 		return nil, err
+	}
+	if h.cleanupStore != nil {
+		if err := h.cleanupStore.Remove(closeReq.WorkspaceID); err != nil {
+			log.Warn().Err(err).Str("workspaceId", closeReq.WorkspaceID).Msg("failed to remove completed workspace cleanup")
+		}
 	}
 
 	return map[string]any{

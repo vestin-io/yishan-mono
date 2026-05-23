@@ -69,6 +69,16 @@ type CloseRequest struct {
 	PostHook      string
 }
 
+type ClosePathRequest struct {
+	WorkspaceID   string
+	Path          string
+	Branch        string
+	RemoveBranch  bool
+	ForceWorktree bool
+	ForceBranch   bool
+	PostHook      string
+}
+
 func (m *Manager) Open(req OpenRequest) (Workspace, error) {
 	if req.ID == "" || req.Path == "" {
 		return Workspace{}, NewRPCError(rpcCodeInvalidParams, "id and path are required")
@@ -133,11 +143,31 @@ func (m *Manager) CloseWorkspace(ctx context.Context, req CloseRequest) (CloseRe
 		result.TerminalCleanupErrors = messages
 	}
 
-	if _, statErr := os.Stat(ws.Path); statErr != nil {
+	result, err = m.CloseWorkspacePath(ctx, ClosePathRequest{
+		WorkspaceID:   req.WorkspaceID,
+		Path:          ws.Path,
+		Branch:        req.Branch,
+		RemoveBranch:  req.RemoveBranch,
+		ForceWorktree: req.ForceWorktree,
+		ForceBranch:   req.ForceBranch,
+		PostHook:      req.PostHook,
+	})
+	if err != nil {
+		return result, err
+	}
+
+	m.mu.Lock()
+	delete(m.workspaces, req.WorkspaceID)
+	m.mu.Unlock()
+
+	return result, nil
+}
+
+func (m *Manager) CloseWorkspacePath(ctx context.Context, req ClosePathRequest) (CloseResult, error) {
+	var result CloseResult
+
+	if _, statErr := os.Stat(req.Path); statErr != nil {
 		if os.IsNotExist(statErr) {
-			m.mu.Lock()
-			delete(m.workspaces, req.WorkspaceID)
-			m.mu.Unlock()
 			return result, nil
 		}
 		return result, statErr
@@ -148,8 +178,8 @@ func (m *Manager) CloseWorkspace(ctx context.Context, req CloseRequest) (CloseRe
 	// non-fatal: the close operation always proceeds.
 	hookResult, hookErr := RunHook(ctx, HookRequest{
 		Command:       req.PostHook,
-		WorkspaceID:   ws.ID,
-		WorkspacePath: ws.Path,
+		WorkspaceID:   req.WorkspaceID,
+		WorkspacePath: req.Path,
 		HookName:      "post",
 	})
 	if hookErr != nil {
@@ -159,20 +189,20 @@ func (m *Manager) CloseWorkspace(ctx context.Context, req CloseRequest) (CloseRe
 		result.PostHookResult = &hookResult
 	}
 
-	mainWorktreePath, err := m.gits.MainWorktreePath(ctx, ws.Path)
+	mainWorktreePath, err := m.gits.MainWorktreePath(ctx, req.Path)
 	if err != nil {
 		return result, err
 	}
 
 	branch := req.Branch
 	if req.RemoveBranch && branch == "" {
-		branch, err = m.gits.CurrentBranch(ctx, ws.Path)
+		branch, err = m.gits.CurrentBranch(ctx, req.Path)
 		if err != nil {
 			return result, err
 		}
 	}
 
-	if err := m.gits.RemoveWorktree(ctx, mainWorktreePath, ws.Path, req.ForceWorktree); err != nil {
+	if err := m.gits.RemoveWorktree(ctx, mainWorktreePath, req.Path, req.ForceWorktree); err != nil {
 		return result, err
 	}
 	if req.RemoveBranch {
@@ -180,10 +210,6 @@ func (m *Manager) CloseWorkspace(ctx context.Context, req CloseRequest) (CloseRe
 			return result, err
 		}
 	}
-
-	m.mu.Lock()
-	delete(m.workspaces, req.WorkspaceID)
-	m.mu.Unlock()
 
 	return result, nil
 }
