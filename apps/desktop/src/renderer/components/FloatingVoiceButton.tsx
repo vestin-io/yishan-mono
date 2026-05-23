@@ -1,6 +1,7 @@
 import { Box, IconButton, Tooltip } from "@mui/material";
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { LuArrowUp, LuLoaderCircle, LuMic, LuX } from "react-icons/lu";
 import { transcribeVoiceForOrganization } from "../commands/voiceTranscriptionCommands";
 import { getErrorMessage } from "../helpers/errorHelpers";
@@ -20,9 +21,11 @@ type FloatingVoiceButtonProps = {
   onText: (text: string) => Promise<void> | void;
   disabled?: boolean;
   disabledMessage?: string;
+  rightOffset?: number;
 };
 
-export function FloatingVoiceButton({ onText, disabled = false, disabledMessage }: FloatingVoiceButtonProps) {
+export function FloatingVoiceButton({ onText, disabled = false, disabledMessage, rightOffset = 0 }: FloatingVoiceButtonProps) {
+  const location = useLocation();
   const [portalHost, setPortalHost] = useState<HTMLElement | null>(null);
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -229,7 +232,7 @@ export function FloatingVoiceButton({ onText, disabled = false, disabledMessage 
         : "Click to record voice input";
 
   const button = (
-    <Box sx={{ position: "fixed", right: 18, bottom: 18, zIndex: 2147483647 }}>
+    <Box sx={{ position: "fixed", right: 18 + rightOffset, bottom: 18, zIndex: 9 }}>
       <Tooltip title={recordingState === "idle" ? (disabled ? (disabledMessage ?? label) : label) : (errorMessage ?? label)} placement="left">
         <span>
           <IconButton
@@ -325,6 +328,10 @@ export function FloatingVoiceButton({ onText, disabled = false, disabledMessage 
       ) : null}
     </Box>
   );
+
+  if (location.pathname !== "/") {
+    return null;
+  }
 
   return portalHost ? createPortal(button, portalHost) : null;
 }

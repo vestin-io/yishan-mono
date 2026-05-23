@@ -6,6 +6,7 @@ import { memo, useCallback, useEffect, useRef } from "react";
 import { FloatingVoiceButton } from "../../../components/FloatingVoiceButton";
 import { writeTerminalInput } from "../../../commands/terminalCommands";
 import { layoutStore } from "../../../store/settings/layoutStore";
+import { useWorkspacePaneVisibilityContext } from "../../../hooks/useWorkspacePaneVisibility";
 import { useTerminalSearchState } from "./useTerminalSearchState";
 import { TerminalSearchPanel } from "./TerminalSearchPanel";
 import { useTerminalFileDrop } from "./useTerminalFileDrop";
@@ -34,6 +35,8 @@ type TerminalViewProps = {
  */
 export const TerminalView = memo(function TerminalView({ tabId, focusRequestKey = 0, showVoiceButton = false }: TerminalViewProps) {
   const isVoiceInputEnabled = layoutStore((state) => state.isVoiceInputEnabled);
+  const rightWidth = layoutStore((state) => state.rightWidth);
+  const { rightCollapsed } = useWorkspacePaneVisibilityContext();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const placeholderRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -182,7 +185,9 @@ export const TerminalView = memo(function TerminalView({ tabId, focusRequestKey 
           pointerEvents: "none",
         }}
       />
-      {isVoiceInputEnabled && showVoiceButton ? <FloatingVoiceButton onText={handleVoiceText} /> : null}
+      {isVoiceInputEnabled && showVoiceButton ? (
+        <FloatingVoiceButton onText={handleVoiceText} rightOffset={rightCollapsed ? 0 : rightWidth} />
+      ) : null}
     </Box>
   );
 });

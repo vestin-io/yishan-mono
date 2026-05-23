@@ -16,6 +16,7 @@ type TabContentRendererProps = {
   workspace: { worktreePath?: string } | undefined;
   externalAppLabel: string;
   focusContentRequestKey: number;
+  isWorkspaceActive: boolean;
   cmd: Commands;
   onOpenExternalApp: (filePath: string) => Promise<void>;
 };
@@ -27,6 +28,7 @@ export function useTabContentRenderer({
   workspace,
   externalAppLabel,
   focusContentRequestKey,
+  isWorkspaceActive,
   cmd,
   onOpenExternalApp,
 }: TabContentRendererProps): RenderTabContent {
@@ -159,7 +161,7 @@ export function useTabContentRenderer({
             <TerminalView
               tabId={tab.id}
               focusRequestKey={shouldFocusContent ? focusContentRequestKey : 0}
-              showVoiceButton={shouldFocusContent}
+              showVoiceButton={shouldFocusContent && isWorkspaceActive}
             />
           </Box>
         );
@@ -167,6 +169,6 @@ export function useTabContentRenderer({
 
       return null;
     },
-    [t, cmd, workspace, externalAppLabel, onOpenExternalApp, focusContentRequestKey],
+    [t, cmd, workspace, externalAppLabel, onOpenExternalApp, focusContentRequestKey, isWorkspaceActive],
   );
 }
