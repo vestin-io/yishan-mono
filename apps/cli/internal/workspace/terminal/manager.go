@@ -21,7 +21,6 @@ import (
 )
 
 const maxSessionOutputBytes = 2 * 1024 * 1024
-const portScanFallbackInterval = 30 * time.Second
 const portScanActivityWindow = 15 * time.Second
 const portScanHintDebounce = 500 * time.Millisecond
 
@@ -289,11 +288,6 @@ func (m *Manager) runPortScanLoop() {
 		m.portLoopMu.Unlock()
 	}()
 
-	// fallbackTicker fires periodically as a safety net for servers that bind
-	// a port without printing anything recognisable (e.g. silent daemons).
-	fallback := time.NewTicker(portScanFallbackInterval)
-	defer fallback.Stop()
-
 	// debounce timer: started when a hint arrives, fires after portScanHintDebounce
 	// to coalesce rapid bursts (e.g. multi-line startup log).
 	debounce := time.NewTimer(0)
@@ -301,6 +295,11 @@ func (m *Manager) runPortScanLoop() {
 		<-debounce.C
 	}
 	debouncing := false
+
+	// idle check: periodically verify that sessions are still alive so the
+	// loop can exit when all sessions have ended. No subprocess is spawned.
+	idleCheck := time.NewTicker(30 * time.Second)
+	defer idleCheck.Stop()
 
 	scan := func() bool {
 		debouncing = false
@@ -326,8 +325,13 @@ func (m *Manager) runPortScanLoop() {
 
 	for {
 		select {
-		case <-fallback.C:
-			if !scan() {
+		case <-idleCheck.C:
+			// No subprocess scan — just check whether any sessions are still
+			// running so we can shut down the loop when they're all gone.
+			if !m.hasActiveSessions() {
+				if m.shouldPublishPortsUpdate(nil) {
+					m.publishPortsChanged(nil)
+				}
 				return
 			}
 
