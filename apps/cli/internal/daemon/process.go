@@ -282,7 +282,7 @@ func StartDetached(cfg StartConfig) (int, error) {
 	} else {
 		command.Stderr = devNull
 	}
-	command.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	command.SysProcAttr = sysProcAttr()
 
 	if err := command.Start(); err != nil {
 		return 0, fmt.Errorf("start daemon process: %w", err)

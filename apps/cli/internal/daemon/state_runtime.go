@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"yishan/apps/cli/internal/config"
@@ -81,13 +80,4 @@ func RemoveState(path string) error {
 	}
 
 	return nil
-}
-
-func IsProcessRunning(pid int) bool {
-	if pid <= 0 {
-		return false
-	}
-
-	err := syscall.Kill(pid, 0)
-	return err == nil || err == syscall.EPERM
 }
