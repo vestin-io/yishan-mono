@@ -102,7 +102,7 @@ export function ServiceTokenSettingsView() {
         title={t("settings.serviceTokens.title")}
         description={t("settings.serviceTokens.description")}
         action={
-          <Button variant="outlined" size="small" onClick={() => setIsCreateOpen(true)}>
+          <Button variant="text" size="small" onClick={() => setIsCreateOpen(true)}>
             {t("settings.serviceTokens.create")}
           </Button>
         }
@@ -274,25 +274,33 @@ function CreateServiceTokenDialog(props: {
           <Typography variant="body2" color="text.secondary">
             {t("settings.serviceTokens.createDialog.description")}
           </Typography>
-          <TextField
-            autoFocus
-            label={t("settings.serviceTokens.createDialog.nameLabel")}
-            placeholder={t("settings.serviceTokens.createDialog.namePlaceholder")}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            size="small"
-            fullWidth
-          />
-          <TextField
-            label={t("settings.serviceTokens.createDialog.expiresLabel")}
-            placeholder={t("settings.serviceTokens.createDialog.expiresPlaceholder")}
-            value={expiresInDays}
-            onChange={(e) => setExpiresInDays(e.target.value)}
-            type="number"
-            size="small"
-            fullWidth
-            helperText={t("settings.serviceTokens.createDialog.expiresHelp")}
-          />
+          <Box>
+            <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+              {t("settings.serviceTokens.createDialog.nameLabel")}
+            </Typography>
+            <TextField
+              autoFocus
+              placeholder={t("settings.serviceTokens.createDialog.namePlaceholder")}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              size="small"
+              fullWidth
+            />
+          </Box>
+          <Box>
+            <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+              {t("settings.serviceTokens.createDialog.expiresLabel")}
+            </Typography>
+            <TextField
+              placeholder={t("settings.serviceTokens.createDialog.expiresPlaceholder")}
+              value={expiresInDays}
+              onChange={(e) => setExpiresInDays(e.target.value)}
+              type="number"
+              size="small"
+              fullWidth
+              helperText={t("settings.serviceTokens.createDialog.expiresHelp")}
+            />
+          </Box>
           {error ? <Alert severity="error">{error}</Alert> : null}
         </Stack>
       </DialogContent>

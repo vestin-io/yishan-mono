@@ -64,7 +64,6 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
       { tab: "notifications", labelKey: "settings.items.notifications", icon: BiBell },
       { tab: "keybindings", labelKey: "settings.items.keybindings", icon: BiSolidKeyboard },
       { tab: "links", labelKey: "settings.items.links", icon: BiLinkExternal },
-      { tab: "serviceTokens", labelKey: "settings.items.serviceTokens", icon: BiKey },
     ],
   },
   {
@@ -73,6 +72,7 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
       { tab: "integrations", labelKey: "settings.items.integrations", icon: BiPlug },
       { tab: "members", labelKey: "settings.items.members", icon: BiGroup },
       { tab: "nodes", labelKey: "settings.items.nodes", icon: BiDesktop },
+      { tab: "serviceTokens", labelKey: "settings.items.serviceTokens", icon: BiKey },
     ],
   },
   {
