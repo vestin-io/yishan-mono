@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { LuArrowUp, LuLoaderCircle, LuMic, LuX } from "react-icons/lu";
+import recordStartSound from "../../assets/record-start.mp3";
 import { transcribeVoiceForOrganization } from "../commands/voiceTranscriptionCommands";
 import { getErrorMessage } from "../helpers/errorHelpers";
 import { sessionStore } from "../store/sessionStore";
@@ -30,10 +31,12 @@ export function FloatingVoiceButton({ onText, disabled = false, disabledMessage,
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [recordedAudio, setRecordedAudio] = useState<{ audio: Blob; durationSeconds: number } | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const startedAtRef = useRef(0);
   const stopTimerRef = useRef<number | null>(null);
+  const countTimerRef = useRef<number | null>(null);
   const didCancelRecordingRef = useRef(false);
   const didSubmitRecordingRef = useRef(false);
 
@@ -41,6 +44,11 @@ export function FloatingVoiceButton({ onText, disabled = false, disabledMessage,
     if (stopTimerRef.current !== null) {
       window.clearTimeout(stopTimerRef.current);
       stopTimerRef.current = null;
+    }
+
+    if (countTimerRef.current !== null) {
+      window.clearInterval(countTimerRef.current);
+      countTimerRef.current = null;
     }
 
     for (const track of streamRef.current?.getTracks() ?? []) {
@@ -191,7 +199,18 @@ export function FloatingVoiceButton({ onText, disabled = false, disabledMessage,
 
       recorder.start(1_000);
       setRecordingState("recording");
-      stopTimerRef.current = window.setTimeout(stopRecording, MAX_RECORDING_MS);
+      setElapsedSeconds(0);
+      const audio = new Audio(recordStartSound);
+      audio.currentTime = 0.4;
+      audio.play().catch(() => {});
+      stopTimerRef.current = window.setTimeout(() => {
+        didSubmitRecordingRef.current = true;
+        setRecordingState("transcribing");
+        stopRecording();
+      }, MAX_RECORDING_MS);
+      countTimerRef.current = window.setInterval(() => {
+        setElapsedSeconds((s) => s + 1);
+      }, 1_000);
     } catch (error) {
       cleanupRecording();
       setRecordingState("idle");
@@ -241,7 +260,7 @@ export function FloatingVoiceButton({ onText, disabled = false, disabledMessage,
             onClick={handleClick}
             disabled={isBusy}
             sx={{
-              width: isBusy ? 220 : 34,
+              width: isBusy ? 240 : 34,
               height: 34,
               justifyContent: isBusy ? "flex-start" : "center",
               gap: 1,
@@ -275,7 +294,7 @@ export function FloatingVoiceButton({ onText, disabled = false, disabledMessage,
                 Transcribing...
               </Box>
             ) : isBusy ? (
-              <Waveform isActive={recordingState === "recording"} />
+              <Waveform isActive={recordingState === "recording"} elapsedSeconds={elapsedSeconds} />
             ) : null}
           </IconButton>
         </span>
@@ -336,29 +355,60 @@ export function FloatingVoiceButton({ onText, disabled = false, disabledMessage,
   return portalHost ? createPortal(button, portalHost) : null;
 }
 
-function Waveform({ isActive }: { isActive: boolean }) {
+function Waveform({ isActive, elapsedSeconds }: { isActive: boolean; elapsedSeconds: number }) {
   const bars = [12, 18, 9, 22, 14, 19, 10, 16, 21, 11, 17, 13];
+  const capped = Math.min(60, elapsedSeconds);
+  const timeLabel = `0:${String(capped).padStart(2, "0")}`;
 
   return (
     <Box sx={{ display: "flex", alignItems: "center", gap: 0.45, flex: 1, pr: 3.5, pl: 3.5 }}>
-      {bars.map((height, index) => (
-        <Box
-          key={`${height}-${index}`}
-          sx={{
-            width: 3,
-            height,
-            borderRadius: 99,
-            bgcolor: isActive ? "success.main" : "grey.300",
-            opacity: isActive ? 0.95 : 0.6,
-            animation: isActive ? "voice-wave 850ms ease-in-out infinite" : "none",
-            animationDelay: `${index * 62}ms`,
-            "@keyframes voice-wave": {
-              "0%, 100%": { transform: "scaleY(0.45)" },
-              "50%": { transform: "scaleY(1.15)" },
-            },
-          }}
-        />
-      ))}
+      {isActive ? (
+        <>
+          {bars.map((height, index) => (
+            <Box
+              key={`${height}-${index}`}
+              sx={{
+                width: 3,
+                height,
+                borderRadius: 99,
+                bgcolor: "success.main",
+                opacity: 0.95,
+                animation: "voice-wave 850ms ease-in-out infinite",
+                animationDelay: `${index * 62}ms`,
+                "@keyframes voice-wave": {
+                  "0%, 100%": { transform: "scaleY(0.45)" },
+                  "50%": { transform: "scaleY(1.15)" },
+                },
+              }}
+            />
+          ))}
+          <Box
+            sx={{
+              ml: 0.5,
+              fontSize: 11,
+              fontVariantNumeric: "tabular-nums",
+              color: capped >= 50 ? "error.main" : "success.main",
+              flexShrink: 0,
+            }}
+          >
+            {timeLabel}
+          </Box>
+        </>
+      ) : (
+        bars.map((height, index) => (
+          <Box
+            key={`${height}-${index}`}
+            sx={{
+              width: 3,
+              height,
+              borderRadius: 99,
+              bgcolor: "grey.300",
+              opacity: 0.6,
+              animation: "none",
+            }}
+          />
+        ))
+      )}
     </Box>
   );
 }
