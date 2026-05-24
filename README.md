@@ -4,156 +4,68 @@
 
 <h1 align="center">Yishan</h1>
 
-[简体中文](README.zh-CN.md)
+<p align="center">
+  <a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a>
+</p>
 
-[![License](https://img.shields.io/badge/license-Elastic--2.0-blue.svg)](LICENSE)
-[![PR Unit Tests](https://github.com/yishan-io/yishan-mono/actions/workflows/pr-unit-tests.yml/badge.svg)](https://github.com/yishan-io/yishan-mono/actions/workflows/pr-unit-tests.yml)
-[![Desktop Release](https://github.com/yishan-io/yishan-mono/actions/workflows/desktop-release.yml/badge.svg)](https://github.com/yishan-io/yishan-mono/actions/workflows/desktop-release.yml)
-[![GitHub stars](https://img.shields.io/github/stars/yishan-io/yishan-mono?style=social)](https://github.com/yishan-io/yishan-mono/stargazers)
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Elastic--2.0-blue.svg" alt="License" /></a>
+  <a href="https://github.com/yishan-io/yishan-mono/actions/workflows/pr-unit-tests.yml"><img src="https://github.com/yishan-io/yishan-mono/actions/workflows/pr-unit-tests.yml/badge.svg" alt="PR Unit Tests" /></a>
+  <a href="https://github.com/yishan-io/yishan-mono/actions/workflows/desktop-release.yml"><img src="https://github.com/yishan-io/yishan-mono/actions/workflows/desktop-release.yml/badge.svg" alt="Desktop Release" /></a>
+  <a href="https://github.com/yishan-io/yishan-mono/stargazers"><img src="https://img.shields.io/github/stars/yishan-io/yishan-mono?style=social" alt="GitHub stars" /></a>
+</p>
 
-Make development work feel lighter.
+**The workspace built for parallel minds.**
 
-Yishan helps development teams reduce the operational overhead that builds up in fast software cycles: switching tasks, restoring workspace context, coordinating agent work, and keeping project state close at hand.
+Agents made parallel work easy. Managing it is still on you. Yishan fixes that.
 
-## What is Yishan?
+<p align="center">
+  <img src="https://raw.githubusercontent.com/yishan-io/yishan-mono/main/apps/landing/public/app.png" alt="Yishan — from zero to multiple parallel workstreams" width="100%" />
+</p>
 
-Yishan is a desktop workspace product backed by:
+## Why Yishan?
 
-- A local Go daemon and CLI for machine-local execution (filesystem, git, terminal, and agent CLI operations).
-- An API service for account and project-level data (auth, organizations, projects, nodes, workspaces, and preferences).
+Tools were built for serial work. The work is now parallel.
 
-The product is designed to make it easier to move between tasks without losing momentum, especially when work needs to be resumed, handed off, or automated.
+Agents let you spin up concurrent tasks — fixing a bug, refactoring a module, reviewing code — all at once. But each workstream runs in its own terminal, repo, or chat tab. The burden of monitoring, switching, and resuming still falls entirely on you.
 
-## Product Principles
+Yishan gives every task a living workspace. Switch between them without losing state.
 
-- Reduce context switching between tasks, projects, and workspaces.
-- Preserve and share useful development context so work can be resumed or handed off faster.
-- Support bring-your-own-agent CLI workflows instead of forcing one runtime.
-- Keep execution close to the developer machine when local access is required.
-- Add new features only when they make development cycles lighter and faster.
+## Core Features
 
-## Repository Layout
+- **Isolated workspaces** — each task gets its own branch, terminal, and file state. Parallel work never collides.
+- **Live status across all workstreams** — see every task's state — running, waiting, done — in one view without opening each terminal.
+- **Leave it running, come back when ready** — start a task, switch to something more urgent, return later without paying any setup cost. Everything stays exactly as you left it.
+- **Built-in shared context** — `.my-context` keeps notes, plans, and handoff details attached to the project, visible across every workspace. Pick up any task without rebuilding context from scratch.
+- **Agent sessions tied to the workspace** — agent work runs inside the workspace alongside the repo and terminal, not in a detached chat tab that loses context the moment you close it.
 
-- `apps/desktop`: Electron + Vite desktop client.
-- `apps/cli`: Go CLI and local daemon with WebSocket JSON-RPC APIs for workspace, file, git, terminal, and agent operations.
-- `apps/api-service`: Hono API service.
-- `apps/mobile` and `apps/web`: mobile/web app surfaces.
-- `packages/design-tokens`: shared design token package.
-- `packages/core` and `packages/runtime`: shared cross-app package slots.
+## More Ways to Work
 
-## Requirements
+- **Team collaboration** — share workspace status and hosts across your team. Everyone sees what's running, what's blocked, and who owns what.
+- **Autopilot** — schedule recurring agent jobs on a cron cadence. Code review passes, health checks, weekly summaries — running automatically while you focus elsewhere.
+- **PR status without leaving Yishan** — see pull request state, CI checks, and review status inline with the workspace.
+- **Voice input** — dictate prompts and instructions hands-free. Works while you're away from the keyboard.
 
-- Bun `1.3.3` (see root `package.json` `packageManager` field).
-- Go `1.24.x`.
-- Node-compatible tooling for Electron/Vite builds.
+## Works With Your Tools
 
-Install workspace dependencies:
+Yishan works alongside the agent CLIs you already use — OpenCode, Codex, Claude, Gemini, Cursor Agent, Pi, and Copilot.
 
-```bash
-bun install
-```
+## Roadmap
 
-## Quick Start
+- Remote host workspaces — run workstreams on a remote machine *(in progress)*
+- CLI + agent workflow integration — spawn multiple workspaces from chat or CLI *(in progress)*
+- Development lifecycle management — issue to workspace to PR in one flow *(planned)*
+- Mobile remote control — monitor and steer workspaces from your phone *(planned)*
 
-Start the desktop app:
+## Getting Started
 
-```bash
-bun --cwd apps/desktop run dev
-```
+**Download for macOS** at [yishan.io](https://yishan.io).
 
-Start the API service:
+To build from source and contribute, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-```bash
-bun --cwd apps/api-service run dev:bun
-```
+## Links
 
-Run the CLI from source:
-
-```bash
-go run ./apps/cli
-```
-
-Run the daemon in the foreground:
-
-```bash
-go run ./apps/cli daemon run --host 127.0.0.1 --port 0
-```
-
-Build the desktop app with an embedded CLI binary:
-
-```bash
-bun --cwd apps/desktop run build:app:dir
-```
-
-## Runtime Model
-
-Yishan separates cloud-shared state from local execution:
-
-- API service: account, organization, project, node, workspace, and preference data.
-- Local daemon: filesystem, git, terminal, and agent CLI execution on the user's machine.
-
-Daemon endpoints:
-
-- `/ws`: WebSocket JSON-RPC API.
-- `/healthz`: health and daemon identity.
-
-Daemon state is written to `~/.yishan/profiles/<profile>/daemon.state.json`.
-
-## Agent Runtime Setup
-
-On daemon startup, managed runtime files are installed under `~/.yishan`:
-
-- `~/.yishan/bin`: wrapper executables for supported agent CLIs.
-- `~/.yishan/lib`: shared wrapper helper scripts.
-- `~/.yishan/notify.sh` and `~/.yishan/notify.ps1`: hook notification bridges.
-- `~/.yishan/shell`: zsh/bash startup wrappers that keep `~/.yishan/bin` first in `PATH` for managed sessions.
-- `~/.yishan/opencode-config-home`: managed OpenCode config home.
-
-Supported agents:
-
-- OpenCode
-- Codex
-- Claude
-- Gemini
-- Pi
-- Copilot
-- Cursor Agent
-
-## Validation Checks
-
-Run CLI tests:
-
-```bash
-go test ./apps/cli/...
-```
-
-Run desktop type checks:
-
-```bash
-bun --cwd apps/desktop run check
-```
-
-Run API type checks:
-
-```bash
-bun --cwd apps/api-service run check
-```
-
-## Configuration
-
-The CLI reads `YISHAN_`-prefixed environment variables:
-
-- `YISHAN_PROFILE`: profile name (default: `default`).
-- `YISHAN_API_BASE_URL`: API service URL (default: `https://api.yishan.io`).
-- `YISHAN_API_TOKEN`: API bearer token.
-- `YISHAN_DAEMON_HOST`: daemon host (default: `127.0.0.1`).
-- `YISHAN_DAEMON_PORT`: daemon port (default: `0`, random free port).
-- `YISHAN_DAEMON_JWT_REQUIRED`: whether daemon WebSocket auth is required (default: `true`).
-
-For detailed CLI commands and daemon JSON-RPC methods, see `apps/cli/README.md`.
-
-## Documentation Maintenance
-
-- Keep `README.md` as the source of truth for repository-level behavior and setup.
-- Keep `README.zh-CN.md` aligned with the same section structure and command examples.
-- When editing one README, update the corresponding section in the other in the same pull request.
+- [Website](https://yishan.io)
+- [Changelog](https://github.com/yishan-io/yishan-mono/releases)
+- [Contributing](CONTRIBUTING.md)
+- [License](LICENSE)
