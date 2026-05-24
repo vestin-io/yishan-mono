@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -92,6 +93,7 @@ func (r *Release) IsNewer() bool {
 }
 
 // Apply downloads, verifies, and replaces the current binary.
+// If the binary was installed via Homebrew, it delegates to `brew upgrade`.
 func (r *Release) Apply(ctx context.Context, progress func(string)) error {
 	execPath, err := os.Executable()
 	if err != nil {
@@ -100,6 +102,11 @@ func (r *Release) Apply(ctx context.Context, progress func(string)) error {
 	execPath, err = filepath.EvalSymlinks(execPath)
 	if err != nil {
 		return fmt.Errorf("resolving symlinks: %w", err)
+	}
+
+	// Detect Homebrew-managed install.
+	if isHomebrewManaged(execPath) {
+		return applyViaHomebrew(ctx, progress)
 	}
 
 	tmpDir, err := os.MkdirTemp("", "yishan-update-*")
@@ -317,6 +324,45 @@ func copyFile(src, dst string) error {
 
 	_, err = io.Copy(out, in)
 	return err
+}
+
+// isHomebrewManaged returns true if the binary path is inside a Homebrew Cellar.
+func isHomebrewManaged(execPath string) bool {
+	// Homebrew Cellar paths:
+	//   /opt/homebrew/Cellar/yishan/... (Apple Silicon)
+	//   /usr/local/Cellar/yishan/...    (Intel Mac)
+	//   /home/linuxbrew/.linuxbrew/Cellar/... (Linux)
+	return strings.Contains(execPath, "/Cellar/")
+}
+
+func applyViaHomebrew(_ context.Context, progress func(string)) error {
+	brewPath, err := exec.LookPath("brew")
+	if err != nil {
+		return fmt.Errorf("binary is Homebrew-managed but brew not found: %w", err)
+	}
+
+	progress("Updating Homebrew tap...")
+	tapCmd := exec.Command(brewPath, "tap", "yishan-io/tap")
+	tapCmd.Stdout = os.Stdout
+	tapCmd.Stderr = os.Stderr
+	// Ignore tap errors — may already be tapped.
+	_ = tapCmd.Run()
+
+	progress("Upgrading via Homebrew...")
+	upgradeCmd := exec.Command(brewPath, "upgrade", "yishan")
+	upgradeCmd.Stdout = os.Stdout
+	upgradeCmd.Stderr = os.Stderr
+	if err := upgradeCmd.Run(); err != nil {
+		// brew upgrade exits non-zero if already up to date; try reinstall.
+		reinstallCmd := exec.Command(brewPath, "reinstall", "yishan")
+		reinstallCmd.Stdout = os.Stdout
+		reinstallCmd.Stderr = os.Stderr
+		if reinstallErr := reinstallCmd.Run(); reinstallErr != nil {
+			return fmt.Errorf("brew upgrade failed: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func normalizeOS(goos string) string {
