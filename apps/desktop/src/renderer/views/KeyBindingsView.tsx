@@ -1,14 +1,18 @@
 import { Box, Button, Stack, Typography } from "@mui/material";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { KeybindingTable } from "../components/KeybindingDisplay";
-import { SUPPORTED_KEY_BINDINGS } from "../shortcuts/keybindings";
+import { getSupportedKeyBindings } from "../shortcuts/keybindings";
+import { keybindingSettingsStore } from "../store/settings/keybindingSettingsStore";
 
 const WORKSPACE_ROUTE = "/";
 
 export function KeyBindingsView() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const overridesById = keybindingSettingsStore((state) => state.overridesById);
+  const supportedKeyBindings = useMemo(() => getSupportedKeyBindings(overridesById), [overridesById]);
 
   return (
     <Box
@@ -33,7 +37,7 @@ export function KeyBindingsView() {
         </Stack>
 
         <KeybindingTable
-          bindings={SUPPORTED_KEY_BINDINGS}
+          bindings={supportedKeyBindings}
           actionColumnLabel={t("keybindings.columns.action")}
           keyColumnLabel={t("keybindings.columns.current")}
         />

@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import { getShortcutDefinitions } from "../shortcuts/keybindings";
 import { compileShortcutDefinitions, processShortcuts } from "../shortcuts/shortcutRunner";
+import { subscribeDesktopRpcEvent } from "../rpc/rpcTransport";
+import { keybindingSettingsStore } from "../store/settings/keybindingSettingsStore";
 import { layoutStore } from "../store/settings/layoutStore";
 import { splitPaneStore } from "../store/splitPaneStore";
 import { tabStore } from "../store/tabStore";
@@ -21,6 +23,8 @@ export function useShortcuts(): void {
   const splitPaneStoreState = splitPaneStore((state) => state);
   const isPopupOpen = layoutStore((state) => state.isPopupOpen);
   const commands = useCommands();
+  const overridesById = keybindingSettingsStore((state) => state.overridesById);
+  const isCaptureActive = keybindingSettingsStore((state) => state.isCaptureActive);
 
   const isWorkspaceRoute = location.pathname === WORKSPACE_ROUTE;
 
@@ -50,7 +54,7 @@ export function useShortcuts(): void {
   );
 
   const contextRef = useRef(context);
-  const definitions = useMemo(() => getShortcutDefinitions(), []);
+  const definitions = useMemo(() => getShortcutDefinitions(overridesById), [overridesById]);
   const compiledDefinitions = useMemo(() => compileShortcutDefinitions(definitions), [definitions]);
 
   useEffect(() => {
@@ -59,12 +63,45 @@ export function useShortcuts(): void {
 
   useEffect(() => {
     const handleWindowKeydown = (event: KeyboardEvent) => {
+      if (isCaptureActive) {
+        return;
+      }
+
       processShortcuts(compiledDefinitions, contextRef.current, event);
     };
 
     window.addEventListener("keydown", handleWindowKeydown, true);
+    const unsubscribeWebviewKeydown = subscribeDesktopRpcEvent((desktopEvent) => {
+      if (desktopEvent.method !== "webviewKeydown" || isCaptureActive) {
+        return;
+      }
+
+      const payload = desktopEvent.payload as
+        | {
+            key?: string;
+            code?: string;
+            ctrlKey?: boolean;
+            metaKey?: boolean;
+            shiftKey?: boolean;
+            altKey?: boolean;
+          }
+        | undefined;
+
+      const syntheticEvent = new KeyboardEvent("keydown", {
+        key: payload?.key ?? "",
+        code: payload?.code ?? "",
+        ctrlKey: Boolean(payload?.ctrlKey),
+        metaKey: Boolean(payload?.metaKey),
+        shiftKey: Boolean(payload?.shiftKey),
+        altKey: Boolean(payload?.altKey),
+      });
+
+      processShortcuts(compiledDefinitions, contextRef.current, syntheticEvent);
+    });
+
     return () => {
       window.removeEventListener("keydown", handleWindowKeydown, true);
+      unsubscribeWebviewKeydown();
     };
-  }, [compiledDefinitions]);
+  }, [compiledDefinitions, isCaptureActive]);
 }

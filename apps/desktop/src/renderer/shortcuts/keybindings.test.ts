@@ -217,6 +217,19 @@ describe("getShortcutDefinitions", () => {
     expect(typeof openKeybindings?.run).toBe("function");
   });
 
+  it("applies valid key overrides and ignores invalid overrides", () => {
+    const runtimeDefinitions = getShortcutDefinitions({
+      "open-keybindings": "command+k",
+      "open-file-search": "mod+p",
+    });
+
+    const openKeybindings = runtimeDefinitions.find((definition) => definition.id === "open-keybindings");
+    const openFileSearch = runtimeDefinitions.find((definition) => definition.id === "open-file-search");
+
+    expect(openKeybindings?.keys).toBe("command+k");
+    expect(openFileSearch?.keys).toBe("ctrl+p,command+p");
+  });
+
   it("dispatches open file search from the central definition", () => {
     const runtimeDefinitions = getShortcutDefinitions();
     const openFileSearch = runtimeDefinitions.find((definition) => definition.id === "open-file-search");
