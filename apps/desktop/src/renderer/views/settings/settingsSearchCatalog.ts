@@ -6,6 +6,7 @@ import {
   BiDesktop,
   BiGitBranch,
   BiGroup,
+  BiKey,
   BiLinkExternal,
   BiPalette,
   BiPlug,
@@ -31,6 +32,7 @@ export type SettingsTab =
   | "members"
   | "nodes"
   | "notifications"
+  | "serviceTokens"
   | "terminal"
   | "workspace";
 
@@ -70,6 +72,7 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
       { tab: "integrations", labelKey: "settings.items.integrations", icon: BiPlug },
       { tab: "members", labelKey: "settings.items.members", icon: BiGroup },
       { tab: "nodes", labelKey: "settings.items.nodes", icon: BiDesktop },
+      { tab: "serviceTokens", labelKey: "settings.items.serviceTokens", icon: BiKey },
     ],
   },
   {
@@ -370,6 +373,22 @@ const NOTIFICATION_SEARCH_ITEMS: SettingsSearchCatalogItem[] = NOTIFICATION_SETT
   focusItemId: item.id,
 }));
 
+const SERVICE_TOKEN_SEARCH_ITEMS: SettingsSearchCatalogItem[] = [
+  {
+    id: "service-tokens-list",
+    tab: "serviceTokens",
+    icon: BiKey,
+    labelKey: "settings.serviceTokens.title",
+    sectionLabelKey: "settings.items.serviceTokens",
+    keywordKeys: [
+      "settings.serviceTokens.description",
+      "settings.serviceTokens.columns.name",
+      "settings.serviceTokens.columns.token",
+      "settings.serviceTokens.columns.status",
+    ],
+  },
+];
+
 export const SETTINGS_SEARCH_CATALOG: SettingsSearchCatalogItem[] = [
   ...SETTINGS_TAB_SEARCH_ITEMS,
   ...ACCOUNT_SEARCH_ITEMS,
@@ -384,5 +403,6 @@ export const SETTINGS_SEARCH_CATALOG: SettingsSearchCatalogItem[] = [
   ...DAEMON_SEARCH_ITEMS,
   ...GIT_WORKSPACE_SEARCH_ITEMS,
   ...TERMINAL_SEARCH_ITEMS,
+  ...SERVICE_TOKEN_SEARCH_ITEMS,
   ...NOTIFICATION_SEARCH_ITEMS,
 ];
