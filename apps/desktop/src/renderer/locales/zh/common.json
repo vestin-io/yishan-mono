@@ -905,9 +905,17 @@
     "columns": {
       "action": "操作",
       "current": "快捷键",
+      "override": "自定义",
       "mac": "macOS",
       "windows": "Windows/Linux"
     },
+    "remap": "重映射",
+    "reset": "重置",
+    "resetAll": "全部重置",
+    "inputHint": "按下快捷键",
+    "invalidInput": "快捷键格式无效",
+    "conflictWarning": "部分快捷键冲突，将按首个匹配执行。",
+    "conflictWith": "冲突按键：{{keys}}",
     "scope": {
       "global": "全局",
       "workspace": "组织"

@@ -1,5 +1,6 @@
 import { ACTIONS } from "../../shared/contracts/actions";
 import { SYSTEM_FILE_MANAGER_APP_ID } from "../../shared/contracts/externalApps";
+import { normalizeKeysString } from "./customKeybindings";
 import { isEditableTarget, isWithinRepoFileTree, isWithinRepoWorkspaceList } from "./editableTarget";
 import { toSupportedKeyBinding } from "./shortcutMetadata";
 import type { KeyBindingScope, ShortContext, ShortcutDefinition, SupportedKeyBinding } from "./types";
@@ -40,6 +41,8 @@ type ShortcutRegistryItem = {
   shouldRun?: (context: ShortContext, event: KeyboardEvent) => boolean;
   run?: (context: ShortContext, event: KeyboardEvent) => void;
 };
+
+export type ShortcutOverrideMap = Record<string, string>;
 
 /** Returns true when one file-tree shortcut can run for the current event target. */
 function shouldRunFileTreeShortcut(event: KeyboardEvent): boolean {
@@ -444,10 +447,19 @@ const SHORTCUT_REGISTRY: readonly ShortcutRegistryItem[] = [
   },
 ] as const;
 
+function resolveShortcutKeys(shortcutId: string, defaultKeys: string, overrides: ShortcutOverrideMap = {}): string {
+  const override = overrides[shortcutId];
+  if (!override) {
+    return defaultKeys;
+  }
+
+  return normalizeKeysString(override) ?? defaultKeys;
+}
+
 /**
  * Returns all runtime shortcut definitions with metadata and callback handlers.
  */
-export function getShortcutDefinitions(): readonly ShortcutDefinition[] {
+export function getShortcutDefinitions(overrides: ShortcutOverrideMap = {}): readonly ShortcutDefinition[] {
   return SHORTCUT_REGISTRY.map((shortcutItem) => {
     if (!shortcutItem.target && !shortcutItem.run) {
       throw new Error(`Missing shortcut target or run callback for id: ${shortcutItem.id}`);
@@ -457,7 +469,7 @@ export function getShortcutDefinitions(): readonly ShortcutDefinition[] {
       id: shortcutItem.id,
       descriptionKey: shortcutItem.descriptionKey,
       scope: shortcutItem.scope,
-      keys: shortcutItem.keys,
+      keys: resolveShortcutKeys(shortcutItem.id, shortcutItem.keys, overrides),
       run: (context: ShortContext, event: KeyboardEvent) => {
         if (shortcutItem.shouldRun && !shortcutItem.shouldRun(context, event)) {
           return;
@@ -479,13 +491,23 @@ export function getShortcutDefinitions(): readonly ShortcutDefinition[] {
 }
 
 /** Returns one key string for one shortcut id when the id exists in the shortcut registry. */
-export function getShortcutKeysById(id: string): string | undefined {
-  return SHORTCUT_REGISTRY.find((binding) => binding.id === id)?.keys;
+export function getShortcutKeysById(id: string, overrides: ShortcutOverrideMap = {}): string | undefined {
+  const shortcut = SHORTCUT_REGISTRY.find((binding) => binding.id === id);
+  if (!shortcut) {
+    return undefined;
+  }
+
+  return resolveShortcutKeys(shortcut.id, shortcut.keys, overrides);
 }
 
 /** Returns one supported keybinding metadata entry for one shortcut id when present. */
 export function getSupportedKeyBindingById(id: string): SupportedKeyBinding | undefined {
   return SUPPORTED_KEY_BINDINGS.find((binding) => binding.id === id);
+}
+
+/** Returns supported keybindings with optional user overrides applied. */
+export function getSupportedKeyBindings(overrides: ShortcutOverrideMap = {}): readonly SupportedKeyBinding[] {
+  return getShortcutDefinitions(overrides).map(toSupportedKeyBinding);
 }
 
 /** Keyboard shortcut metadata used for shortcut map rendering. */

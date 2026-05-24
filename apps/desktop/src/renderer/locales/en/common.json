@@ -938,9 +938,17 @@
     "columns": {
       "action": "Action",
       "current": "Shortcut",
+      "override": "Override",
       "mac": "macOS",
       "windows": "Windows/Linux"
     },
+    "remap": "Remap",
+    "reset": "Reset",
+    "resetAll": "Reset all",
+    "inputHint": "Press shortcut",
+    "invalidInput": "Invalid shortcut format",
+    "conflictWarning": "Some shortcuts conflict. The first match will run.",
+    "conflictWith": "Conflicts on {{keys}}",
     "scope": {
       "global": "Global",
       "workspace": "Workspace"
