@@ -1,6 +1,6 @@
-import { type ChildProcess, spawn } from "node:child_process";
+import { type ChildProcess, spawn, execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { delimiter, resolve } from "node:path";
 import { isDevMode } from "../runtime/environment";
 import {
   DAEMON_HEALTH_RETRY_COUNT,
@@ -55,6 +55,50 @@ function resolveDevCliDir(): string | undefined {
   ]);
 }
 
+/**
+ * Searches PATH for a user-installed `yishan` binary. Skips the bundled
+ * binary inside the app bundle so we only find externally-installed copies
+ * (Homebrew, install script, self-update).
+ */
+function resolveCliOnPath(): string | undefined {
+  const binaryName = process.platform === "win32" ? "yishan.exe" : "yishan";
+  const bundledDir = process.resourcesPath;
+  const paths = (process.env.PATH || "").split(delimiter);
+
+  for (const dir of paths) {
+    if (!dir.trim()) continue;
+    const candidate = resolve(dir, binaryName);
+    // Skip the bundled binary — we only want externally-installed ones.
+    if (candidate.startsWith(bundledDir)) continue;
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  // Also check common install locations that may not be in the Electron
+  // process PATH (macOS GUI apps have a restricted PATH).
+  const home = process.env.HOME || process.env.USERPROFILE || "";
+  const commonPaths =
+    process.platform === "win32"
+      ? [
+          resolve(home, "AppData", "Local", "Yishan", "bin", binaryName),
+          resolve(home, ".local", "bin", binaryName),
+        ]
+      : [
+          resolve(home, ".local", "bin", binaryName),
+          `/usr/local/bin/${binaryName}`,
+          `/opt/homebrew/bin/${binaryName}`,
+        ];
+  for (const candidate of commonPaths) {
+    if (candidate.startsWith(bundledDir)) continue;
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return undefined;
+}
+
 function resolveCliInvocation(): CliInvocation {
   const explicitCliPath = process.env.YISHAN_CLI_PATH?.trim();
   if (explicitCliPath) {
@@ -71,6 +115,17 @@ function resolveCliInvocation(): CliInvocation {
       executablePath: "go",
       prefixArgs: ["run", ".", "--profile", "dev"],
       cwd: cliDir,
+    };
+  }
+
+  // Prefer a user-installed CLI binary on PATH (Homebrew, install script,
+  // self-update) over the bundled one so that updates take effect without
+  // a full desktop release.
+  const pathCli = resolveCliOnPath();
+  if (pathCli) {
+    return {
+      executablePath: pathCli,
+      prefixArgs: [],
     };
   }
 

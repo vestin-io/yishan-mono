@@ -46,14 +46,10 @@ export function AppShell() {
         <Tooltip
           arrow
           placement="left"
-          title={
-            <>
-              {t("daemon.version.outdatedMessage", {
-                daemonVersion: daemonVersion ?? t("settings.daemon.values.unknown"),
-                appVersion: appVersion ?? t("settings.daemon.values.unknown"),
-              })}
-            </>
-          }
+          title={t("daemon.version.outdatedMessage", {
+            daemonVersion: daemonVersion ?? t("settings.daemon.values.unknown"),
+            appVersion: appVersion ?? t("settings.daemon.values.unknown"),
+          })}
         >
           <IconButton
             size="small"
