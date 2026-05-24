@@ -2,8 +2,14 @@
 
 import { useI18n } from "@/i18n";
 import { DownloadButton } from "./download-button";
+import { FeatureCards } from "./feature-cards";
 import { HeroImage } from "./hero-image";
 import { LanguageSwitcher } from "./language-switcher";
+import { MoreFeatures } from "./more-features";
+import { ProblemImage } from "./problem-image";
+import { RoadmapTimeline } from "./roadmap-timeline";
+import { SolutionImage } from "./solution-image";
+import { WorkflowDemo } from "./workflow-demo";
 
 const logoUrl =
   "https://raw.githubusercontent.com/yishan-io/yishan-mono/main/apps/desktop/src/assets/images/yishan-transparent.png";
@@ -49,16 +55,16 @@ export default function LandingPage() {
           </div>
 
           <nav className="hidden items-center gap-8 text-sm text-[#A5B0A8] md:flex">
-            <a href="#pillars" className="transition hover:text-[#E8ECE8]">
-              {t("nav.overview")}
-            </a>
-            <a href="#product" className="transition hover:text-[#E8ECE8]">
+            <a href="#features" className="transition hover:text-[#E8ECE8]">
               {t("nav.product")}
             </a>
             <a href="#workflow" className="transition hover:text-[#E8ECE8]">
               {t("nav.workflow")}
             </a>
-            <a href="https://github.com/yishan-io/yishan-mono/blob/main/CHANGELOG.md" className="transition hover:text-[#E8ECE8]">
+            <a href="#roadmap" className="transition hover:text-[#E8ECE8]">
+              {t("nav.roadmap")}
+            </a>
+            <a href="https://github.com/yishan-io/yishan-mono/releases" className="transition hover:text-[#E8ECE8]">
               {t("nav.changelog")}
             </a>
           </nav>
@@ -89,12 +95,6 @@ export default function LandingPage() {
               {t("hero.title")}
             </h1>
 
-            <div className="mt-8 inline-flex items-center gap-3 rounded-full border border-[#2A342F] bg-[#151B18] px-4 py-2 text-sm text-[#A5B0A8]">
-              <span className="font-semibold text-[#E8ECE8]">{t("brand")}</span>
-              <span className="text-[#8FCB99]">/</span>
-              <span>{t("hero.tagline")}</span>
-            </div>
-
             <p className="mx-auto mt-6 max-w-2xl text-base leading-8 text-[#A5B0A8] md:text-lg">
               {t("hero.desc")}
             </p>
@@ -114,103 +114,83 @@ export default function LandingPage() {
           <HeroImage />
         </section>
 
-        {/* Agents marquee */}
-        <section className="mx-auto max-w-7xl px-6 py-6 lg:px-8 lg:py-10">
-          <div className="rounded-[32px] border border-[#2A342F] bg-[#121715] p-8 lg:p-10 overflow-hidden">
-            <div className="max-w-2xl">
-              <div className="text-xs uppercase tracking-[0.24em] text-[#A5B0A8]">{t("agents.label")}</div>
-              <h2 className="mt-4 text-3xl font-semibold tracking-tight text-[#E8ECE8] md:text-4xl">
-                {t("agents.title")}
-              </h2>
-              <p className="mt-4 text-base leading-8 text-[#A5B0A8]">
-                {t("agents.desc")}
-              </p>
-            </div>
-
-            <div className="mt-8 relative -mx-8 px-8 lg:-mx-10 lg:px-10">
-              <div className="pointer-events-none absolute inset-y-0 left-0 w-20 bg-gradient-to-r from-[#121715] to-transparent z-10" />
-              <div className="pointer-events-none absolute inset-y-0 right-0 w-20 bg-gradient-to-l from-[#121715] to-transparent z-10" />
-
-              <div className="flex gap-4 whitespace-nowrap animate-marquee w-max">
-                {[...agents, ...agents].map((agent, idx) => (
-                  <div
-                    key={`${agent.name}-${idx}`}
-                    className="inline-flex items-center gap-3 rounded-full border border-[#2A342F] bg-[#151B18] px-5 py-3"
-                  >
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[#2A342F] bg-[#0F1412]">
-                      <div
-                        className={`${agent.size ?? "h-5 w-5"} bg-[#D1B06A]`}
-                        style={{ mask: `url(${agent.icon}) center/contain no-repeat`, WebkitMask: `url(${agent.icon}) center/contain no-repeat` }}
-                        aria-label={agent.name}
-                      />
-                    </div>
-                    <div className="text-sm font-medium text-[#E8ECE8]">{agent.name}</div>
-                  </div>
-                ))}
+        {/* Problem */}
+        <section className="mx-auto max-w-7xl px-6 py-6 lg:px-8 lg:py-8">
+          <div className="rounded-[36px] border border-[#2A342F] bg-[#121715] px-8 py-10 lg:px-10">
+            <div className="grid gap-10 lg:grid-cols-2 lg:items-start">
+              <div>
+                <div className="text-xs uppercase tracking-[0.24em] text-[#A5B0A8]">{t("problem.label")}</div>
+                <h2 className="mt-4 text-3xl font-semibold tracking-tight text-[#E8ECE8] md:text-4xl">
+                  {t("problem.title")}
+                </h2>
+                <p className="mt-4 text-base leading-8 text-[#A5B0A8]">
+                  {t("problem.desc")}
+                </p>
               </div>
+              <ProblemImage />
             </div>
           </div>
         </section>
 
-        {/* Pillars */}
-        <section id="pillars" className="mx-auto max-w-7xl px-6 py-6 lg:px-8 lg:py-8">
-          <div className="grid gap-5 md:grid-cols-3">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="rounded-[28px] border border-[#2A342F] bg-[#151B18] p-6 shadow-sm">
-                <h3 className="text-xl font-semibold text-[#E8ECE8]">{t(`pillars.${i}.title`)}</h3>
-                <p className="mt-3 text-sm leading-7 text-[#A5B0A8]">{t(`pillars.${i}.desc`)}</p>
+        {/* Solution */}
+        <section className="mx-auto max-w-7xl px-6 py-6 lg:px-8 lg:py-8">
+          <div className="rounded-[36px] border border-[#2A342F] bg-[#121715] px-8 py-10 lg:px-10">
+            <div className="grid gap-10 lg:grid-cols-2 lg:items-start">
+              <div>
+                <div className="text-xs uppercase tracking-[0.24em] text-[#A5B0A8]">{t("solution.label")}</div>
+                <h2 className="mt-4 text-3xl font-semibold tracking-tight text-[#E8ECE8] md:text-4xl">
+                  {t("solution.title")}
+                </h2>
+                <p className="mt-4 text-base leading-8 text-[#A5B0A8]">
+                  {t("solution.desc")}
+                </p>
               </div>
-            ))}
+              <SolutionImage />
+            </div>
           </div>
         </section>
 
-        {/* Product */}
-        <section id="product" className="mx-auto max-w-7xl px-6 py-20 lg:px-8">
+        {/* Core features */}
+        <section id="features" className="mx-auto max-w-7xl px-6 py-20 lg:px-8">
           <div className="max-w-2xl">
-            <div className="text-xs uppercase tracking-[0.24em] text-[#A5B0A8]">{t("product.label")}</div>
+            <div className="text-xs uppercase tracking-[0.24em] text-[#A5B0A8]">{t("features.label")}</div>
             <h2 className="mt-4 text-3xl font-semibold tracking-tight text-[#E8ECE8] md:text-4xl">
-              {t("product.title")}
+              {t("features.title")}
             </h2>
-            <p className="mt-4 text-base leading-8 text-[#A5B0A8]">
-              {t("product.desc")}
-            </p>
           </div>
 
-          <div className="mt-10 grid gap-5 md:grid-cols-3">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="rounded-[28px] border border-[#2A342F] bg-[#151B18] p-6">
-                <div className="text-xs uppercase tracking-[0.22em] text-[#D1B06A]">{t(`cards.${i}.eyebrow`)}</div>
-                <h3 className="mt-4 text-xl font-semibold leading-8 text-[#E8ECE8]">{t(`cards.${i}.title`)}</h3>
-                <p className="mt-3 text-sm leading-7 text-[#A5B0A8]">{t(`cards.${i}.desc`)}</p>
+          <FeatureCards t={t} />
+        </section>
+
+        <MoreFeatures t={t} />
+
+        {/* Agents compatibility strip */}
+        <section className="mx-auto max-w-7xl px-6 py-6 lg:px-8 lg:py-8">
+          <h2 className="text-center text-xs uppercase tracking-[0.24em] text-[#A5B0A8]">{t("agents.label")}</h2>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            {agents.map((agent) => (
+              <div
+                key={agent.name}
+                className="inline-flex items-center gap-3 rounded-full border border-[#2A342F] bg-[#151B18] px-5 py-3"
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[#2A342F] bg-[#0F1412]">
+                  <div
+                    className={`${agent.size ?? "h-5 w-5"} bg-[#D1B06A]`}
+                    style={{ mask: `url(${agent.icon}) center/contain no-repeat`, WebkitMask: `url(${agent.icon}) center/contain no-repeat` }}
+                    aria-label={agent.name}
+                  />
+                </div>
+                <div className="text-sm font-medium text-[#E8ECE8]">{agent.name}</div>
               </div>
             ))}
           </div>
         </section>
 
         {/* Workflow */}
-        <section id="workflow" className="mx-auto max-w-7xl px-6 py-6 lg:px-8 lg:py-8">
-          <div className="rounded-[36px] border border-[#2A342F] bg-[#121715] px-8 py-10 text-[#E8ECE8] lg:px-10">
-            <div className="max-w-2xl">
-              <div className="text-xs uppercase tracking-[0.24em] text-[#A5B0A8]">{t("workflow.label")}</div>
-              <h2 className="mt-4 text-3xl font-semibold tracking-tight text-[#E8ECE8] md:text-4xl">
-                {t("workflow.title")}
-              </h2>
-              <p className="mt-4 text-base leading-8 text-[#A5B0A8]">
-                {t("workflow.desc")}
-              </p>
-            </div>
+        <WorkflowDemo t={t} />
 
-            <div className="mt-10 grid gap-5 md:grid-cols-3">
-              {[0, 1, 2].map((i) => (
-                <div key={i} className="rounded-[28px] border border-[#2A342F] bg-[#151B18] p-6">
-                  <div className="text-sm font-medium text-[#D1B06A]">{`0${i + 1}`}</div>
-                  <h3 className="mt-4 text-xl font-semibold text-[#E8ECE8]">{t(`workflow.${i}.title`)}</h3>
-                  <p className="mt-3 text-sm leading-7 text-[#A5B0A8]">{t(`workflow.${i}.desc`)}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
+        {/* Roadmap */}
+        <RoadmapTimeline t={t} />
 
         {/* CTA */}
         <section className="mx-auto max-w-7xl px-6 pb-24 pt-20 lg:px-8">
@@ -262,14 +242,14 @@ export default function LandingPage() {
             <div>
               <div className="text-xs uppercase tracking-[0.22em] text-[#A5B0A8]">{t("footer.product")}</div>
               <div className="mt-4 space-y-3 text-sm text-[#A5B0A8]">
-                <a href="#pillars" className="block transition hover:text-[#E8ECE8]">
-                  {t("nav.overview")}
-                </a>
-                <a href="#product" className="block transition hover:text-[#E8ECE8]">
+                <a href="#features" className="block transition hover:text-[#E8ECE8]">
                   {t("nav.product")}
                 </a>
                 <a href="#workflow" className="block transition hover:text-[#E8ECE8]">
                   {t("nav.workflow")}
+                </a>
+                <a href="#roadmap" className="block transition hover:text-[#E8ECE8]">
+                  {t("nav.roadmap")}
                 </a>
               </div>
             </div>
@@ -283,7 +263,7 @@ export default function LandingPage() {
                 <a href="https://github.com/yishan-io/yishan-mono" className="block transition hover:text-[#E8ECE8]">
                   GitHub
                 </a>
-                <a href="https://github.com/yishan-io/yishan-mono/blob/main/CHANGELOG.md" className="block transition hover:text-[#E8ECE8]">
+                <a href="https://github.com/yishan-io/yishan-mono/releases" className="block transition hover:text-[#E8ECE8]">
                   {t("nav.changelog")}
                 </a>
               </div>
