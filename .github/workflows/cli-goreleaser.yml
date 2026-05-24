@@ -24,6 +24,11 @@ jobs:
           go-version-file: apps/cli/go.mod
           cache-dependency-path: apps/cli/go.sum
 
+      - name: Strip tag prefix
+        if: startsWith(github.ref, 'refs/tags/cli-')
+        id: tag
+        run: echo "version=${GITHUB_REF#refs/tags/cli-}" >> "$GITHUB_OUTPUT"
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
@@ -36,3 +41,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          GORELEASER_CURRENT_TAG: ${{ steps.tag.outputs.version || '' }}
