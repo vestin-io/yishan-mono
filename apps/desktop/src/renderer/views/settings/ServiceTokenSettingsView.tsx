@@ -25,6 +25,7 @@ import { StatusIndicator } from "../../components/StatusIndicator";
 import { SettingsCard, SettingsSectionHeader } from "../../components/settings";
 import { api } from "../../api/client";
 import type { ServiceTokenRecord } from "../../api/serviceTokenTypes";
+import { copyToClipboard } from "../../helpers/clipboard";
 
 function formatTokenDate(dateString: string | null): string {
   if (!dateString) {
@@ -90,7 +91,7 @@ export function ServiceTokenSettingsView() {
   };
 
   const handleCopyToken = async (token: string) => {
-    await navigator.clipboard.writeText(token);
+    await copyToClipboard(token);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
