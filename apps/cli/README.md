@@ -2,16 +2,46 @@
 
 Go-based CLI built with Cobra, Viper, and Zerolog.
 
-## Run
+## Install
 
-Install the latest released CLI with Homebrew:
+### Homebrew (macOS)
 
 ```bash
 brew tap yishan-io/tap
 brew install yishan
 ```
 
-Run from source during development:
+### Universal install script (macOS / Linux)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yishan-io/yishan-mono/main/install.sh | sh
+```
+
+Install a specific version:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yishan-io/yishan-mono/main/install.sh | sh -s -- --version 0.11.1
+```
+
+Install and set up as a launch daemon (launchd on macOS, systemd on Linux):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yishan-io/yishan-mono/main/install.sh | sh -s -- --daemon
+```
+
+Custom install directory (default: `/usr/local/bin`):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yishan-io/yishan-mono/main/install.sh | sh -s -- --bin-dir ~/.local/bin
+```
+
+Skip confirmation prompt (for CI/scripts):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yishan-io/yishan-mono/main/install.sh | sh -s -- --force
+```
+
+### From source
 
 ```bash
 go run .
@@ -145,8 +175,26 @@ You can also set `--log-level` on any command.
 
 ## Release
 
-The CLI is released with GoReleaser using component-specific tags like `cli-v1.0.0`.
+The CLI version is defined in `apps/cli/VERSION`. This is the single source of truth used by local builds, desktop builds, and the install script.
+
+Release with GoReleaser using component-specific tags:
+
+```bash
+# 1. Bump the version
+echo "0.12.0" > VERSION
+
+# 2. Commit and tag
+git add VERSION
+git commit -m "chore(cli): bump version to 0.12.0"
+git tag cli-v0.12.0
+git push origin main --tags
+```
+
+The CI workflow (`.github/workflows/cli-goreleaser.yml`) triggers on `cli-v*` tags and:
+
+1. Cross-compiles for darwin/linux/windows on amd64/arm64
+2. Creates a GitHub Release with archives and checksums
+3. Publishes the Homebrew formula to `yishan-io/homebrew-tap`
 
 - Local dry run: `goreleaser release --snapshot --clean --config .goreleaser.yaml`
-- CI release workflow: `.github/workflows/cli-goreleaser.yml`
-- Homebrew formula publishing uses `yishan-io/homebrew-tap` and requires the `HOMEBREW_TAP_GITHUB_TOKEN` repository secret.
+- Homebrew formula publishing requires the `HOMEBREW_TAP_GITHUB_TOKEN` repository secret.
