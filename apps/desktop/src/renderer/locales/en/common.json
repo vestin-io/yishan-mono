@@ -949,6 +949,8 @@
     "invalidInput": "Invalid shortcut format",
     "conflictWarning": "Some shortcuts conflict. The first match will run.",
     "conflictWith": "Conflicts on {{keys}}",
+    "pendingConflict": "Conflicts with: {{action}}",
+    "captureConflict": "Conflicts with: {{actions}}",
     "scope": {
       "global": "Global",
       "workspace": "Workspace"

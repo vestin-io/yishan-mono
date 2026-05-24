@@ -916,6 +916,8 @@
     "invalidInput": "快捷键格式无效",
     "conflictWarning": "部分快捷键冲突，将按首个匹配执行。",
     "conflictWith": "冲突按键：{{keys}}",
+    "pendingConflict": "冲突操作：{{action}}",
+    "captureConflict": "冲突操作：{{actions}}",
     "scope": {
       "global": "全局",
       "workspace": "组织"

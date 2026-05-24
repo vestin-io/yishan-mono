@@ -1,4 +1,4 @@
-import { Alert, Box, Button, Stack, Typography } from "@mui/material";
+import { Alert, Box, Button, Stack, SvgIcon, Tooltip, Typography } from "@mui/material";
 import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { HotkeyDisplay } from "../../components/KeybindingDisplay";
@@ -12,6 +12,14 @@ type EditingState = {
   shortcutId: string;
   keys: string;
 };
+
+function WarningIcon({ fontSize = "small" }: { fontSize?: "small" | "inherit" }) {
+  return (
+    <SvgIcon fontSize={fontSize} sx={{ color: "warning.main" }} viewBox="0 0 24 24">
+      <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" />
+    </SvgIcon>
+  );
+}
 
 function toComboFromKeyboardEvent(event: ReactKeyboardEvent<HTMLElement>): string | undefined {
   const code = event.code;
@@ -178,6 +186,56 @@ export function KeybindingsSettingsView() {
     return next;
   }, [conflicts]);
 
+  // Maps conflicting shortcut id → descriptionKey of the action whose captured key collides
+  const pendingConflictMap = useMemo(() => {
+    if (!editingState?.keys) {
+      return new Map<string, string>();
+    }
+
+    const normalized = normalizeKeysString(editingState.keys);
+    if (!normalized) {
+      return new Map<string, string>();
+    }
+
+    const pendingCombos = new Set(normalized.split(","));
+    // descriptionKey of the action being edited (the "source")
+    const editingDescKey = definitions.find((d) => d.id === editingState.shortcutId)?.descriptionKey ?? editingState.shortcutId;
+
+    const result = new Map<string, string>();
+    for (const definition of definitions) {
+      if (definition.id === editingState.shortcutId) {
+        continue;
+      }
+
+      const existingCombos = normalizeKeysString(definition.keys);
+      if (!existingCombos) {
+        continue;
+      }
+
+      const hasOverlap = existingCombos.split(",").some((combo) => pendingCombos.has(combo));
+      if (hasOverlap) {
+        // The other row gets the editing action's name as the conflict source
+        result.set(definition.id, editingDescKey);
+      }
+    }
+
+    return result;
+  }, [editingState, definitions]);
+
+  // Flat set for quick existence checks
+  const pendingConflictIds = useMemo(() => new Set(pendingConflictMap.keys()), [pendingConflictMap]);
+
+  // Names of all actions conflicting with the currently captured key (for capture-box tooltip)
+  const captureConflictNames = useMemo(() => {
+    if (!editingState?.keys || pendingConflictMap.size === 0) {
+      return [];
+    }
+
+    return Array.from(pendingConflictMap.keys())
+      .map((id) => definitions.find((d) => d.id === id)?.descriptionKey)
+      .filter((key): key is string => Boolean(key));
+  }, [editingState, pendingConflictMap, definitions]);
+
   const isEditingInvalid = editingState ? !normalizeKeysString(editingState.keys) : false;
 
   return (
@@ -219,8 +277,24 @@ export function KeybindingsSettingsView() {
         {supportedBindings.map((binding) => {
           const displayKeys = platform === "darwin" ? binding.macKeys : binding.windowsKeys;
           const hasOverride = Boolean(overridesById[binding.id]);
-          const hasConflict = conflictByShortcutId.has(binding.id);
+          const hasCommittedConflict = conflictByShortcutId.has(binding.id);
+          const hasPendingConflict = pendingConflictIds.has(binding.id);
           const isEditing = editingState?.shortcutId === binding.id;
+          const capturedKeys = isEditing && editingState.keys ? toDisplayKeysForCombo(editingState.keys) : null;
+          const isCapturedConflict = isEditing && editingState.keys
+            ? Boolean(normalizeKeysString(editingState.keys)) && pendingConflictIds.size > 0
+            : false;
+
+          // Tooltip for the row icon: "Conflicts with: <editing action name>"
+          const pendingConflictSource = hasPendingConflict ? pendingConflictMap.get(binding.id) : undefined;
+          const pendingConflictTooltip = pendingConflictSource
+            ? t("keybindings.pendingConflict", { action: t(pendingConflictSource) })
+            : "";
+
+          // Tooltip for the capture box icon: "Conflicts with: A, B, ..."
+          const captureConflictTooltip = captureConflictNames.length > 0
+            ? t("keybindings.captureConflict", { actions: captureConflictNames.map((k) => t(k)).join(", ") })
+            : "";
 
           return (
             <Box
@@ -243,14 +317,21 @@ export function KeybindingsSettingsView() {
                 <Typography variant="caption" color="text.secondary">
                   {binding.scope === "global" ? t("keybindings.scope.global") : t("keybindings.scope.workspace")}
                 </Typography>
-                {hasConflict ? (
+                {hasCommittedConflict ? (
                   <Typography variant="caption" color="warning.main" sx={{ display: "block" }}>
                     {t("keybindings.conflictWith", { keys: conflictByShortcutId.get(binding.id) })}
                   </Typography>
                 ) : null}
               </Box>
 
-              <HotkeyDisplay keys={displayKeys} />
+              <Stack direction="row" spacing={0.5} alignItems="center">
+                <HotkeyDisplay keys={displayKeys} />
+                {hasPendingConflict ? (
+                  <Tooltip title={pendingConflictTooltip} placement="top">
+                    <WarningIcon />
+                  </Tooltip>
+                ) : null}
+              </Stack>
 
               {isEditing ? (
                 <Stack direction="row" spacing={1} alignItems="center">
@@ -262,7 +343,7 @@ export function KeybindingsSettingsView() {
                     sx={{
                       minWidth: 180,
                       border: 1,
-                      borderColor: isEditingInvalid ? "error.main" : "divider",
+                      borderColor: isCapturedConflict ? "warning.main" : isEditingInvalid ? "error.main" : "divider",
                       borderRadius: 1,
                       px: 1,
                       py: 0.75,
@@ -280,8 +361,15 @@ export function KeybindingsSettingsView() {
                       setEditingState({ shortcutId: binding.id, keys: combo });
                     }}
                   >
-                    {editingState.keys ? (
-                      <HotkeyDisplay keys={toDisplayKeysForCombo(editingState.keys)} />
+                    {capturedKeys ? (
+                      <Stack direction="row" spacing={0.5} alignItems="center">
+                        <HotkeyDisplay keys={capturedKeys} />
+                        {isCapturedConflict ? (
+                          <Tooltip title={captureConflictTooltip} placement="top">
+                            <WarningIcon />
+                          </Tooltip>
+                        ) : null}
+                      </Stack>
                     ) : (
                       <Typography variant="caption" color="text.secondary">
                         {t("keybindings.inputHint")}
