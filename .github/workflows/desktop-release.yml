@@ -148,6 +148,11 @@ jobs:
     needs: [resolve-version, build]
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -157,6 +162,33 @@ jobs:
 
       - name: List release artifacts
         run: ls -lhR artifacts/
+
+      - name: Generate desktop release notes
+        run: |
+          set -euo pipefail
+          version="${{ needs.resolve-version.outputs.version }}"
+          tag="desktop-v${version}"
+          previous_tag="$(git tag --list 'desktop-v*' --sort=-version:refname | grep -Fxv "$tag" | head -n1 || true)"
+
+          {
+            echo "## Desktop changes"
+            echo
+            if [[ -n "$previous_tag" ]]; then
+              echo "Changes since \`$previous_tag\`."
+              echo
+              log_output="$(git log --no-merges --pretty=format:'- %s (%h)' "$previous_tag..HEAD" -- apps/desktop packages/design-tokens packages/core || true)"
+            else
+              echo "Changes in this release."
+              echo
+              log_output="$(git log --no-merges --pretty=format:'- %s (%h)' HEAD -- apps/desktop packages/design-tokens packages/core || true)"
+            fi
+
+            if [[ -n "${log_output:-}" ]]; then
+              echo "$log_output"
+            else
+              echo "- No desktop-scoped commits found in this range."
+            fi
+          } > notes-desktop.md
 
       - name: Create or update GitHub release
         env:
@@ -181,7 +213,7 @@ jobs:
           args=(
             "$tag"
             --title "Desktop v${version}"
-            --generate-notes
+            --notes-file notes-desktop.md
           )
 
           # Add draft flag

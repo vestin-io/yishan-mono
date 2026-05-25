@@ -50,6 +50,9 @@ brews:
 
 changelog:
   use: git
+  paths:
+    - "apps/cli/**"
+    - "install.sh"
 
 release:
   name_template: "Yishan CLI {{.Tag}}"
