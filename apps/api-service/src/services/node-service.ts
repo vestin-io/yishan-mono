@@ -6,6 +6,7 @@ import { nodes, organizationMembers } from "@/db/schema";
 import {
   NodeDeletePermissionRequiredError,
   NodeNotFoundError,
+  NodeScopeUpdatePermissionRequiredError,
   OrganizationMembershipRequiredError,
   OrganizationNodePermissionRequiredError,
 } from "@/errors";
@@ -300,6 +301,79 @@ export class NodeService {
       }
 
       await tx.delete(nodes).where(eq(nodes.id, input.nodeId));
+    });
+  }
+
+  async updateNodeScope(input: {
+    organizationId: string;
+    nodeId: string;
+    actorUserId: string;
+    scope: NodeScope;
+  }): Promise<NodeView> {
+    return await this.db.transaction(async (tx) => {
+      const actorMembershipRows = await tx
+        .select({ role: organizationMembers.role })
+        .from(organizationMembers)
+        .where(
+          and(
+            eq(organizationMembers.organizationId, input.organizationId),
+            eq(organizationMembers.userId, input.actorUserId),
+          ),
+        )
+        .limit(1);
+
+      const actorRole = actorMembershipRows[0]?.role;
+      if (!actorRole) {
+        throw new OrganizationMembershipRequiredError();
+      }
+
+      const existingRows = await tx
+        .select({
+          id: nodes.id,
+          scope: nodes.scope,
+          ownerUserId: nodes.ownerUserId,
+          organizationId: nodes.organizationId,
+        })
+        .from(nodes)
+        .where(eq(nodes.id, input.nodeId))
+        .limit(1);
+
+      const node = existingRows[0];
+      if (!node) {
+        throw new NodeNotFoundError(input.nodeId);
+      }
+
+      // Permission rules:
+      //  private node  → only the owner may change scope
+      //  shared node   → only org owners/admins may change scope
+      if (node.scope === "private") {
+        if (node.ownerUserId !== input.actorUserId) {
+          throw new NodeScopeUpdatePermissionRequiredError();
+        }
+      } else {
+        if (actorRole !== "owner" && actorRole !== "admin") {
+          throw new NodeScopeUpdatePermissionRequiredError();
+        }
+      }
+
+      const now = new Date();
+      const updatedRows = await tx
+        .update(nodes)
+        .set({ scope: input.scope, updatedAt: now })
+        .where(eq(nodes.id, input.nodeId))
+        .returning();
+
+      const updated = updatedRows[0];
+      if (!updated) {
+        throw new NodeNotFoundError(input.nodeId);
+      }
+
+      return {
+        ...updated,
+        canUse: updated.scope === "shared" || updated.ownerUserId === input.actorUserId,
+        metadata: this.normalizeMetadata(updated.metadata),
+        isOnline: false,
+      };
     });
   }
 

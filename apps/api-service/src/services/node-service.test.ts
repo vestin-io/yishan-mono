@@ -1,6 +1,7 @@
 import { nodes } from "@/db/schema";
 import {
   NodeDeletePermissionRequiredError,
+  NodeScopeUpdatePermissionRequiredError,
   OrganizationMembershipRequiredError,
   OrganizationNodePermissionRequiredError,
 } from "@/errors";
@@ -413,6 +414,125 @@ describe("NodeService.deleteNode", () => {
     await service.deleteNode({ organizationId: "org-1", nodeId: "node-1", actorUserId: "user-1" });
 
     expect(mockTx.delete).toHaveBeenCalled();
+  });
+});
+
+describe("NodeService.updateNodeScope", () => {
+  /** Build a mock transaction for the updateNodeScope query chain. */
+  function createScopeMock(options: {
+    actorRole?: string | null;
+    nodeScope?: "private" | "shared";
+    nodeOwner?: string | null;
+  }) {
+    const { actorRole = "member", nodeScope = "private", nodeOwner = "user-1" } = options;
+
+    const updatedRow = {
+      ...defaultRow,
+      scope: nodeScope === "private" ? "shared" : ("private" as const),
+      ownerUserId: nodeOwner,
+    };
+
+    const mockUpdateWhere = vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([updatedRow]),
+    });
+    const mockUpdateSet = vi.fn().mockReturnValue({ where: mockUpdateWhere });
+    const mockUpdate = vi.fn().mockReturnValue({ set: mockUpdateSet });
+
+    let selectCallCount = 0;
+    const mockLimit = vi.fn().mockImplementation(() => {
+      selectCallCount++;
+      if (selectCallCount === 1) {
+        return Promise.resolve(actorRole ? [{ role: actorRole }] : []);
+      }
+      // Second select: node lookup
+      return Promise.resolve([{ id: "node-1", scope: nodeScope, ownerUserId: nodeOwner, organizationId: null }]);
+    });
+    const mockWhere = vi.fn().mockReturnValue({ limit: mockLimit });
+    const mockFrom = vi.fn().mockReturnValue({ where: mockWhere });
+    const mockSelect = vi.fn().mockReturnValue({ from: mockFrom });
+
+    const mockTx = { select: mockSelect, update: mockUpdate };
+    // biome-ignore lint/suspicious/noExplicitAny: mock DB for unit testing
+    const mockDb = { transaction: vi.fn().mockImplementation((fn: any) => fn(mockTx)) } as any;
+    return { mockDb, mockTx, mockUpdateSet, mockUpdateWhere };
+  }
+
+  it("allows owner to change their private node to shared", async () => {
+    const { mockDb, mockTx } = createScopeMock({
+      actorRole: "member",
+      nodeScope: "private",
+      nodeOwner: "user-1",
+    });
+    // biome-ignore lint/suspicious/noExplicitAny: stub
+    const service = new NodeService(mockDb, {} as any, {} as any);
+
+    const result = await service.updateNodeScope({
+      organizationId: "org-1",
+      nodeId: "node-1",
+      actorUserId: "user-1",
+      scope: "shared",
+    });
+
+    expect(mockTx.update).toHaveBeenCalled();
+    expect(result.scope).toBe("shared");
+  });
+
+  it("throws NodeScopeUpdatePermissionRequiredError when non-owner tries to change private node scope", async () => {
+    const { mockDb } = createScopeMock({
+      actorRole: "member",
+      nodeScope: "private",
+      nodeOwner: "user-99",
+    });
+    // biome-ignore lint/suspicious/noExplicitAny: stub
+    const service = new NodeService(mockDb, {} as any, {} as any);
+
+    await expect(
+      service.updateNodeScope({ organizationId: "org-1", nodeId: "node-1", actorUserId: "user-1", scope: "shared" }),
+    ).rejects.toBeInstanceOf(NodeScopeUpdatePermissionRequiredError);
+  });
+
+  it("allows admin to change shared node back to private", async () => {
+    const { mockDb, mockTx } = createScopeMock({
+      actorRole: "admin",
+      nodeScope: "shared",
+      nodeOwner: null,
+    });
+    // biome-ignore lint/suspicious/noExplicitAny: stub
+    const service = new NodeService(mockDb, {} as any, {} as any);
+
+    const result = await service.updateNodeScope({
+      organizationId: "org-1",
+      nodeId: "node-1",
+      actorUserId: "user-1",
+      scope: "private",
+    });
+
+    expect(mockTx.update).toHaveBeenCalled();
+    expect(result.scope).toBe("private");
+  });
+
+  it("throws NodeScopeUpdatePermissionRequiredError when plain member tries to change shared node scope", async () => {
+    const { mockDb } = createScopeMock({
+      actorRole: "member",
+      nodeScope: "shared",
+      nodeOwner: null,
+    });
+    // biome-ignore lint/suspicious/noExplicitAny: stub
+    const service = new NodeService(mockDb, {} as any, {} as any);
+
+    await expect(
+      service.updateNodeScope({ organizationId: "org-1", nodeId: "node-1", actorUserId: "user-1", scope: "private" }),
+    ).rejects.toBeInstanceOf(NodeScopeUpdatePermissionRequiredError);
+  });
+
+  it("throws OrganizationMembershipRequiredError when actor is not a member", async () => {
+    const { mockDb } = createScopeMock({ actorRole: null });
+    // biome-ignore lint/suspicious/noExplicitAny: stub
+    const service = new NodeService(mockDb, {} as any, {} as any);
+
+    await expect(
+      service.updateNodeScope({ organizationId: "org-1", nodeId: "node-1", actorUserId: "user-1", scope: "shared" }),
+    ).rejects.toBeInstanceOf(OrganizationMembershipRequiredError);
   });
 });
 
