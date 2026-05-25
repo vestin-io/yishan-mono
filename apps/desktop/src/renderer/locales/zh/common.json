@@ -92,9 +92,9 @@
     },
     "nodes": {
       "title": "节点",
-      "description": "查看组织中的节点，以及它们当前是否在线。",
+      "description": "查看团队可用的组织节点及其当前连接状态。",
       "loadError": "加载组织节点失败。",
-      "empty": "当前组织没有可用节点。",
+      "empty": "此组织暂无可用节点。",
       "columns": {
         "name": "节点名称",
         "type": "节点类型",
@@ -113,6 +113,16 @@
       "values": {
         "unknownOwner": "未知",
         "unknownVersion": "未知"
+      },
+      "actions": {
+        "makeShared": "设为共享",
+        "makePrivate": "设为私有"
+      },
+      "scopeChangeDialog": {
+        "title": "更改节点范围",
+        "toSharedDescription": "将「{{name}}」设为共享后，所有组织成员均可使用该节点。确认更改吗？",
+        "toPrivateDescription": "将「{{name}}」设为私有后，仅节点所有者可使用。当前使用该节点的工作区可能会失去访问权限。确认更改吗？",
+        "confirm": "更改范围"
       }
     },
     "serviceTokens": {

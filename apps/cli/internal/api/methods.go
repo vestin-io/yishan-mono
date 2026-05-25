@@ -95,6 +95,14 @@ func (c *Client) DeleteNode(orgID string, nodeID string) (OKResponse, error) {
 	return response, err
 }
 
+func (c *Client) UpdateNodeScope(orgID string, nodeID string, scope string) (UpdateNodeScopeResponse, error) {
+	var response UpdateNodeScopeResponse
+	err := c.DoDecode("PATCH", "/orgs/"+orgID+"/nodes/"+nodeID+"/scope", map[string]string{
+		"scope": scope,
+	}, &response)
+	return response, err
+}
+
 func (c *Client) RegisterNode(input RegisterNodeInput) (RegisterNodeResponse, error) {
 	payload := map[string]any{
 		"nodeId": input.NodeID,

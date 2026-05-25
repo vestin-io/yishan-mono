@@ -3,7 +3,9 @@ import type {
   NodeParamsInput,
   OrganizationNodeDeleteParamsInput,
   OrganizationNodeParamsInput,
+  OrganizationNodeScopeParamsInput,
   RegisterNodeBodyInput,
+  UpdateNodeScopeBodyInput,
 } from "@/validation/node";
 
 export async function listNodesHandler(c: AppContext, params: OrganizationNodeParamsInput) {
@@ -24,6 +26,21 @@ export async function deleteNodeHandler(c: AppContext, params: OrganizationNodeD
   });
 
   return c.json({ ok: true });
+}
+
+export async function updateNodeScopeHandler(
+  c: AppContext,
+  params: OrganizationNodeScopeParamsInput,
+  body: UpdateNodeScopeBodyInput,
+) {
+  const actorUser = c.get("sessionUser");
+  const node = await c.get("services").node.updateNodeScope({
+    organizationId: params.orgId,
+    nodeId: params.nodeId,
+    actorUserId: actorUser.id,
+    scope: body.scope,
+  });
+  return c.json({ node });
 }
 
 export async function registerNodeHandler(c: AppContext, body: RegisterNodeBodyInput) {

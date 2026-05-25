@@ -1,7 +1,13 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 
-import { deleteNodeHandler, listNodesHandler, registerNodeHandler, relayTokenHandler } from "@/handlers/node";
+import {
+  deleteNodeHandler,
+  listNodesHandler,
+  registerNodeHandler,
+  relayTokenHandler,
+  updateNodeScopeHandler,
+} from "@/handlers/node";
 import { completeScheduledJobRunHandler, startScheduledJobRunHandler } from "@/handlers/scheduled-job";
 import type { AppEnv } from "@/hono";
 import { requireOrganizationMemberFromParam } from "@/middlewares/organization-access";
@@ -10,7 +16,9 @@ import {
   nodeParamsSchema,
   organizationNodeDeleteParamsSchema,
   organizationNodeParamsSchema,
+  organizationNodeScopeParamsSchema,
   registerNodeBodySchema,
+  updateNodeScopeBodySchema,
 } from "@/validation/node";
 import {
   completeScheduledJobRunBodySchema,
@@ -31,6 +39,13 @@ orgNodesRouter.delete(
   "/:nodeId",
   zValidator("param", organizationNodeDeleteParamsSchema, validationErrorResponse),
   (c) => deleteNodeHandler(c, c.req.valid("param")),
+);
+
+orgNodesRouter.patch(
+  "/:nodeId/scope",
+  zValidator("param", organizationNodeScopeParamsSchema, validationErrorResponse),
+  zValidator("json", updateNodeScopeBodySchema, validationErrorResponse),
+  (c) => updateNodeScopeHandler(c, c.req.valid("param"), c.req.valid("json")),
 );
 
 nodeRouter.route("/orgs/:orgId/nodes", orgNodesRouter);

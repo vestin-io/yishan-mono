@@ -20,6 +20,15 @@ export const organizationNodeDeleteParamsSchema = z.object({
   nodeId: nonEmptyStringSchema,
 });
 
+export const organizationNodeScopeParamsSchema = z.object({
+  orgId: nonEmptyStringSchema,
+  nodeId: nonEmptyStringSchema,
+});
+
+export const updateNodeScopeBodySchema = z.object({
+  scope: z.enum(["private", "shared"]),
+});
+
 export const registerNodeBodySchema = z.object({
   nodeId: nonEmptyStringSchema,
   name: nonEmptyStringSchema,
@@ -33,3 +42,5 @@ export type NodeParamsInput = z.infer<typeof nodeParamsSchema>;
 export type RegisterNodeBodyInput = z.infer<typeof registerNodeBodySchema>;
 export type OrganizationNodeParamsInput = z.infer<typeof orgIdParamSchema>;
 export type OrganizationNodeDeleteParamsInput = z.infer<typeof organizationNodeDeleteParamsSchema>;
+export type OrganizationNodeScopeParamsInput = z.infer<typeof organizationNodeScopeParamsSchema>;
+export type UpdateNodeScopeBodyInput = z.infer<typeof updateNodeScopeBodySchema>;

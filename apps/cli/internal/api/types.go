@@ -70,6 +70,10 @@ type RegisterNodeResponse struct {
 	Node Node `json:"node"`
 }
 
+type UpdateNodeScopeResponse struct {
+	Node Node `json:"node"`
+}
+
 type Project struct {
 	ID             string `json:"id"`
 	OrganizationID string `json:"organizationId"`

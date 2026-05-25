@@ -194,6 +194,17 @@ export class NodeDeletePermissionRequiredError extends AppError {
   }
 }
 
+export class NodeScopeUpdatePermissionRequiredError extends AppError {
+  constructor() {
+    super(
+      "You do not have permission to change this node's scope",
+      StatusCodes.FORBIDDEN,
+      "NODE_SCOPE_UPDATE_PERMISSION_REQUIRED",
+    );
+    this.name = "NodeScopeUpdatePermissionRequiredError";
+  }
+}
+
 export class OrganizationMembershipRequiredError extends AppError {
   constructor() {
     super("You are not a member of this organization", StatusCodes.FORBIDDEN, "ORGANIZATION_MEMBERSHIP_REQUIRED");
