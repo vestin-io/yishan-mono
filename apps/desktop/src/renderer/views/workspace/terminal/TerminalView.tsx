@@ -35,6 +35,7 @@ type TerminalViewProps = {
  */
 export const TerminalView = memo(function TerminalView({ tabId, focusRequestKey = 0, showVoiceButton = false }: TerminalViewProps) {
   const isVoiceInputEnabled = layoutStore((state) => state.isVoiceInputEnabled);
+  const voiceAutoEnter = layoutStore((state) => state.voiceAutoEnter);
   const rightWidth = layoutStore((state) => state.rightWidth);
   const { rightCollapsed } = useWorkspacePaneVisibilityContext();
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -60,8 +61,9 @@ export const TerminalView = memo(function TerminalView({ tabId, focusRequestKey 
       throw new Error("Terminal session is not ready yet.");
     }
 
-    await writeTerminalInput({ sessionId, data: text });
-  }, [tabId]);
+    const dataToWrite = voiceAutoEnter ? `${text}\r` : text;
+    await writeTerminalInput({ sessionId, data: dataToWrite });
+  }, [tabId, voiceAutoEnter]);
 
   // ─── Attach/Detach Lifecycle ────────────────────────────────────────────────
 
