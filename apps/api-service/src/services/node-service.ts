@@ -150,7 +150,8 @@ export class NodeService {
     const connectedNodeDaemonVersions = await this.getConnectedNodeSessions();
 
     return rows.map((row) => {
-      const isOnline = connectedNodeDaemonVersions.has(row.id);
+      const isActorOwnedManagedNode = row.kind === "managed" && row.ownerUserId === input.actorUserId;
+      const isOnline = isActorOwnedManagedNode || connectedNodeDaemonVersions.has(row.id);
       const liveDaemonVersion = isOnline ? (connectedNodeDaemonVersions.get(row.id) ?? "") : "";
       const baseMetadata = this.normalizeMetadata(row.metadata) ?? {};
 
