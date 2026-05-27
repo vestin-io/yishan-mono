@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TerminalView } from "./TerminalView";
-import { __resetTerminalRuntimeRegistryForTests } from "./terminalRuntimeRegistry";
+import { __resetTerminalRuntimeRegistryForTests, getTerminalRuntime } from "./terminalRuntimeRegistry";
 import { __resetTerminalSessionServiceForTests } from "./terminalSessionService";
 
 type TerminalOutputEvent =
@@ -70,6 +70,7 @@ const mocked = vi.hoisted(() => {
     const state = stateRef.current as { closeTab?: (nextTabId: string) => void };
     state.closeTab?.(tabId);
   });
+  const selectTab = vi.fn();
   const searchAddon = {
     findNext: vi.fn(),
     findPrevious: vi.fn(),
@@ -100,6 +101,7 @@ const mocked = vi.hoisted(() => {
     xtermClear,
     xtermWrite,
     closeTab,
+    selectTab,
     renameTab,
     searchAddon,
     loadTerminalAddons,
@@ -162,6 +164,7 @@ vi.mock("../../../commands/terminalCommands", () => ({
 
 vi.mock("../../../hooks/useCommands", () => ({
   useCommands: () => ({
+    selectTab: mocked.selectTab,
     closeTab: mocked.closeTab,
     createTerminalSession: mocked.createTerminalSession,
     listTerminalSessions: mocked.listTerminalSessions,
@@ -353,6 +356,41 @@ function buildStoreState() {
 }
 
 describe("TerminalView", () => {
+  it("activates the tab when the xterm host is clicked", async () => {
+    const state = buildStoreState();
+    mocked.stateRef.current = state;
+    mocked.createTerminalSession.mockResolvedValueOnce({
+      sessionId: "session-host-click",
+      cwd: "/tmp/workspace-1",
+      cols: 120,
+      rows: 30,
+    });
+    mocked.readTerminalOutput.mockResolvedValueOnce({
+      nextIndex: 0,
+      chunks: [],
+      exited: false,
+      exitCode: null,
+      signalCode: null,
+    });
+    mocked.resizeTerminal.mockResolvedValue({ ok: true });
+
+    stubTerminalBrowserApis();
+
+    render(<TerminalView tabId="terminal-tab-1" />);
+    await waitFor(() => {
+      expect(mocked.createTerminalSession).toHaveBeenCalled();
+    });
+
+    const hostElement = getTerminalRuntime("terminal-tab-1")?.hostElement;
+    expect(hostElement).toBeTruthy();
+    if (!hostElement) {
+      throw new Error("Expected terminal host element");
+    }
+
+    fireEvent.mouseDown(hostElement);
+    expect(mocked.selectTab).toHaveBeenCalledWith("terminal-tab-1");
+  });
+
   it("closes tab when websocket reports session exited", async () => {
     const state = buildStoreState();
     mocked.stateRef.current = state;

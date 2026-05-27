@@ -5,6 +5,7 @@ import "@xterm/xterm/css/xterm.css";
 import { memo, useCallback, useEffect, useRef } from "react";
 import { FloatingVoiceButton, type FloatingVoiceButtonHandle } from "../../../components/FloatingVoiceButton";
 import { writeTerminalInput } from "../../../commands/terminalCommands";
+import { useCommands } from "../../../hooks/useCommands";
 import { layoutStore } from "../../../store/settings/layoutStore";
 import { keybindingSettingsStore } from "../../../store/settings/keybindingSettingsStore";
 import { getShortcutKeysById } from "../../../shortcuts/keybindings";
@@ -36,6 +37,7 @@ type TerminalViewProps = {
  * 4. Manages UI-only concerns: search panel, drag/drop overlay, focus, keyboard shortcuts.
  */
 export const TerminalView = memo(function TerminalView({ tabId, focusRequestKey = 0, showVoiceButton = false }: TerminalViewProps) {
+  const cmd = useCommands();
   const isVoiceInputEnabled = layoutStore((state) => state.isVoiceInputEnabled);
   const voiceAutoEnter = layoutStore((state) => state.voiceAutoEnter);
   const rightWidth = layoutStore((state) => state.rightWidth);
@@ -128,6 +130,22 @@ export const TerminalView = memo(function TerminalView({ tabId, focusRequestKey 
       detachTerminalRuntime(tabId, placeholder);
     };
   }, [tabId]);
+
+  useEffect(() => {
+    const hostElement = getTerminalRuntime(tabId)?.hostElement;
+    if (!hostElement) {
+      return;
+    }
+
+    const handleMouseDown = () => {
+      cmd.selectTab(tabId);
+    };
+
+    hostElement.addEventListener("mousedown", handleMouseDown);
+    return () => {
+      hostElement.removeEventListener("mousedown", handleMouseDown);
+    };
+  }, [cmd, tabId]);
 
   // ─── Search ─────────────────────────────────────────────────────────────────
 
