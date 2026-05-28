@@ -202,7 +202,7 @@ jobs:
       - name: List release artifacts
         run: ls -lhR artifacts/
 
-      - name: Generate desktop release notes
+      - name: Generate release notes
         run: |
           set -euo pipefail
           version="${{ needs.resolve-version.outputs.version }}"
@@ -210,6 +210,24 @@ jobs:
           previous_tag="$(git tag --list 'v*' --sort=-version:refname | grep -Fxv "$tag" | head -n1 || true)"
 
           {
+            echo "## CLI changes"
+            echo
+            if [[ -n "$previous_tag" ]]; then
+              echo "Changes since \`$previous_tag\`."
+              echo
+              log_output="$(git log --no-merges --pretty=format:'- %s (%h)' "$previous_tag..HEAD" -- apps/cli || true)"
+            else
+              echo "Changes in this release."
+              echo
+              log_output="$(git log --no-merges --pretty=format:'- %s (%h)' HEAD -- apps/cli || true)"
+            fi
+
+            if [[ -n "${log_output:-}" ]]; then
+              echo "$log_output"
+            else
+              echo "- No cli-scoped commits found in this range."
+            fi
+            echo
             echo "## Desktop changes"
             echo
             if [[ -n "$previous_tag" ]]; then
@@ -227,7 +245,7 @@ jobs:
             else
               echo "- No desktop-scoped commits found in this range."
             fi
-          } > notes-desktop.md
+          } > notes-release.md
 
       - name: Upload desktop artifacts to release
         env:
@@ -249,13 +267,7 @@ jobs:
             echo "::warning::No desktop artifacts found to upload."
           fi
 
-          # Append desktop release notes
-          existing_notes="$(gh release view "$tag" --json body --jq .body)"
-          combined_notes="${existing_notes}
-
-          $(cat notes-desktop.md)"
-          echo "$combined_notes" > combined-notes.md
-          gh release edit "$tag" --notes-file combined-notes.md --title "Yishan v${version}"
+          gh release edit "$tag" --notes-file notes-release.md --title "Yishan v${version}"
 
           # Verify auto-update manifests were uploaded
           if ! gh release view "$tag" --json assets --jq '.assets[].name' | grep -qE '\.yml$'; then
