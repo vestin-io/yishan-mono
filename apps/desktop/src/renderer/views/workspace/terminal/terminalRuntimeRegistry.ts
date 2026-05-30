@@ -365,6 +365,29 @@ export function isTerminalRuntimeAttached(tabId: string): boolean {
   return entry?.state === "attached";
 }
 
+/**
+ * Re-applies one attached runtime's layout/rendering state after the window
+ * returns from long backgrounding or OS sleep.
+ */
+export function recoverAttachedTerminalRuntime(tabId: string): void {
+  const entry = runtimesByTabId.get(tabId);
+  if (!entry || entry.state !== "attached") {
+    return;
+  }
+
+  const didFit = safeFitTerminal(entry, true);
+  notifyTerminalResizeIfNeeded(entry, didFit);
+
+  const refresh = (entry.terminal as { refresh?: (start: number, end: number) => void }).refresh;
+  if (typeof refresh === "function") {
+    try {
+      refresh.call(entry.terminal, 0, Math.max(0, entry.terminal.rows - 1));
+    } catch (error) {
+      reportTerminalAsyncError("refresh terminal after background restore", error);
+    }
+  }
+}
+
 // ─── Session Lifecycle Integration ─────────────────────────────────────────────
 
 /**

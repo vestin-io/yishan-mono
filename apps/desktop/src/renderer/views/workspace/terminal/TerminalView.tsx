@@ -18,6 +18,7 @@ import {
   detachTerminalRuntime,
   ensureTerminalRuntime,
   getTerminalRuntime,
+  recoverAttachedTerminalRuntime,
 } from "./terminalRuntimeRegistry";
 import { initTerminalSessionLifecycle } from "./terminalSessionService";
 
@@ -146,6 +147,27 @@ export const TerminalView = memo(function TerminalView({ tabId, focusRequestKey 
       hostElement.removeEventListener("mousedown", handleMouseDown);
     };
   }, [cmd, tabId]);
+
+  useEffect(() => {
+    const restoreInteractiveScrollState = () => {
+      recoverAttachedTerminalRuntime(tabId);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+      restoreInteractiveScrollState();
+    };
+
+    window.addEventListener("focus", restoreInteractiveScrollState);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("focus", restoreInteractiveScrollState);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [tabId]);
 
   // ─── Search ─────────────────────────────────────────────────────────────────
 
