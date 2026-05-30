@@ -216,6 +216,7 @@ function getFileTreeProps() {
 
   return mocks.repoFileTreePropsRef.current as {
     files: string[];
+    ignoredPaths?: string[];
     gitChangesByPath?: Record<string, string>;
     expandedItems?: string[];
     selectionRequest?: { path: string; requestId: number; focus?: boolean } | null;
@@ -764,6 +765,84 @@ describe("FileManagerView file loading", () => {
     });
   });
 
+  it("keeps loaded descendants after refresh when recursive root list only includes parent directory", async () => {
+    mocks.listFiles.mockImplementation(async (input: {
+      workspaceWorktreePath: string;
+      relativePath?: string;
+      recursive?: boolean;
+    }) => {
+      if (input.recursive === false && input.relativePath === ".opencode") {
+        return { files: asEntries([".opencode/agents/", ".opencode/agents/main.md"]) };
+      }
+
+      if (input.recursive) {
+        return { files: asEntries([".opencode/"]) };
+      }
+
+      return { files: asEntries([]) };
+    });
+
+    const { rerender } = render(<FileManagerView />);
+
+    await waitFor(() => {
+      expect((mocks.repoFileTreePropsRef.current?.files as string[]) ?? []).toEqual([".opencode/"]);
+    });
+
+    await getFileTreeProps().onEnsurePathLoaded?.(".opencode");
+
+    await waitFor(() => {
+      expect((mocks.repoFileTreePropsRef.current?.files as string[]) ?? []).toEqual([
+        ".opencode/",
+        ".opencode/agents/",
+        ".opencode/agents/main.md",
+      ]);
+    });
+
+    mocks.stateRef.current.fileTreeRefreshVersion += 1;
+    rerender(<FileManagerView />);
+
+    await waitFor(() => {
+      expect((mocks.repoFileTreePropsRef.current?.files as string[]) ?? []).toEqual([
+        ".opencode/",
+        ".opencode/agents/",
+        ".opencode/agents/main.md",
+      ]);
+    });
+  });
+
+  it("keeps ignored marker stable across inconsistent refresh payloads", async () => {
+    let recursiveCallCount = 0;
+    mocks.listFiles.mockImplementation(async (input: {
+      workspaceWorktreePath: string;
+      relativePath?: string;
+      recursive?: boolean;
+    }) => {
+      if (input.recursive) {
+        recursiveCallCount += 1;
+        if (recursiveCallCount === 1) {
+          return { files: asEntries([".opencode/"], [".opencode/"]) };
+        }
+
+        return { files: asEntries([".opencode/"]) };
+      }
+
+      return { files: asEntries([]) };
+    });
+
+    const { rerender } = render(<FileManagerView />);
+
+    await waitFor(() => {
+      expect(getFileTreeProps().ignoredPaths ?? []).toContain(".opencode/");
+    });
+
+    mocks.stateRef.current.fileTreeRefreshVersion += 1;
+    rerender(<FileManagerView />);
+
+    await waitFor(() => {
+      expect(getFileTreeProps().ignoredPaths ?? []).toContain(".opencode/");
+    });
+  });
+
   it("removes stale old filename after external mv a.txt -> b.txt", async () => {
     const directoryEntries = ["src/"];
     let recursiveLeafName = "a.txt";
@@ -847,6 +926,117 @@ describe("FileManagerView file loading", () => {
     expect(getFileTreeProps().files).toEqual(
       expect.arrayContaining([".my-context/", ".my-context/brief.md", ".my-context/notes/todo.md"]),
     );
+  });
+
+  it("falls back to recursive load when directory immediate children are ignored", async () => {
+    mocks.listFiles.mockImplementation(async (input: {
+      workspaceWorktreePath: string;
+      relativePath?: string;
+      recursive?: boolean;
+    }) => {
+      if (input.recursive === false && input.relativePath === "src") {
+        return {
+          files: asEntries(["src/.cache/", "src/.cache/nested/"], ["src/.cache/", "src/.cache/nested/"]),
+        };
+      }
+
+      if (input.recursive === true && input.relativePath === "src") {
+        return {
+          files: asEntries([
+            "src/.cache/",
+            "src/.cache/nested/",
+            "src/.cache/nested/keep.ts",
+            "src/.cache/nested/ignore.log",
+          ], ["src/.cache/", "src/.cache/nested/", "src/.cache/nested/ignore.log"]),
+        };
+      }
+
+      if (input.recursive) {
+        return { files: asEntries(["src/"]) };
+      }
+
+      return { files: asEntries([]) };
+    });
+
+    render(<FileManagerView />);
+
+    await waitFor(() => {
+      expect((mocks.repoFileTreePropsRef.current?.files as string[]) ?? []).toEqual(["src/"]);
+    });
+
+    await getFileTreeProps().onEnsurePathLoaded?.("src");
+
+    await waitFor(() => {
+      expect(mocks.listFiles).toHaveBeenCalledWith({
+        workspaceWorktreePath: "/tmp/repo",
+        relativePath: "src",
+        recursive: false,
+      });
+      expect(mocks.listFiles).toHaveBeenCalledWith({
+        workspaceWorktreePath: "/tmp/repo",
+        relativePath: "src",
+        recursive: true,
+      });
+      expect((mocks.repoFileTreePropsRef.current?.files as string[]) ?? []).toEqual([
+        "src/",
+        "src/.cache/",
+        "src/.cache/nested/",
+        "src/.cache/nested/ignore.log",
+        "src/.cache/nested/keep.ts",
+      ]);
+    });
+  });
+
+  it("falls back to recursive load when shallow response only echoes the directory", async () => {
+    mocks.listFiles.mockImplementation(async (input: {
+      workspaceWorktreePath: string;
+      relativePath?: string;
+      recursive?: boolean;
+    }) => {
+      if (input.recursive === false && input.relativePath === ".opencode") {
+        return {
+          files: asEntries([".opencode/"]),
+        };
+      }
+
+      if (input.recursive === true && input.relativePath === ".opencode") {
+        return {
+          files: asEntries([".opencode/", ".opencode/agents/", ".opencode/agents/main.md"]),
+        };
+      }
+
+      if (input.recursive) {
+        return { files: asEntries([".opencode/"]) };
+      }
+
+      return { files: asEntries([]) };
+    });
+
+    render(<FileManagerView />);
+
+    await waitFor(() => {
+      expect((mocks.repoFileTreePropsRef.current?.files as string[]) ?? []).toEqual([".opencode/"]);
+    });
+
+    await getFileTreeProps().onEnsurePathLoaded?.(".opencode");
+
+    await waitFor(() => {
+      expect(mocks.listFiles).toHaveBeenCalledWith({
+        workspaceWorktreePath: "/tmp/repo",
+        relativePath: ".opencode",
+        recursive: false,
+      });
+      expect(mocks.listFiles).toHaveBeenCalledWith({
+        workspaceWorktreePath: "/tmp/repo",
+        relativePath: ".opencode",
+        recursive: true,
+      });
+      expect((mocks.repoFileTreePropsRef.current?.files as string[]) ?? []).toEqual([
+        ".opencode/",
+        ".opencode/agents/",
+        ".opencode/agents/main.md",
+      ]);
+    });
   });
 });
 

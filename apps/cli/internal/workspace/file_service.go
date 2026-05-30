@@ -339,11 +339,11 @@ func (s *FileService) listGitFiles(root string, path string) ([]FileEntry, bool,
 		"--others",
 		"--ignored",
 		"--exclude-standard",
-		"--directory",
-		"--no-empty-directory",
-		"-z",
-		"--",
 	}
+	if strings.TrimSpace(path) == "" {
+		ignoredArgs = append(ignoredArgs, "--directory", "--no-empty-directory")
+	}
+	ignoredArgs = append(ignoredArgs, "-z", "--")
 	if strings.TrimSpace(path) != "" {
 		ignoredArgs = append(ignoredArgs, filepath.ToSlash(path))
 	}

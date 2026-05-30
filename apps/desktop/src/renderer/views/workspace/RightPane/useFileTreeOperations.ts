@@ -27,7 +27,16 @@ function mergeWorkspaceEntries(current: WorkspaceFileEntry[], incoming: Workspac
   }
 
   for (const entry of incoming) {
-    mergedByPath.set(entry.path, entry);
+    const existingEntry = mergedByPath.get(entry.path);
+    if (!existingEntry) {
+      mergedByPath.set(entry.path, entry);
+      continue;
+    }
+
+    mergedByPath.set(entry.path, {
+      ...entry,
+      isIgnored: existingEntry.isIgnored || entry.isIgnored,
+    });
   }
 
   return [...mergedByPath.values()].sort((left, right) => left.path.localeCompare(right.path));
@@ -49,6 +58,26 @@ function buildNormalizedPathSet(entries: WorkspaceFileEntry[]): Set<string> {
   }
 
   return normalizedPaths;
+}
+
+function hasVisibleImmediateChildren(directoryPath: string, entries: WorkspaceFileEntry[]): boolean {
+  const normalizedDirectoryPath = normalizeRelativePath(directoryPath);
+  if (!normalizedDirectoryPath) {
+    return false;
+  }
+
+  return entries.some((entry) => {
+    if (entry.isIgnored) {
+      return false;
+    }
+
+    const normalizedEntryPath = normalizeRelativePath(entry.path);
+    if (!normalizedEntryPath || normalizedEntryPath === normalizedDirectoryPath) {
+      return false;
+    }
+
+    return normalizedEntryPath.startsWith(`${normalizedDirectoryPath}/`);
+  });
 }
 
 function isMissingWorkspacePathError(error: unknown): boolean {
@@ -208,17 +237,14 @@ export function useFileTreeOperations(): UseFileTreeOperationsResult {
               continue;
             }
 
-            for (const incomingPath of normalizedIncomingPathSet) {
-              if (isPathWithinOrEqual(incomingPath, loadedDirectoryPath)) {
-                return false;
-              }
-            }
-
-            if (normalizedIncomingPathSet.has(loadedDirectoryPath)) {
+            const incomingHasLoadedDescendant = [...normalizedIncomingPathSet].some((incomingPath) =>
+              incomingPath.startsWith(`${loadedDirectoryPath}/`),
+            );
+            if (incomingHasLoadedDescendant) {
               return false;
             }
 
-              return true;
+            return true;
           }
 
           return false;
@@ -257,7 +283,19 @@ export function useFileTreeOperations(): UseFileTreeOperationsResult {
           relativePath: normalizedPath,
           recursive: false,
         });
-        setRepoEntries((currentEntries) => mergeWorkspaceEntries(currentEntries, response.files));
+
+        if (hasVisibleImmediateChildren(normalizedPath, response.files)) {
+          setRepoEntries((currentEntries) => mergeWorkspaceEntries(currentEntries, response.files));
+          return;
+        }
+
+        const recursiveResponse = await listFiles({
+          workspaceWorktreePath: selectedWorkspaceWorktreePath,
+          relativePath: normalizedPath,
+          recursive: true,
+        });
+
+        setRepoEntries((currentEntries) => mergeWorkspaceEntries(currentEntries, recursiveResponse.files));
       } catch (error) {
         // Suppress benign filesystem errors (stale worktree, removed path, broken symlink)
         const message = getErrorMessage(error);

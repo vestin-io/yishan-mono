@@ -170,6 +170,41 @@ func TestFileServiceRecursiveListUsesGitIgnore(t *testing.T) {
 	}
 }
 
+func TestFileServiceRecursiveListInsideIgnoredPathIncludesDescendants(t *testing.T) {
+	root := t.TempDir()
+	initGitRepo(t, root)
+	svc := NewFileService()
+
+	if err := os.MkdirAll(filepath.Join(root, ".opencode", "agents"), 0o755); err != nil {
+		t.Fatalf("mkdir .opencode: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte(".opencode/\n"), 0o644); err != nil {
+		t.Fatalf("write gitignore: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".opencode", "agents", "main.md"), []byte("agent\n"), 0o644); err != nil {
+		t.Fatalf("write ignored descendant: %v", err)
+	}
+
+	entries, err := svc.List(root, ".opencode", true)
+	if err != nil {
+		t.Fatalf("recursive list ignored path: %v", err)
+	}
+
+	paths := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		paths = append(paths, entry.Path)
+	}
+
+	expected := []string{
+		".opencode",
+		".opencode/agents",
+		".opencode/agents/main.md",
+	}
+	if strings.Join(paths, ",") != strings.Join(expected, ",") {
+		t.Fatalf("expected ignored descendants %v, got %v", expected, paths)
+	}
+}
+
 func TestFileServiceDirectListMarksGitIgnoredEntries(t *testing.T) {
 	root := t.TempDir()
 	initGitRepo(t, root)
