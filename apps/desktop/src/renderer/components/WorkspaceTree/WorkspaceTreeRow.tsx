@@ -1,4 +1,4 @@
-import { Avatar, Box, IconButton, Tooltip, useTheme } from "@mui/material";
+import { Box, IconButton, Tooltip, useTheme } from "@mui/material";
 import { LuChevronRight, LuCloud, LuFolder, LuFolderOpen, LuLaptop, LuServer } from "react-icons/lu";
 import { LuEllipsis } from "react-icons/lu";
 import { LuPlus } from "react-icons/lu";
@@ -62,7 +62,7 @@ export function WorkspaceTreeRowView({
         height: WORKSPACE_TREE_ROW_HEIGHT,
         display: "flex",
         alignItems: "center",
-        pl: row.depth * 2 + 1,
+        pl: row.depth * 1.25 + 1,
         pr: 1,
         borderRadius: 1,
         cursor: "pointer",
@@ -115,19 +115,23 @@ export function WorkspaceTreeRowView({
         <LuChevronRight size={14} />
       </Box>
       {row.kind === "project" ? (
-        <Avatar
-          variant="rounded"
+        <Box
+          component="span"
           sx={{
             width: 16,
             height: 16,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
             bgcolor: row.color ?? theme.palette.primary.main,
             color: theme.palette.common.white,
             fontSize: 10,
             fontWeight: 700,
+            borderRadius: 0.5,
           }}
         >
           {renderProjectIcon(row.icon ?? undefined, 10)}
-        </Avatar>
+        </Box>
       ) : row.kind === "node" ? (
         <Box component="span" sx={{ width: 16, height: 16, display: "inline-flex", color: "text.secondary" }}>
           {row.nodeKind === "managed" ? (

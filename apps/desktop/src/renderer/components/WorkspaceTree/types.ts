@@ -53,6 +53,7 @@ export type WorkspaceTreeProps = {
   selectedProjectId?: string;
   selectedNodeId?: string;
   selectedWorkspaceId?: string;
+  hierarchyMode?: "by_project" | "by_node";
   expandedItems?: string[];
   onExpandedItemsChange?: (items: string[]) => void;
   onSelectProject?: (projectId: string) => void;

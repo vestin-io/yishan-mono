@@ -10,6 +10,7 @@ type UseVisibleWorkspaceTreeInput = {
   projects: WorkspaceTreeProject[];
   nodes: WorkspaceTreeNode[];
   workspaces: WorkspaceTreeWorkspace[];
+  hierarchyMode?: "by_project" | "by_node";
   expandedItemsOverride?: string[];
   onExpandedItemsChange?: (items: string[]) => void;
 };
@@ -29,6 +30,7 @@ export function useVisibleWorkspaceTree({
   projects,
   nodes,
   workspaces,
+  hierarchyMode = "by_project",
   expandedItemsOverride,
   onExpandedItemsChange,
 }: UseVisibleWorkspaceTreeInput): UseVisibleWorkspaceTreeOutput {
@@ -51,6 +53,7 @@ export function useVisibleWorkspaceTree({
     const expandedSet = new Set(expandedItems);
     const nodeById = new Map(nodes.map((node) => [node.id, node]));
     const workspacesByProjectId = new Map<string, WorkspaceTreeWorkspace[]>();
+    const projectById = new Map(projects.map((project) => [project.id, project]));
 
     for (const workspace of workspaces) {
       const existing = workspacesByProjectId.get(workspace.projectId);
@@ -59,6 +62,93 @@ export function useVisibleWorkspaceTree({
       } else {
         workspacesByProjectId.set(workspace.projectId, [workspace]);
       }
+    }
+
+    if (hierarchyMode === "by_node") {
+      const workspacesByNodeId = new Map<string, WorkspaceTreeWorkspace[]>();
+      for (const workspace of workspaces) {
+        const existing = workspacesByNodeId.get(workspace.nodeId);
+        if (existing) {
+          existing.push(workspace);
+        } else {
+          workspacesByNodeId.set(workspace.nodeId, [workspace]);
+        }
+      }
+
+      for (const [nodeId, nodeWorkspaces] of workspacesByNodeId) {
+        if (nodeWorkspaces.length === 0) {
+          continue;
+        }
+
+        const node = nodeById.get(nodeId);
+        const nodeRowId = toRowId("node", nodeId);
+        rows.push({
+          id: nodeRowId,
+          label: node?.name ?? "Unknown node",
+          depth: 0,
+          kind: "node",
+          parentId: null,
+          hasChildren: true,
+          nodeKind: node?.kind,
+          nodeScope: node?.scope,
+          nodeIsOnline: node?.isOnline,
+        });
+
+        if (!expandedSet.has(nodeRowId)) {
+          continue;
+        }
+
+        const nodeWorkspacesByProjectId = new Map<string, WorkspaceTreeWorkspace[]>();
+        for (const workspace of nodeWorkspaces) {
+          const existing = nodeWorkspacesByProjectId.get(workspace.projectId);
+          if (existing) {
+            existing.push(workspace);
+          } else {
+            nodeWorkspacesByProjectId.set(workspace.projectId, [workspace]);
+          }
+        }
+
+        for (const [projectId, projectWorkspaces] of nodeWorkspacesByProjectId) {
+          const project = projectById.get(projectId);
+          if (!project || projectWorkspaces.length === 0) {
+            continue;
+          }
+
+          const projectRowId = toRowId("project", `${nodeId}:${projectId}`);
+          rows.push({
+            id: projectRowId,
+            label: project.name,
+            depth: 1,
+            kind: "project",
+            parentId: nodeRowId,
+            hasChildren: true,
+            icon: project.icon,
+            color: project.color,
+          });
+
+          if (!expandedSet.has(projectRowId)) {
+            continue;
+          }
+
+          for (const workspace of projectWorkspaces) {
+            rows.push({
+              id: toRowId("workspace", workspace.id),
+              label: workspace.name,
+              depth: 2,
+              kind: "workspace",
+              parentId: projectRowId,
+              hasChildren: false,
+              workspaceKind: workspace.kind,
+              additions: workspace.additions,
+              deletions: workspace.deletions,
+              runtimeStatus: workspace.runtimeStatus,
+              notificationTone: workspace.notificationTone,
+            });
+          }
+        }
+      }
+
+      return rows;
     }
 
     for (const project of projects) {
@@ -132,7 +222,7 @@ export function useVisibleWorkspaceTree({
     }
 
     return rows;
-  }, [expandedItems, nodes, projects, workspaces]);
+  }, [expandedItems, hierarchyMode, nodes, projects, workspaces]);
 
   const isExpanded = (id: string) => expandedItems.includes(id);
 

@@ -1,4 +1,5 @@
 import {
+  ButtonGroup,
   Box,
   Button,
   Checkbox,
@@ -11,11 +12,13 @@ import {
   Stack,
   TextField,
   Tooltip,
+  Typography,
 } from "@mui/material";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { MdOutlineFilterList } from "react-icons/md";
 import { useCommands } from "../../../hooks/useCommands";
+import { workspaceUiStore } from "../../../store/workspaceUiStore";
 import { workspaceStore } from "../../../store/workspaceStore";
 
 /** Returns true when a repository row matches the quick-search keyword. */
@@ -36,6 +39,8 @@ export function ProjectFilterPopoverView() {
   const { setDisplayRepoIds } = useCommands();
   const [repoFilterAnchor, setRepoFilterAnchor] = useState<HTMLElement | null>(null);
   const [repoQuickSearch, setRepoQuickSearch] = useState("");
+  const workspaceListHierarchyMode = workspaceUiStore((state) => state.workspaceListHierarchyMode);
+  const setWorkspaceListHierarchyMode = workspaceUiStore((state) => state.setWorkspaceListHierarchyMode);
 
   const handleSelectAll = () => {
     setDisplayRepoIds(repos.map((repo) => repo.id));
@@ -88,7 +93,29 @@ export function ProjectFilterPopoverView() {
         }}
       >
         <Box sx={{ width: 240, p: 1 }}>
-          <Stack direction="row" justifyContent="flex-start" sx={{ mb: 1 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
+            {t("project.filter.sections.hirarchy")}
+          </Typography>
+          <ButtonGroup size="small" fullWidth sx={{ mb: 1 }}>
+            <Button
+              variant={workspaceListHierarchyMode === "by_project" ? "contained" : "outlined"}
+              sx={{ fontSize: 11, textTransform: "none" }}
+              onClick={() => setWorkspaceListHierarchyMode("by_project")}
+            >
+              {t("project.filter.hierarchy.byProject")}
+            </Button>
+            <Button
+              variant={workspaceListHierarchyMode === "by_node" ? "contained" : "outlined"}
+              sx={{ fontSize: 11, textTransform: "none" }}
+              onClick={() => setWorkspaceListHierarchyMode("by_node")}
+            >
+              {t("project.filter.hierarchy.byNode")}
+            </Button>
+          </ButtonGroup>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+            <Typography variant="caption" color="text.secondary">
+              {t("project.filter.sections.projects")}
+            </Typography>
             <Button size="small" sx={{ minWidth: 0, px: 0.75, py: 0.25, fontSize: 11 }} onClick={handleSelectAll}>
               {t("project.filter.actions.all")}
             </Button>

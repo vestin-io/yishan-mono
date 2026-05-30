@@ -18,6 +18,19 @@ function parseCompositeNodeRowId(id: string): { projectId: string; nodeId: strin
   };
 }
 
+function parseProjectRowId(id: string): { projectId: string; nodeId?: string } | null {
+  const value = id.replace(/^project:/, "");
+  const splitIndex = value.indexOf(":");
+  if (splitIndex <= 0) {
+    return { projectId: value };
+  }
+
+  return {
+    nodeId: value.slice(0, splitIndex),
+    projectId: value.slice(splitIndex + 1),
+  };
+}
+
 export function WorkspaceTree({
   projects,
   nodes,
@@ -25,6 +38,7 @@ export function WorkspaceTree({
   selectedProjectId,
   selectedNodeId,
   selectedWorkspaceId,
+  hierarchyMode = "by_project",
   expandedItems,
   onExpandedItemsChange,
   onSelectProject,
@@ -46,6 +60,7 @@ export function WorkspaceTree({
     projects,
     nodes,
     workspaces,
+    hierarchyMode,
     expandedItemsOverride: expandedItems,
     onExpandedItemsChange,
   });
@@ -67,9 +82,13 @@ export function WorkspaceTree({
           }
 
           const expanded = row.hasChildren && isExpanded(row.id);
+          const parsedProject = row.kind === "project" ? parseProjectRowId(row.id) : null;
           const isSelected =
-            (row.kind === "project" && !selectedWorkspaceId && row.id === `project:${selectedProjectId ?? ""}`) ||
-            (row.kind === "node" && row.id === `node:${selectedProjectId ?? ""}:${selectedNodeId ?? ""}`) ||
+            (row.kind === "project" && !selectedWorkspaceId && parsedProject?.projectId === (selectedProjectId ?? "")) ||
+            (row.kind === "node" &&
+              (hierarchyMode === "by_project"
+                ? row.id === `node:${selectedProjectId ?? ""}:${selectedNodeId ?? ""}`
+                : row.id === `node:${selectedNodeId ?? ""}`)) ||
             (row.kind === "workspace" && row.id === `workspace:${selectedWorkspaceId ?? ""}`);
 
           return (
@@ -118,7 +137,7 @@ export function WorkspaceTree({
                 }}
                 onContextMenu={(event) => {
                   if (row.kind === "project") {
-                    const projectId = row.id.replace(/^project:/, "");
+                    const projectId = parseProjectRowId(row.id)?.projectId ?? "";
                     onProjectContextMenu?.(event, projectId);
                     return;
                   }
@@ -138,7 +157,7 @@ export function WorkspaceTree({
                     return;
                   }
 
-                  const projectId = row.id.replace(/^project:/, "");
+                  const projectId = parseProjectRowId(row.id)?.projectId ?? "";
                   onProjectActionsClick?.(event, projectId);
                 }}
                 onProjectCreateWorkspaceClick={(event) => {
@@ -146,12 +165,12 @@ export function WorkspaceTree({
                     return;
                   }
 
-                  const projectId = row.id.replace(/^project:/, "");
+                  const projectId = parseProjectRowId(row.id)?.projectId ?? "";
                   onProjectCreateWorkspaceClick?.(event, projectId);
                 }}
                 onClick={() => {
                   if (row.kind === "project") {
-                    const projectId = row.id.replace(/^project:/, "");
+                    const projectId = parseProjectRowId(row.id)?.projectId ?? "";
                     onSelectProject?.(projectId);
                     if (row.hasChildren) {
                       toggleExpanded(row.id);
@@ -160,12 +179,16 @@ export function WorkspaceTree({
                   }
 
                   if (row.kind === "node") {
-                    const parsed = parseCompositeNodeRowId(row.id);
-                    if (!parsed) {
-                      return;
+                    if (hierarchyMode === "by_project") {
+                      const parsed = parseCompositeNodeRowId(row.id);
+                      if (!parsed) {
+                        return;
+                      }
+                      onSelectNode?.(parsed.nodeId, parsed.projectId);
+                    } else {
+                      const nodeId = row.id.replace(/^node:/, "");
+                      onSelectNode?.(nodeId, selectedProjectId ?? "");
                     }
-
-                    onSelectNode?.(parsed.nodeId, parsed.projectId);
                     if (row.hasChildren) {
                       toggleExpanded(row.id);
                     }

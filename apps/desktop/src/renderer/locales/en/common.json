@@ -821,6 +821,14 @@
       "empty": "No projects match the current filter.",
       "searchPlaceholder": "Quick search projects",
       "searchAriaLabel": "Quick search projects",
+      "sections": {
+        "hirarchy": "Hirarchy",
+        "projects": "Projects"
+      },
+      "hierarchy": {
+        "byProject": "By project",
+        "byNode": "By node"
+      },
       "actions": {
         "all": "Select all"
       }

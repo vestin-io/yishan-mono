@@ -22,6 +22,7 @@ import { useSuppressNativeContextMenuWhileOpen } from "../../../hooks/useSuppres
 import { getShortcutDisplayLabelById } from "../../../shortcuts/shortcutDisplay";
 import { chatStore } from "../../../store/chatStore";
 import { sessionStore } from "../../../store/sessionStore";
+import { workspaceUiStore } from "../../../store/workspaceUiStore";
 import { workspaceStore } from "../../../store/workspaceStore";
 import { api } from "../../../api/client";
 import { CreateWorkspaceDialogView } from "./CreateWorkspaceDialogView";
@@ -135,6 +136,7 @@ export function ProjectListView() {
   const [projectActionsAnchorEl, setProjectActionsAnchorEl] = useState<HTMLElement | null>(null);
   const [projectActionsProjectId, setProjectActionsProjectId] = useState("");
   const [isAppFocused, setIsAppFocused] = useState(() => document.hasFocus());
+  const workspaceListHierarchyMode = workspaceUiStore((state) => state.workspaceListHierarchyMode);
   const selectedOrganizationId = sessionStore((state) => state.selectedOrganizationId);
   const nodesQuery = useQuery({
     queryKey: ["org-nodes", selectedOrganizationId],
@@ -264,10 +266,36 @@ export function ProjectListView() {
   ]);
   const expandedTreeItems = useMemo(() => {
     const items: string[] = [];
-    const foldedSet = new Set(foldedProjectIds);
-    const foldedNodeSet = new Set(foldedNodeKeys);
+    const foldedTopSet = new Set(foldedProjectIds);
+    const foldedChildSet = new Set(foldedNodeKeys);
+
+    if (workspaceListHierarchyMode === "by_node") {
+      const nodeIds = Array.from(new Set(treeWorkspaces.map((workspace) => workspace.nodeId)));
+      for (const nodeId of nodeIds) {
+        if (foldedTopSet.has(nodeId)) {
+          continue;
+        }
+
+        items.push(`node:${nodeId}`);
+        const projectIds = Array.from(
+          new Set(
+            treeWorkspaces
+              .filter((workspace) => workspace.nodeId === nodeId)
+              .map((workspace) => workspace.projectId),
+          ),
+        );
+        for (const projectId of projectIds) {
+          const projectKey = `${nodeId}:${projectId}`;
+          if (!foldedChildSet.has(projectKey)) {
+            items.push(`project:${projectKey}`);
+          }
+        }
+      }
+      return items;
+    }
+
     for (const project of filteredProjects) {
-      if (foldedSet.has(project.id)) {
+      if (foldedTopSet.has(project.id)) {
         continue;
       }
 
@@ -275,13 +303,13 @@ export function ProjectListView() {
       const projectNodeIds = new Set(treeWorkspaces.filter((workspace) => workspace.projectId === project.id).map((w) => w.nodeId));
       for (const nodeId of projectNodeIds) {
         const nodeKey = `${project.id}:${nodeId}`;
-        if (!foldedNodeSet.has(nodeKey)) {
+        if (!foldedChildSet.has(nodeKey)) {
           items.push(`node:${nodeKey}`);
         }
       }
     }
     return items;
-  }, [filteredProjects, foldedNodeKeys, foldedProjectIds, treeWorkspaces]);
+  }, [filteredProjects, foldedNodeKeys, foldedProjectIds, treeWorkspaces, workspaceListHierarchyMode]);
   const displayWorkspaceIdByProjectId = useMemo(() => {
     const displayWorkspaceIdByProjectIdMap: Record<string, string> = {};
 
@@ -592,8 +620,29 @@ export function ProjectListView() {
           workspaces={treeWorkspaces}
           selectedProjectId={selectedProjectId}
           selectedWorkspaceId={selectedWorkspaceId}
+          hierarchyMode={workspaceListHierarchyMode}
           expandedItems={expandedTreeItems}
           onExpandedItemsChange={(items) => {
+            if (workspaceListHierarchyMode === "by_node") {
+              const expandedNodeIds = new Set(
+                items
+                  .filter((item) => item.startsWith("node:"))
+                  .map((item) => item.replace(/^node:/, "")),
+              );
+              const expandedProjectKeys = new Set(
+                items
+                  .filter((item) => item.startsWith("project:"))
+                  .map((item) => item.replace(/^project:/, "")),
+              );
+              const visibleNodeIds = Array.from(new Set(treeWorkspaces.map((workspace) => workspace.nodeId)));
+              const visibleProjectKeys = Array.from(
+                new Set(treeWorkspaces.map((workspace) => `${workspace.nodeId}:${workspace.projectId}`)),
+              );
+              setFoldedProjectIds(visibleNodeIds.filter((nodeId) => !expandedNodeIds.has(nodeId)));
+              setFoldedNodeKeys(visibleProjectKeys.filter((projectKey) => !expandedProjectKeys.has(projectKey)));
+              return;
+            }
+
             const expandedProjectIds = new Set(
               items
                 .filter((item) => item.startsWith("project:"))
@@ -615,7 +664,9 @@ export function ProjectListView() {
           deleteWorkspaceLabel={t("workspace.actions.delete")}
           onSelectProject={(projectId) => {
             setSelectedRepoId(projectId);
-            setFoldedProjectIds((current) => current.filter((item) => item !== projectId));
+            if (workspaceListHierarchyMode === "by_project") {
+              setFoldedProjectIds((current) => current.filter((item) => item !== projectId));
+            }
           }}
           onSelectWorkspace={(workspaceId, projectId) => {
             setSelectedRepoId(projectId);
