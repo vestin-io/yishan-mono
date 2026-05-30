@@ -198,6 +198,7 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<stri
   }
 
   const workspaceId = createWorkspaceId();
+  const normalizedNodeId = input.nodeId?.trim() || "";
   workspaceCreateProgressStore.getState().startWorkspaceCreateProgress(workspaceId);
   store.addWorkspace({
     repoId: projectId,
@@ -205,6 +206,7 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<stri
     sourceBranch,
     branch: targetBranch,
     worktreePath: "",
+    nodeId: normalizedNodeId || undefined,
     workspaceId,
     organizationId,
   });
@@ -217,7 +219,7 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<stri
       const created = (await client.workspace.createWorkspace({
         workspaceId,
         organizationId,
-        nodeId: input.nodeId?.trim() || undefined,
+        nodeId: normalizedNodeId || undefined,
         projectId,
         repoKey,
         workspaceName: normalizedName,
@@ -296,6 +298,7 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<stri
       sourceBranch: backendWorkspace.sourceBranch,
       branch: backendWorkspace.branch,
       worktreePath: backendWorkspace.worktreePath,
+      nodeId: normalizedNodeId || undefined,
     });
     await completeVisibleCreateProgressSteps(workspaceId);
     workspaceCreateProgressStore.getState().applyWorkspaceCreateProgressEvent({

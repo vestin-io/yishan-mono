@@ -26,7 +26,7 @@ export function createWorkspaceActions(set: WorkspaceStoreSetState, _get: Worksp
   };
 
   return {
-    addWorkspace: ({ organizationId, projectId, repoId, name, sourceBranch, branch, worktreePath, workspaceId }) => {
+    addWorkspace: ({ organizationId, projectId, repoId, name, sourceBranch, branch, worktreePath, workspaceId, nodeId }) => {
       if (!workspaceId) {
         return;
       }
@@ -48,6 +48,7 @@ export function createWorkspaceActions(set: WorkspaceStoreSetState, _get: Worksp
             sourceBranch,
             branch,
             worktreePath: worktreePath ?? "",
+            nodeId,
           },
         });
       });

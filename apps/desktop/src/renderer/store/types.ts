@@ -215,6 +215,7 @@ export type WorkspaceStoreState = {
     sourceBranch: string;
     branch: string;
     worktreePath?: string;
+    nodeId?: string;
     workspaceId: string;
   }) => void;
   removeWorkspace: (input: {

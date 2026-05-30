@@ -43,6 +43,7 @@ export function applyCreatedWorkspaceState(
       sourceBranch: string;
       branch: string;
       worktreePath: string;
+      nodeId?: string;
     };
   },
 ): void {
@@ -58,6 +59,7 @@ export function applyCreatedWorkspaceState(
     branch: input.backendWorkspace.branch || input.normalizedBranch,
     summaryId: nextWorkspaceId,
     worktreePath: input.backendWorkspace.worktreePath,
+    nodeId: input.backendWorkspace.nodeId,
   };
   const existingWorkspaceIndex = state.workspaces.findIndex((workspace) => workspace.id === nextWorkspaceId);
   if (existingWorkspaceIndex >= 0) {
