@@ -173,6 +173,7 @@ function mapApiData(
           branch: workspace.branch ?? "main",
           summaryId: workspace.id,
           worktreePath: workspace.localPath,
+          nodeId: workspace.nodeId,
           kind: "managed",
         }) satisfies WorkspaceItem,
     );

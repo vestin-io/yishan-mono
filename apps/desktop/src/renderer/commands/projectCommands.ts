@@ -253,6 +253,7 @@ export async function createProject(input: {
       sourceBranch: workspace.branch?.trim() || "main",
       branch: workspace.branch?.trim() || "main",
       worktreePath: workspace.localPath,
+      nodeId: workspace.nodeId,
     });
   }
 

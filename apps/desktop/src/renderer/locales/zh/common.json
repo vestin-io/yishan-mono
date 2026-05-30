@@ -788,6 +788,14 @@
       "empty": "当前筛选条件下没有匹配的项目。",
       "searchPlaceholder": "快速搜索项目",
       "searchAriaLabel": "快速搜索项目",
+      "sections": {
+        "hirarchy": "层级",
+        "projects": "项目"
+      },
+      "hierarchy": {
+        "byProject": "按项目",
+        "byNode": "按节点"
+      },
       "actions": {
         "all": "全选"
       }

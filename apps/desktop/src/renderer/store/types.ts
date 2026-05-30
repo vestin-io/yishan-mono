@@ -48,6 +48,7 @@ export type WorkspaceItem = {
   branch: string;
   summaryId: string;
   worktreePath?: string;
+  nodeId?: string;
   kind?: "managed" | "local";
 };
 
@@ -221,6 +222,7 @@ export type WorkspaceStoreState = {
     sourceBranch: string;
     branch: string;
     worktreePath?: string;
+    nodeId?: string;
     workspaceId: string;
   }) => void;
   removeWorkspace: (input: {

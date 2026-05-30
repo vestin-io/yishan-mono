@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 
 export type WorkspaceRightPaneTab = "files" | "changes" | "pr";
+export type WorkspaceListHierarchyMode = "by_project" | "by_node";
 
 type WorkspaceUiStoreState = {
   // ── file tree signals ──────────────────────────────────────────────────────
@@ -13,6 +14,7 @@ type WorkspaceUiStoreState = {
   fileSearchRequestKey: number;
   /** Whether the scheduled job panel is visible in the main pane. */
   isScheduledJobPanelOpen: boolean;
+  workspaceListHierarchyMode: WorkspaceListHierarchyMode;
 
   setSelectedEntryPath: (path: string) => void;
   requestDeleteSelection: () => void;
@@ -20,6 +22,7 @@ type WorkspaceUiStoreState = {
   setRightPaneTab: (tab: WorkspaceRightPaneTab) => void;
   requestFileSearch: () => void;
   setScheduledJobPanelOpen: (isOpen: boolean) => void;
+  setWorkspaceListHierarchyMode: (mode: WorkspaceListHierarchyMode) => void;
 };
 
 /** Stores workspace-scoped UI signals: file-tree selection/commands and right-pane tab state. */
@@ -31,6 +34,7 @@ export const workspaceUiStore = create<WorkspaceUiStoreState>()(
     rightPaneTab: "files",
     fileSearchRequestKey: 0,
     isScheduledJobPanelOpen: false,
+    workspaceListHierarchyMode: "by_project",
 
     setSelectedEntryPath: (selectedEntryPath) => {
       set({ selectedEntryPath });
@@ -55,6 +59,9 @@ export const workspaceUiStore = create<WorkspaceUiStoreState>()(
     },
     setScheduledJobPanelOpen: (isOpen) => {
       set({ isScheduledJobPanelOpen: isOpen });
+    },
+    setWorkspaceListHierarchyMode: (workspaceListHierarchyMode) => {
+      set({ workspaceListHierarchyMode });
     },
   })),
 );

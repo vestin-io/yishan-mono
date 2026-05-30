@@ -12,12 +12,16 @@ const mocked = vi.hoisted(() => {
       projects: Array<{ id: string; name: string; path: string }>;
       displayProjectIds: string[];
       setDisplayProjectIds: (repoIds: string[]) => void;
+      workspaceListHierarchyMode: "by_project" | "by_node";
+      setWorkspaceListHierarchyMode: (mode: "by_project" | "by_node") => void;
     };
   } = {
     current: {
       projects: [{ id: "repo-1", name: "Repo 1", path: "/tmp/repo-1" }],
       displayProjectIds: ["repo-1"],
       setDisplayProjectIds: () => undefined,
+      workspaceListHierarchyMode: "by_project",
+      setWorkspaceListHierarchyMode: () => undefined,
     },
   };
 
@@ -37,6 +41,10 @@ vi.mock("react-i18next", () => ({
         "project.filter.actions.all": "Select all",
         "project.filter.searchPlaceholder": "Quick search projects",
         "project.filter.searchAriaLabel": "Quick search projects",
+        "project.filter.sections.hirarchy": "Hirarchy",
+        "project.filter.sections.projects": "Projects",
+        "project.filter.hierarchy.byProject": "By project",
+        "project.filter.hierarchy.byNode": "By node",
       };
 
       return translations[key] ?? key;
@@ -46,6 +54,10 @@ vi.mock("react-i18next", () => ({
 
 vi.mock("../../../store/workspaceStore", () => ({
   workspaceStore: mocked.workspaceStore,
+}));
+
+vi.mock("../../../store/workspaceUiStore", () => ({
+  workspaceUiStore: mocked.workspaceStore,
 }));
 
 afterEach(() => {
