@@ -14,7 +14,9 @@ function normalizeWorkspacePath(path: string | undefined): string {
 
 function resolveVisibleWorkspaceTargets() {
   const state = workspaceStore.getState();
-  const visibleProjectIds = new Set((state.displayProjectIds ?? []).map((projectId) => projectId.trim()).filter(Boolean));
+  const visibleProjectIds = new Set(
+    (state.displayProjectIds ?? []).map((projectId) => projectId.trim()).filter(Boolean),
+  );
 
   return state.workspaces.filter((workspace) => {
     const worktreePath = workspace.worktreePath?.trim();
@@ -55,6 +57,14 @@ export async function ensureVisibleWorkspacesOpen(mergedWorkspaceIds?: ReadonlyS
   const client = await getDaemonClient();
   const daemonWorkspaces = await client.workspace.list();
   const openPaths = new Set(daemonWorkspaces.map((workspace) => workspace.path.trim()).filter(Boolean));
+
+  // Seed daemon PR info from already-open workspaces so the popover can show
+  // live PR data immediately without waiting for the next polling interval.
+  for (const daemonWorkspace of daemonWorkspaces) {
+    if (daemonWorkspace.pullRequest) {
+      workspaceStore.getState().setWorkspacePullRequest(daemonWorkspace.id, daemonWorkspace.pullRequest);
+    }
+  }
 
   if (import.meta.env.DEV) {
     console.debug("[daemonWorkspaceSync] daemon already-open workspaces", [...openPaths]);
@@ -107,7 +117,7 @@ export async function ensureVisibleWorkspacesOpen(mergedWorkspaceIds?: ReadonlyS
       }
 
       try {
-        await client.workspace.open({
+        const openedWorkspace = await client.workspace.open({
           workspaceId: workspace.id,
           workspaceWorktreePath: worktreePath,
           orgId: workspace.organizationId,
@@ -115,6 +125,9 @@ export async function ensureVisibleWorkspacesOpen(mergedWorkspaceIds?: ReadonlyS
           pullRequestAlreadyMerged: mergedWorkspaceIds?.has(workspace.id) ?? false,
         });
         openPaths.add(worktreePath);
+        if (openedWorkspace.pullRequest) {
+          workspaceStore.getState().setWorkspacePullRequest(openedWorkspace.id, openedWorkspace.pullRequest);
+        }
       } catch (error) {
         console.warn("[daemonWorkspaceSync] failed to open workspace in daemon", {
           workspaceId: workspace.id,
@@ -132,7 +145,9 @@ export async function ensureVisibleWorkspacesOpen(mergedWorkspaceIds?: ReadonlyS
 export async function reconcileDaemonWorkspaces(snapshotWorkspaces: WorkspaceSnapshotRecord[]): Promise<void> {
   const client = await getDaemonClient();
   const daemonWorkspaces = await client.workspace.list();
-  const snapshotPathSet = new Set(snapshotWorkspaces.map((workspace) => normalizeWorkspacePath(workspace.worktreePath)).filter(Boolean));
+  const snapshotPathSet = new Set(
+    snapshotWorkspaces.map((workspace) => normalizeWorkspacePath(workspace.worktreePath)).filter(Boolean),
+  );
 
   await Promise.all(
     daemonWorkspaces.map(async (daemonWorkspace) => {
@@ -141,7 +156,9 @@ export async function reconcileDaemonWorkspaces(snapshotWorkspaces: WorkspaceSna
         return;
       }
 
-      const snapshotMatch = snapshotWorkspaces.find((workspace) => normalizeWorkspacePath(workspace.worktreePath) === daemonPath);
+      const snapshotMatch = snapshotWorkspaces.find(
+        (workspace) => normalizeWorkspacePath(workspace.worktreePath) === daemonPath,
+      );
       try {
         await client.workspace.close({
           workspaceId: daemonWorkspace.id,
