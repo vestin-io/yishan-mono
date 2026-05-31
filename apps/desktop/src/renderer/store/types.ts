@@ -242,6 +242,11 @@ export type WorkspaceStoreState = {
     workspaceId: string;
     branch: string;
   }) => void;
+  reorderWorkspace: (input: {
+    draggedWorkspaceId: string;
+    targetWorkspaceId: string;
+    position: "before" | "after";
+  }) => void;
   setWorkspaceGitChangesCount: (workspaceId: string, count: number) => void;
   setWorkspaceGitChangeTotals: (workspaceId: string, totals: WorkspaceGitChangeTotals) => void;
   setWorkspacePullRequest: (workspaceId: string, pullRequest?: DaemonWorkspacePullRequest) => void;
@@ -275,6 +280,7 @@ export type WorkspaceStoreActions = Pick<
   | "removeWorkspace"
   | "renameWorkspace"
   | "renameWorkspaceBranch"
+  | "reorderWorkspace"
   | "setWorkspaceGitChangesCount"
   | "setWorkspaceGitChangeTotals"
   | "setWorkspacePullRequest"

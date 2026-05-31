@@ -68,4 +68,11 @@ export type WorkspaceTreeProps = {
   createWorkspaceTooltipLabel?: string;
   onProjectCreateWorkspaceClick?: (event: React.MouseEvent<HTMLElement>, projectId: string) => void;
   onProjectActionsClick?: (event: React.MouseEvent<HTMLElement>, projectId: string) => void;
+  onRowReorder?: (input: {
+    draggedRowId: string;
+    targetRowId: string;
+    rowKind: WorkspaceTreeRow["kind"];
+    parentId: string | null;
+    position: "before" | "after";
+  }) => void;
 };
