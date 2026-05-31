@@ -116,6 +116,7 @@ import {
   focusWorkspaceFileTree as focusWorkspaceFileTreeCommand,
   openCreateWorkspaceDialog as openCreateWorkspaceDialogCommand,
   openWorkspaceFileSearch as openWorkspaceFileSearchCommand,
+  reorderWorkspace as reorderWorkspaceCommand,
   refreshWorkspaceGitChanges as refreshWorkspaceGitChangesCommand,
   renameWorkspaceBranch as renameWorkspaceBranchCommand,
   renameWorkspace as renameWorkspaceCommand,
@@ -155,6 +156,7 @@ export type Commands = {
   undoFileTreeOperation: typeof undoFileTreeOperationCommand;
   openWorkspaceFileSearch: typeof openWorkspaceFileSearchCommand;
   renameWorkspace: typeof renameWorkspaceCommand;
+  reorderWorkspace: typeof reorderWorkspaceCommand;
   renameWorkspaceBranch: typeof renameWorkspaceBranchCommand;
   openLocalFolderDialog: typeof openLocalFolderDialogCommand;
   getDefaultWorktreeLocation: typeof getDefaultWorktreeLocationCommand;
@@ -281,6 +283,7 @@ export function useCommands(): Commands {
       undoFileTreeOperation: undoFileTreeOperationCommand,
       openWorkspaceFileSearch: openWorkspaceFileSearchCommand,
       renameWorkspace: renameWorkspaceCommand,
+      reorderWorkspace: reorderWorkspaceCommand,
       renameWorkspaceBranch: renameWorkspaceBranchCommand,
       openLocalFolderDialog: openLocalFolderDialogCommand,
       getDefaultWorktreeLocation: getDefaultWorktreeLocationCommand,

@@ -15,6 +15,7 @@ import { OPEN_CREATE_WORKSPACE_DIALOG_EVENT } from "../../../commands/workspaceC
 import { ContextMenu, type ContextMenuEntry } from "../../../components/ContextMenu";
 import { WorkspaceTree } from "../../../components/WorkspaceTree";
 import type { WorkspaceTreeWorkspace } from "../../../components/WorkspaceTree";
+import type { WorkspaceTreeRow } from "../../../components/WorkspaceTree/types";
 import { getRendererPlatform } from "../../../helpers/platform";
 import { useCommands } from "../../../hooks/useCommands";
 import { useContextMenuState } from "../../../hooks/useContextMenuState";
@@ -54,6 +55,52 @@ function resolveWorkspaceNotificationTone(input: {
   return "none";
 }
 
+function reorderIds(input: {
+  ids: string[];
+  draggedId: string;
+  targetId: string;
+  position: "before" | "after";
+}): string[] {
+  const draggedIndex = input.ids.indexOf(input.draggedId);
+  const targetIndex = input.ids.indexOf(input.targetId);
+  if (draggedIndex < 0 || targetIndex < 0) {
+    return input.ids;
+  }
+
+  const nextIds = [...input.ids];
+  const [movedId] = nextIds.splice(draggedIndex, 1);
+  if (!movedId) {
+    return input.ids;
+  }
+
+  const nextTargetIndex = nextIds.indexOf(input.targetId);
+  if (nextTargetIndex < 0) {
+    return input.ids;
+  }
+
+  const insertIndex = input.position === "after" ? nextTargetIndex + 1 : nextTargetIndex;
+  nextIds.splice(insertIndex, 0, movedId);
+  return nextIds;
+}
+
+function parseProjectRowProjectId(rowId: string): string {
+  const value = rowId.replace(/^project:/, "");
+  const splitIndex = value.indexOf(":");
+  if (splitIndex < 0) {
+    return value;
+  }
+  return value.slice(splitIndex + 1);
+}
+
+function parseNodeRowNodeId(rowId: string): string {
+  const value = rowId.replace(/^node:/, "");
+  const splitIndex = value.indexOf(":");
+  if (splitIndex < 0) {
+    return value;
+  }
+  return value.slice(splitIndex + 1);
+}
+
 /** Renders project rows and nested workspace rows with per-project fold controls. */
 export function ProjectListView() {
   const { t } = useTranslation();
@@ -67,6 +114,7 @@ export function ProjectListView() {
   const {
     setSelectedRepoId,
     setSelectedWorkspaceId,
+    reorderWorkspace,
     closeWorkspace,
     deleteProject,
     openEntryInExternalApp,
@@ -135,6 +183,8 @@ export function ProjectListView() {
   const [foldedNodeKeys, setFoldedNodeKeys] = useState<string[]>([]);
   const [projectActionsAnchorEl, setProjectActionsAnchorEl] = useState<HTMLElement | null>(null);
   const [projectActionsProjectId, setProjectActionsProjectId] = useState("");
+  const [projectOrderIds, setProjectOrderIds] = useState<string[]>([]);
+  const [nodeOrderByParentId, setNodeOrderByParentId] = useState<Record<string, string[]>>({});
   const [isAppFocused, setIsAppFocused] = useState(() => document.hasFocus());
   const workspaceListHierarchyMode = workspaceUiStore((state) => state.workspaceListHierarchyMode);
   const selectedOrganizationId = sessionStore((state) => state.selectedOrganizationId);
@@ -211,7 +261,13 @@ export function ProjectListView() {
     }
     return acc;
   }, {});
-  const filteredProjects = projects.filter((p) => displayProjectIds.includes(p.id));
+  const filteredProjects = useMemo(() => {
+    const projectById = new Map(projects.filter((project) => displayProjectIds.includes(project.id)).map((project) => [project.id, project]));
+    const orderedIds = projectOrderIds.filter((projectId) => projectById.has(projectId));
+    const missingIds = Array.from(projectById.keys()).filter((projectId) => !orderedIds.includes(projectId));
+    const nextIds = [...orderedIds, ...missingIds];
+    return nextIds.map((projectId) => projectById.get(projectId)).filter((project): project is NonNullable<typeof project> => Boolean(project));
+  }, [displayProjectIds, projectOrderIds, projects]);
   const treeProjects = filteredProjects.map((project) => ({
     id: project.id,
     name: project.name,
@@ -239,7 +295,20 @@ export function ProjectListView() {
         ? projectWorkspaces.filter((workspace) => workspace.kind !== "local")
         : projectWorkspaces;
 
-      for (const workspace of displayedWorkspaces) {
+      const parentNodeOrder = nodeOrderByParentId[`project:${project.id}`] ?? [];
+      const nodeRankById = new Map(parentNodeOrder.map((nodeId, index) => [nodeId, index]));
+      const sortedWorkspaces = [...displayedWorkspaces].sort((a, b) => {
+        const nodeA = a.nodeId?.trim() || "unknown";
+        const nodeB = b.nodeId?.trim() || "unknown";
+        const rankA = nodeRankById.get(nodeA) ?? Number.MAX_SAFE_INTEGER;
+        const rankB = nodeRankById.get(nodeB) ?? Number.MAX_SAFE_INTEGER;
+        if (rankA !== rankB) {
+          return rankA - rankB;
+        }
+        return 0;
+      });
+
+      for (const workspace of sortedWorkspaces) {
         rows.push({
           id: workspace.id,
           name: workspace.kind === "local" || localDisplayWorkspaceId === workspace.id ? "local" : workspace.title,
@@ -256,10 +325,34 @@ export function ProjectListView() {
         });
       }
     }
-    return rows;
+    if (workspaceListHierarchyMode !== "by_node") {
+      return rows;
+    }
+
+    const topNodeOrder = nodeOrderByParentId["root:node"] ?? [];
+    const topNodeRankById = new Map(topNodeOrder.map((nodeId, index) => [nodeId, index]));
+    return [...rows].sort((a, b) => {
+      const rankNodeA = topNodeRankById.get(a.nodeId) ?? Number.MAX_SAFE_INTEGER;
+      const rankNodeB = topNodeRankById.get(b.nodeId) ?? Number.MAX_SAFE_INTEGER;
+      if (rankNodeA !== rankNodeB) {
+        return rankNodeA - rankNodeB;
+      }
+
+      const projectOrder = nodeOrderByParentId[`node:${a.nodeId}`] ?? [];
+      const projectRankById = new Map(projectOrder.map((projectId, index) => [projectId, index]));
+      const rankProjectA = projectRankById.get(a.projectId) ?? Number.MAX_SAFE_INTEGER;
+      const rankProjectB = projectRankById.get(b.projectId) ?? Number.MAX_SAFE_INTEGER;
+      if (rankProjectA !== rankProjectB) {
+        return rankProjectA - rankProjectB;
+      }
+
+      return 0;
+    });
   }, [
     filteredProjects,
     gitChangeTotalsByWorkspaceId,
+    nodeOrderByParentId,
+    workspaceListHierarchyMode,
     workspaceAgentStatusByWorkspaceId,
     workspaceByProjectId,
     workspaceUnreadToneByWorkspaceId,
@@ -639,7 +732,29 @@ export function ProjectListView() {
                 new Set(treeWorkspaces.map((workspace) => `${workspace.nodeId}:${workspace.projectId}`)),
               );
               setFoldedProjectIds(visibleNodeIds.filter((nodeId) => !expandedNodeIds.has(nodeId)));
-              setFoldedNodeKeys(visibleProjectKeys.filter((projectKey) => !expandedProjectKeys.has(projectKey)));
+            setFoldedNodeKeys((current) => {
+              const next = new Set(current);
+              for (const projectKey of visibleProjectKeys) {
+                const [nodeId] = projectKey.split(":");
+                if (!nodeId || !expandedNodeIds.has(nodeId)) {
+                  continue;
+                }
+
+                if (expandedProjectKeys.has(projectKey)) {
+                  next.delete(projectKey);
+                } else {
+                  // Only mark as folded if the parent node was already expanded before
+                  // this change. If the node was just re-expanded (was in foldedProjectIds),
+                  // absence of the project key from items means the tree hasn't rendered
+                  // it yet — not that the user folded it.
+                  const nodeWasPreviouslyFolded = foldedProjectIds.includes(nodeId);
+                  if (!nodeWasPreviouslyFolded) {
+                    next.add(projectKey);
+                  }
+                }
+              }
+              return Array.from(next);
+            });
               return;
             }
 
@@ -657,9 +772,35 @@ export function ProjectListView() {
               .map((project) => project.id)
               .filter((projectId) => !expandedProjectIds.has(projectId));
             const visibleNodeKeys = Array.from(new Set(treeWorkspaces.map((workspace) => `${workspace.projectId}:${workspace.nodeId}`)));
-            const nextFoldedNodeKeys = visibleNodeKeys.filter((nodeKey) => !expandedNodeKeys.has(nodeKey));
             setFoldedProjectIds(nextFoldedProjectIds);
-            setFoldedNodeKeys(nextFoldedNodeKeys);
+            setFoldedNodeKeys((current) => {
+              const next = new Set(current);
+              for (const nodeKey of visibleNodeKeys) {
+                const [projectId] = nodeKey.split(":");
+                if (!projectId) {
+                  continue;
+                }
+
+                if (!expandedProjectIds.has(projectId)) {
+                  next.delete(nodeKey);
+                  continue;
+                }
+
+                if (expandedNodeKeys.has(nodeKey)) {
+                  next.delete(nodeKey);
+                } else {
+                  // Only mark as folded if the project was already expanded before
+                  // this change. If the project was just re-expanded (was in
+                  // foldedProjectIds), absence means the tree hasn't rendered the
+                  // child yet — not that the user explicitly folded the node.
+                  const projectWasPreviouslyFolded = foldedProjectIds.includes(projectId);
+                  if (!projectWasPreviouslyFolded) {
+                    next.add(nodeKey);
+                  }
+                }
+              }
+              return Array.from(next);
+            });
           }}
           deleteWorkspaceLabel={t("workspace.actions.delete")}
           createWorkspaceTooltipLabel={createWorkspaceTooltipLabel}
@@ -718,6 +859,83 @@ export function ProjectListView() {
           onWorkspaceMouseLeave={handleWorkspaceInfoMouseLeave}
           onWorkspaceRequestDelete={(workspaceId, projectId) => {
             handleRequestWorkspaceDeletion(projectId, workspaceId);
+          }}
+          onRowReorder={({ draggedRowId, targetRowId, rowKind, parentId, position }) => {
+            if (rowKind === "workspace") {
+              const draggedId = draggedRowId.replace(/^workspace:/, "");
+              const targetId = targetRowId.replace(/^workspace:/, "");
+              reorderWorkspace({
+                draggedWorkspaceId: draggedId,
+                targetWorkspaceId: targetId,
+                position,
+              });
+              return;
+            }
+
+            if (rowKind === "project") {
+              const draggedProjectId = parseProjectRowProjectId(draggedRowId);
+              const targetProjectId = parseProjectRowProjectId(targetRowId);
+              if (workspaceListHierarchyMode === "by_node" && parentId) {
+                const parentNodeId = parentId.replace(/^node:/, "").split(":")[0] ?? "";
+                const projectIdsUnderNode = Array.from(
+                  new Set(
+                    treeWorkspaces
+                      .filter((workspace) => workspace.nodeId === parentNodeId)
+                      .map((workspace) => workspace.projectId),
+                  ),
+                );
+                const currentOrder = nodeOrderByParentId[parentId] ?? projectIdsUnderNode;
+                const nextOrder = reorderIds({
+                  ids: currentOrder,
+                  draggedId: draggedProjectId,
+                  targetId: targetProjectId,
+                  position,
+                });
+                setNodeOrderByParentId((current) => ({
+                  ...current,
+                  [parentId]: nextOrder,
+                }));
+                return;
+              }
+
+              const nextProjectIds = reorderIds({
+                ids: filteredProjects.map((project) => project.id),
+                draggedId: draggedProjectId,
+                targetId: targetProjectId,
+                position,
+              });
+              setProjectOrderIds(nextProjectIds);
+              return;
+            }
+
+            if (rowKind === "node") {
+              const draggedNodeId = parseNodeRowNodeId(draggedRowId);
+              const targetNodeId = parseNodeRowNodeId(targetRowId);
+              const reorderParentId = parentId ?? "root:node";
+              const nodeIdsUnderParent = Array.from(
+                new Set(
+                  treeWorkspaces
+                    .filter((workspace) => {
+                      if (workspaceListHierarchyMode === "by_project") {
+                        return `project:${workspace.projectId}` === reorderParentId;
+                      }
+                      return `node:${workspace.nodeId}` === reorderParentId;
+                    })
+                    .map((workspace) => workspace.nodeId),
+                ),
+              );
+              const currentOrder = nodeOrderByParentId[reorderParentId] ?? nodeIdsUnderParent;
+              const nextOrder = reorderIds({
+                ids: currentOrder,
+                draggedId: draggedNodeId,
+                targetId: targetNodeId,
+                position,
+              });
+              setNodeOrderByParentId((current) => ({
+                ...current,
+                [reorderParentId]: nextOrder,
+              }));
+            }
           }}
         />
       </Box>

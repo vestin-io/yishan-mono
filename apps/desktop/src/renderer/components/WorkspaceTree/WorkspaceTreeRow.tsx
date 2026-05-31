@@ -4,7 +4,7 @@ import { LuEllipsis } from "react-icons/lu";
 import { LuPlus } from "react-icons/lu";
 import { LuArchive } from "react-icons/lu";
 import { HiCubeTransparent, HiOutlineCube } from "react-icons/hi2";
-import type { MouseEvent } from "react";
+import type { DragEvent, MouseEvent } from "react";
 import { renderProjectIcon } from "../projectIcons";
 import { GitChangeTotals } from "../GitChangeTotals";
 import { CliSpinner } from "../CliSpinner";
@@ -19,6 +19,7 @@ type WorkspaceTreeRowViewProps = {
   onClick: () => void;
   onToggle?: () => void;
   onMouseEnter?: (event: MouseEvent<HTMLElement>) => void;
+  onMouseOver?: () => void;
   onMouseLeave?: () => void;
   onContextMenu?: (event: MouseEvent<HTMLElement>) => void;
   onProjectCreateWorkspaceClick?: (event: MouseEvent<HTMLElement>) => void;
@@ -26,6 +27,11 @@ type WorkspaceTreeRowViewProps = {
   deleteWorkspaceLabel?: string;
   onWorkspaceRequestDelete?: () => void;
   createWorkspaceTooltipLabel?: string;
+  draggable?: boolean;
+  onDragStart?: (event: DragEvent<HTMLElement>) => void;
+  onDragOver?: (event: DragEvent<HTMLElement>) => void;
+  onDrop?: (event: DragEvent<HTMLElement>) => void;
+  onDragEnd?: (event: DragEvent<HTMLElement>) => void;
 };
 
 export function WorkspaceTreeRowView({
@@ -35,6 +41,7 @@ export function WorkspaceTreeRowView({
   onClick,
   onToggle,
   onMouseEnter,
+  onMouseOver,
   onMouseLeave,
   onContextMenu,
   onProjectCreateWorkspaceClick,
@@ -42,6 +49,11 @@ export function WorkspaceTreeRowView({
   deleteWorkspaceLabel,
   onWorkspaceRequestDelete,
   createWorkspaceTooltipLabel,
+  draggable = false,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
 }: WorkspaceTreeRowViewProps) {
   const theme = useTheme();
   const isFolderLike = row.kind !== "workspace";
@@ -60,8 +72,24 @@ export function WorkspaceTreeRowView({
       data-testid={row.kind === "workspace" ? `workspace-row-${workspaceId}` : undefined}
       role="treeitem"
       aria-expanded={isFolderLike ? isExpanded : undefined}
+      draggable={draggable}
       onClick={onClick}
+      onDragStart={(event) => {
+        event.stopPropagation();
+        event.dataTransfer.effectAllowed = "move";
+        onDragStart?.(event);
+      }}
+      onDragOver={(event) => {
+        onDragOver?.(event);
+      }}
+      onDrop={(event) => {
+        onDrop?.(event);
+      }}
+      onDragEnd={(event) => {
+        onDragEnd?.(event);
+      }}
       onMouseEnter={onMouseEnter}
+      onMouseOver={onMouseOver}
       onMouseLeave={onMouseLeave}
       onContextMenu={onContextMenu}
       sx={{
@@ -122,17 +150,17 @@ export function WorkspaceTreeRowView({
             onToggle?.();
           }}
           sx={{
-            width: 16,
-            height: 16,
+            width: 20,
+            height: 20,
             mr: 0.5,
             color: "text.secondary",
             transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
           }}
         >
-          <LuChevronRight size={14} />
+          <LuChevronRight size={18} />
         </IconButton>
       ) : (
-        <Box sx={{ width: 16, height: 16, mr: 0.5 }} />
+        <Box sx={{ width: 20, height: 20, mr: 0.5 }} />
       )}
       {row.kind === "project" ? (
         <Box

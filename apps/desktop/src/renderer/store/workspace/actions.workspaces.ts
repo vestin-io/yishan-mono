@@ -13,6 +13,7 @@ type WorkspaceActions = Pick<
   | "removeWorkspace"
   | "renameWorkspace"
   | "renameWorkspaceBranch"
+  | "reorderWorkspace"
   | "setWorkspaceGitChangesCount"
   | "setWorkspaceGitChangeTotals"
   | "setWorkspacePullRequest"
@@ -94,6 +95,58 @@ export function createWorkspaceActions(set: WorkspaceStoreSetState, _get: Worksp
           workspaceId,
           normalizedBranch,
         });
+      });
+    },
+    reorderWorkspace: ({ draggedWorkspaceId, targetWorkspaceId, position }) => {
+      if (!draggedWorkspaceId || !targetWorkspaceId || draggedWorkspaceId === targetWorkspaceId) {
+        return;
+      }
+
+      set((state) => {
+        const draggedIndex = state.workspaces.findIndex((workspace) => workspace.id === draggedWorkspaceId);
+        const targetIndex = state.workspaces.findIndex((workspace) => workspace.id === targetWorkspaceId);
+        if (draggedIndex < 0 || targetIndex < 0) {
+          return;
+        }
+
+        const draggedWorkspace = state.workspaces[draggedIndex];
+        const targetWorkspace = state.workspaces[targetIndex];
+        if (!draggedWorkspace || !targetWorkspace) {
+          return;
+        }
+
+        const draggedProjectId = resolveProjectId({
+          projectId: draggedWorkspace.projectId,
+          repoId: draggedWorkspace.repoId,
+        });
+        const targetProjectId = resolveProjectId({
+          projectId: targetWorkspace.projectId,
+          repoId: targetWorkspace.repoId,
+        });
+        const draggedNodeId = draggedWorkspace.nodeId?.trim() ?? "";
+        const targetNodeId = targetWorkspace.nodeId?.trim() ?? "";
+        if (
+          !draggedProjectId ||
+          !targetProjectId ||
+          draggedProjectId !== targetProjectId ||
+          draggedNodeId !== targetNodeId
+        ) {
+          return;
+        }
+
+        const [movedWorkspace] = state.workspaces.splice(draggedIndex, 1);
+        if (!movedWorkspace) {
+          return;
+        }
+
+        const nextTargetIndex = state.workspaces.findIndex((workspace) => workspace.id === targetWorkspaceId);
+        if (nextTargetIndex < 0) {
+          state.workspaces.splice(draggedIndex, 0, movedWorkspace);
+          return;
+        }
+
+        const insertionIndex = position === "after" ? nextTargetIndex + 1 : nextTargetIndex;
+        state.workspaces.splice(insertionIndex, 0, movedWorkspace);
       });
     },
     setWorkspaceGitChangesCount: (workspaceId, count) => {

@@ -254,6 +254,19 @@ export function renameWorkspace(input: { projectId?: string; repoId?: string; wo
   });
 }
 
+/** Reorders one workspace in the left-pane workspace list. */
+export function reorderWorkspace(input: {
+  draggedWorkspaceId: string;
+  targetWorkspaceId: string;
+  position: "before" | "after";
+}) {
+  if (!input.draggedWorkspaceId || !input.targetWorkspaceId || input.draggedWorkspaceId === input.targetWorkspaceId) {
+    return;
+  }
+
+  readWorkspaceStoreState().reorderWorkspace(input);
+}
+
 /** Renames one managed workspace branch in git and mirrors the new branch in renderer store state. */
 export async function renameWorkspaceBranch(input: {
   projectId?: string;
