@@ -1,11 +1,9 @@
 import { Box } from "@mui/material";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { LuGlobe, LuSquareTerminal } from "react-icons/lu";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LuSquareTerminal } from "react-icons/lu";
 import { SYSTEM_FILE_MANAGER_APP_ID, findExternalAppPreset } from "../../../shared/contracts/externalApps";
 import { SplitPaneContainer } from "../../components/SplitPaneContainer";
 import { SplitPaneGroup } from "../../components/SplitPaneGroup";
-import { TabPanel } from "../../components/TabPanel";
 import { getFileTreeIcon } from "../../components/fileTreeIcons";
 import { type DesktopAgentKind, SUPPORTED_DESKTOP_AGENT_KINDS } from "../../helpers/agentSettings";
 import { useCommands } from "../../hooks/useCommands";
@@ -16,56 +14,11 @@ import { splitPaneStore } from "../../store/splitPaneStore";
 import { tabStore } from "../../store/tabStore";
 import type { WorkspaceTab } from "../../store/types";
 import { workspaceStore } from "../../store/workspaceStore";
-import { DARK_SURFACE_COLORS } from "../../theme";
-import { LaunchView } from "./LaunchView";
-import { MainPaneTitleBarView } from "./MainPaneTitleBarView";
-import { removeWebviewsForClosedTabs } from "./browser/webviewRegistry";
-import { getOrCreateRuntimeRoot } from "./runtime/runtimeRoot";
-import { disposeTerminalRuntimesForClosedTabs } from "./terminal/terminalRuntimeRegistry";
+import { WorkspaceTabSurfaceLayer } from "./WorkspaceTabSurfaceLayer";
+import { FaviconIcon, toTabBarDescriptor } from "./workspaceSplitPaneHelpers";
+import { useWorkspaceTabPlacements } from "./useWorkspaceTabPlacements";
 import { usePaneTabHandlers } from "./usePaneTabHandlers";
 import { useTabContentRenderer } from "./useTabContentRenderer";
-
-// ─── Small helpers ────────────────────────────────────────────────────────────
-
-function FaviconIcon({ url, size }: { url?: string; size: number }) {
-  const [failed, setFailed] = useState(false);
-  if (!url || failed) {
-    return <LuGlobe size={size} />;
-  }
-  return (
-    <Box
-      component="img"
-      src={url}
-      alt=""
-      sx={{ width: size, height: size, flexShrink: 0, objectFit: "contain" }}
-      onError={() => setFailed(true)}
-    />
-  );
-}
-
-function collectPaneLeaves(node: SplitPaneNode | null | undefined): PaneLeaf[] {
-  if (!node) {
-    return [];
-  }
-  if (node.kind === "leaf") {
-    return [node];
-  }
-  return [...collectPaneLeaves(node.first), ...collectPaneLeaves(node.second)];
-}
-
-/** Converts a full WorkspaceTab to the lightweight descriptor used by TabBar/SplitPaneGroup. */
-function toTabBarDescriptor(tab: WorkspaceTab) {
-  return {
-    id: tab.id,
-    title: tab.title,
-    pinned: tab.pinned,
-    kind: tab.kind,
-    isDirty: tab.kind === "file" ? tab.data.isDirty : false,
-    isTemporary: ["file", "image", "diff"].includes(tab.kind)
-      ? (tab.data as { isTemporary: boolean }).isTemporary
-      : false,
-  };
-}
 
 // ─── Per-workspace split pane ─────────────────────────────────────────────────
 
@@ -117,8 +70,6 @@ export function WorkspaceSplitPane({ workspaceId, isActive, workspaceTabs }: Wor
   const [isDraggingSplit, setIsDraggingSplit] = useState(false);
   const didTrackSelectedTabRef = useRef(false);
   const didSyncPaneSelectionRef = useRef(false);
-  const [panePlaceholders, setPanePlaceholders] = useState<Record<string, HTMLDivElement | null>>({});
-  const [layoutVersion, setLayoutVersion] = useState(0);
   const lastKnownRectByTabIdRef = useRef<Record<string, { left: number; top: number; width: number; height: number }>>(
     {},
   );
@@ -126,6 +77,7 @@ export function WorkspaceSplitPane({ workspaceId, isActive, workspaceTabs }: Wor
   const layout = splitPaneStore((state) => state.layoutByWorkspaceId[workspaceId]);
   const splitRoot = layout?.root;
   const activePaneId = layout?.activePaneId ?? "";
+  const { tabPlacements, handleContentPlaceholderChange } = useWorkspaceTabPlacements({ splitRoot, activePaneId });
 
   const tabById = useMemo(() => {
     const map = new Map<string, WorkspaceTab>();
@@ -271,123 +223,7 @@ export function WorkspaceSplitPane({ workspaceId, isActive, workspaceTabs }: Wor
     onOpenExternalApp: handleOpenExternalApp,
   });
 
-  // ─── Tab surface renderer (fixed-position portal overlay) ─────────────────
-
-  const renderTabSurface = useCallback(
-    (
-      tab: WorkspaceTab,
-      isSelected: boolean,
-      isInActivePane: boolean,
-      rect: { left: number; top: number; width: number; height: number } | null,
-      paneId: string,
-    ) => {
-      const hasArea = Boolean(rect && rect.width > 1 && rect.height > 1);
-      if (hasArea && rect) {
-        lastKnownRectByTabIdRef.current[tab.id] = rect;
-      }
-      const effectiveRect = rect ?? lastKnownRectByTabIdRef.current[tab.id] ?? null;
-      const shouldShow =
-        isActive && isSelected && Boolean(effectiveRect && effectiveRect.width > 1 && effectiveRect.height > 1);
-      const style = effectiveRect
-        ? {
-            position: "fixed" as const,
-            left: effectiveRect.left,
-            top: effectiveRect.top,
-            width: effectiveRect.width,
-            height: effectiveRect.height,
-            display: shouldShow && !isDraggingSplit ? "flex" : "none",
-            flexDirection: "column" as const,
-            pointerEvents: shouldShow && !isDraggingSplit ? "auto" : "none",
-          }
-        : {
-            position: "absolute" as const,
-            left: 0,
-            top: 0,
-            width: 0,
-            height: 0,
-            display: "none",
-            flexDirection: "column" as const,
-            pointerEvents: "none",
-          };
-
-      return (
-        <Box
-          key={tab.id}
-          sx={style}
-          onMouseDown={() => {
-            if (!isInActivePane) {
-              handleFocusPane(paneId);
-            }
-          }}
-        >
-          {renderTabContent(tab, isSelected, isInActivePane)}
-        </Box>
-      );
-    },
-    [isActive, isDraggingSplit, handleFocusPane, renderTabContent],
-  );
-
   const renderPaneContent = useCallback((_pane: PaneLeaf, _placeholder: HTMLDivElement | null) => null, []);
-
-  const handleContentPlaceholderChange = useCallback((paneId: string, placeholder: HTMLDivElement | null) => {
-    setPanePlaceholders((prev) => (prev[paneId] === placeholder ? prev : { ...prev, [paneId]: placeholder }));
-  }, []);
-
-  // ─── Layout / resize observer ─────────────────────────────────────────────
-
-  const tabPlacements = useMemo(() => {
-    const placements = new Map<
-      string,
-      {
-        paneId: string;
-        selected: boolean;
-        activePane: boolean;
-        rect: { left: number; top: number; width: number; height: number } | null;
-      }
-    >();
-    if (!splitRoot) {
-      return placements;
-    }
-    const leaves = collectPaneLeaves(splitRoot);
-    for (const pane of leaves) {
-      const placeholder = panePlaceholders[pane.id];
-      let rect: { left: number; top: number; width: number; height: number } | null = null;
-      if (placeholder) {
-        const bounds = placeholder.getBoundingClientRect();
-        rect = { left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height };
-      }
-      for (const tabId of pane.tabIds) {
-        placements.set(tabId, {
-          paneId: pane.id,
-          selected: tabId === pane.selectedTabId,
-          activePane: pane.id === activePaneId,
-          rect,
-        });
-      }
-    }
-    return placements;
-  }, [splitRoot, panePlaceholders, layoutVersion, activePaneId]);
-
-  useLayoutEffect(() => {
-    const observedElements = Object.values(panePlaceholders).filter(
-      (element): element is HTMLDivElement => element != null,
-    );
-    if (observedElements.length === 0 || typeof ResizeObserver !== "function") {
-      return;
-    }
-
-    const resizeObserver = new ResizeObserver(() => {
-      setLayoutVersion((version) => version + 1);
-    });
-
-    for (const element of observedElements) {
-      resizeObserver.observe(element);
-    }
-
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, [panePlaceholders]);
 
   // ─── Pane renderer ────────────────────────────────────────────────────────
 
@@ -459,32 +295,15 @@ export function WorkspaceSplitPane({ workspaceId, isActive, workspaceTabs }: Wor
   return (
     <Box sx={{ position: "relative", height: "100%" }}>
       <SplitPaneContainer node={splitRoot} renderPane={renderPane} onSplitRatioChange={handleSplitRatioChange} />
-      {createPortal(
-        <Box
-          sx={{
-            position: "fixed",
-            left: 0,
-            top: 0,
-            width: 0,
-            height: 0,
-            pointerEvents: "none",
-            opacity: isDraggingSplit ? 0.28 : 1,
-            transition: "opacity 120ms ease-out",
-          }}
-        >
-          {workspaceTabs.map((tab) => {
-            const placement = tabPlacements.get(tab.id);
-            return renderTabSurface(
-              tab,
-              placement?.selected ?? false,
-              placement?.activePane ?? false,
-              placement?.rect ?? null,
-              placement?.paneId ?? "",
-            );
-          })}
-        </Box>,
-        getOrCreateRuntimeRoot(),
-      )}
+      <WorkspaceTabSurfaceLayer
+        isActive={isActive}
+        isDraggingSplit={isDraggingSplit}
+        workspaceTabs={workspaceTabs}
+        tabPlacements={tabPlacements}
+        lastKnownRectByTabIdRef={lastKnownRectByTabIdRef}
+        handleFocusPane={handleFocusPane}
+        renderTabContent={renderTabContent}
+      />
     </Box>
   );
 }
