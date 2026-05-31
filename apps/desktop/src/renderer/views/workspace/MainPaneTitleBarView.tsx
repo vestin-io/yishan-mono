@@ -14,7 +14,6 @@ import {
 } from "@mui/material";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { HiCubeTransparent, HiOutlineCube } from "react-icons/hi2";
 import { LuChevronRight, LuPanelLeft, LuPanelRight, LuPlay } from "react-icons/lu";
 import { getMainWindowFullscreenState } from "../../commands/appCommands";
 import { PaneHeader } from "../../components/PaneHeader";
@@ -25,61 +24,9 @@ import { useCommands } from "../../hooks/useCommands";
 import { useWorkspacePaneVisibilityContext } from "../../hooks/useWorkspacePaneVisibility";
 import { getShortcutDisplayLabelById } from "../../shortcuts/shortcutDisplay";
 import { chatStore } from "../../store/chatStore";
-import type { WorkspaceItem, WorkspaceProjectRecord } from "../../store/types";
 import { workspaceStore } from "../../store/workspaceStore";
 import { WorkspacePortsMenuControl } from "./WorkspacePortsMenuControl";
-
-/** Resolves the workspace displayed as local in the left pane for a project. */
-function resolvePrimaryWorkspaceId(project: WorkspaceProjectRecord | undefined, workspaces: WorkspaceItem[]) {
-  const preferredProjectPath =
-    project?.localPath?.trim() || project?.path?.trim() || project?.worktreePath?.trim() || "";
-  if (!project || !preferredProjectPath) {
-    return undefined;
-  }
-
-  return workspaces.find(
-    (workspace) =>
-      workspace.repoId === project.id &&
-      workspace.kind !== "local" &&
-      workspace.worktreePath?.trim() === preferredProjectPath,
-  )?.id;
-}
-
-/** Renders the same workspace kind icon used by left-pane workspace rows. */
-function renderWorkspaceKindIcon(workspace: WorkspaceItem | undefined, isPrimaryWorkspace: boolean, size: number) {
-  if (workspace?.kind === "local" || isPrimaryWorkspace) {
-    return <HiOutlineCube size={size} />;
-  }
-
-  return <HiCubeTransparent size={size} />;
-}
-
-type MenuSearchFieldProps = {
-  placeholder: string;
-  value: string;
-  onChange: (value: string) => void;
-};
-
-/** Renders a compact search TextField used inside a Menu header row. */
-function MenuSearchField({ placeholder, value, onChange }: MenuSearchFieldProps) {
-  return (
-    <MenuItem disableRipple disableTouchRipple disableGutters sx={{ px: 1, py: 0.5, cursor: "default" }}>
-      <TextField
-        autoFocus
-        size="small"
-        fullWidth
-        placeholder={placeholder}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        slotProps={{ htmlInput: { "aria-label": placeholder } }}
-        sx={{
-          "& .MuiInputBase-root": { minHeight: 28 },
-          "& .MuiInputBase-input": { py: 0.5, fontSize: 13 },
-        }}
-      />
-    </MenuItem>
-  );
-}
+import { MenuSearchField, renderWorkspaceKindIcon, resolvePrimaryWorkspaceId } from "./mainPaneTitleBarHelpers";
 
 /** Renders the main pane title bar with repo/workspace selectors and pane toggle controls. */
 export function MainPaneTitleBarView() {
