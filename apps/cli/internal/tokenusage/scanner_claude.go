@@ -106,6 +106,7 @@ func scanClaudeTranscriptFile(
 
 	fallbackSessionID := strings.TrimSuffix(filepath.Base(transcriptFile), ".jsonl")
 	scanner := bufio.NewScanner(fileHandle)
+	scanner.Buffer(make([]byte, 0, 64*1024), maxTokenUsageScanLineBytes)
 	for scanner.Scan() {
 		if err := ctx.Err(); err != nil {
 			return err

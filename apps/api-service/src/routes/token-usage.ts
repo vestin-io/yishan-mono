@@ -12,19 +12,22 @@ import {
 } from "@/validation/token-usage";
 
 export const tokenUsageRouter = new Hono<AppEnv>();
+const router = new Hono<AppEnv>();
 
-tokenUsageRouter.use("/*", requireOrganizationMemberFromParam);
+router.use("/*", requireOrganizationMemberFromParam);
 
-tokenUsageRouter.get(
-  "/orgs/:orgId/token-usage/hourly",
+router.get(
+  "/token-usage/hourly",
   zValidator("param", tokenUsageOrgParamsSchema, validationErrorResponse),
   zValidator("query", tokenUsageHourlyQuerySchema, validationErrorResponse),
   (c) => listTokenUsageHourlyHandler(c, c.req.valid("param"), c.req.valid("query")),
 );
 
-tokenUsageRouter.post(
-  "/orgs/:orgId/token-usage/hourly",
+router.post(
+  "/token-usage/hourly",
   zValidator("param", tokenUsageOrgParamsSchema, validationErrorResponse),
   zValidator("json", upsertTokenUsageHourlyBodySchema, validationErrorResponse),
   (c) => upsertTokenUsageHourlyHandler(c, c.req.valid("param"), c.req.valid("json")),
 );
+
+tokenUsageRouter.route("/orgs/:orgId", router);

@@ -179,7 +179,7 @@ func applyOpenCodeSessionRow(
 	}
 	cwd := firstNonEmptyPath(sessionRow.Directory, sessionRow.WorkspaceDir, sessionRow.Worktree)
 	workspace, confidence := resolveWorktree(cwd, worktrees)
-	event := codexEvent{SessionID: sessionRow.SessionID, Model: sessionRow.SessionModel, Timestamp: timestamp}
+	event := codexEvent{SessionID: sessionRow.SessionID, Model: normalizeOpenCodeModel(sessionRow.SessionModel), Timestamp: timestamp}
 	delta := codexUsage{
 		InputTokens:       sessionRow.TokensInput,
 		OutputTokens:      sessionRow.TokensOutput,
@@ -193,6 +193,40 @@ func applyOpenCodeSessionRow(
 	key := makeOpenCodeHourlyKey(event, workspace, confidence, databasePath)
 	acc := getAccumulator(buckets, key)
 	accumulateDelta(acc, delta, sessionRow.SessionID)
+}
+
+func normalizeOpenCodeModel(rawModel string) string {
+	trimmed := strings.TrimSpace(rawModel)
+	if trimmed == "" {
+		return "unknown"
+	}
+
+	if !strings.HasPrefix(trimmed, "{") {
+		return trimmed
+	}
+
+	type modelPayload struct {
+		ID         string `json:"id"`
+		ModelID    string `json:"modelID"`
+		ModelIdAlt string `json:"modelId"`
+		ProviderID string `json:"providerID"`
+		ProviderId string `json:"providerId"`
+	}
+
+	var parsed modelPayload
+	if err := json.Unmarshal([]byte(trimmed), &parsed); err != nil {
+		return trimmed
+	}
+
+	modelID := firstNonEmptyPath(parsed.ModelID, parsed.ModelIdAlt, parsed.ID)
+	providerID := firstNonEmptyPath(parsed.ProviderID, parsed.ProviderId)
+	if strings.TrimSpace(modelID) == "" {
+		return trimmed
+	}
+	if strings.TrimSpace(providerID) == "" {
+		return modelID
+	}
+	return providerID + "/" + modelID
 }
 
 func firstNonEmptyPath(values ...string) string {

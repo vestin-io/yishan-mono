@@ -13,6 +13,7 @@ import (
 )
 
 const codexAgentKind = "codex"
+const maxTokenUsageScanLineBytes = 16 * 1024 * 1024
 
 type codexUsage struct {
 	InputTokens        int64
@@ -126,6 +127,7 @@ func scanCodexSessionFile(
 	defer fileHandle.Close()
 
 	scanner := bufio.NewScanner(fileHandle)
+	scanner.Buffer(make([]byte, 0, 64*1024), maxTokenUsageScanLineBytes)
 	for scanner.Scan() {
 		if err := ctx.Err(); err != nil {
 			return err
