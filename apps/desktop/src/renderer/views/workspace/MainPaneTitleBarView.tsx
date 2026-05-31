@@ -1,17 +1,4 @@
-import {
-  Box,
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Divider,
-  Menu,
-  MenuItem,
-  TextField,
-  Tooltip,
-  Typography,
-} from "@mui/material";
+import { Box, Button, Tooltip, Typography } from "@mui/material";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { LuChevronRight, LuPanelLeft, LuPanelRight, LuPlay } from "react-icons/lu";
@@ -25,8 +12,14 @@ import { useWorkspacePaneVisibilityContext } from "../../hooks/useWorkspacePaneV
 import { getShortcutDisplayLabelById } from "../../shortcuts/shortcutDisplay";
 import { chatStore } from "../../store/chatStore";
 import { workspaceStore } from "../../store/workspaceStore";
+import {
+  AddProjectCommandDialog,
+  ProjectCommandsMenu,
+  RepoSelectorMenu,
+  WorkspaceSelectorMenu,
+} from "./mainPaneTitleBarMenus";
 import { WorkspacePortsMenuControl } from "./WorkspacePortsMenuControl";
-import { MenuSearchField, renderWorkspaceKindIcon, resolvePrimaryWorkspaceId } from "./mainPaneTitleBarHelpers";
+import { renderWorkspaceKindIcon, resolvePrimaryWorkspaceId } from "./mainPaneTitleBarHelpers";
 
 /** Renders the main pane title bar with repo/workspace selectors and pane toggle controls. */
 export function MainPaneTitleBarView() {
@@ -293,201 +286,64 @@ export function MainPaneTitleBarView() {
           ) : null}
         </Box>
       </PaneHeader>
-      <Menu
+      <RepoSelectorMenu
         open={isRepoMenuOpen}
         anchorEl={repoMenuAnchorEl}
-        onClose={() => {
-          setRepoMenuAnchorEl(null);
-          setRepoSearchValue("");
-        }}
-      >
-        <MenuSearchField
-          placeholder={t("org.menu.search.repo")}
-          value={repoSearchValue}
-          onChange={setRepoSearchValue}
-        />
-        {filteredRepoOptions.map((repo) => (
-          <MenuItem
-            key={repo.id}
-            selected={repo.id === selectedProjectId}
-            onClick={() => {
-              setSelectedRepoId(repo.id);
-              setRepoMenuAnchorEl(null);
-              setWorkspaceMenuAnchorEl(null);
-              setRepoSearchValue("");
-              setWorkspaceSearchValue("");
-            }}
-          >
-            <Box component="span" sx={{ display: "inline-flex", alignItems: "center", mr: 1 }}>
-              {renderProjectIcon(repo.icon ?? undefined, 14)}
-            </Box>
-            <Typography variant="body2" noWrap>
-              {repo.name}
-            </Typography>
-          </MenuItem>
-        ))}
-      </Menu>
-      <Menu
+        repoSearchValue={repoSearchValue}
+        setRepoSearchValue={setRepoSearchValue}
+        filteredRepoOptions={filteredRepoOptions}
+        selectedProjectId={selectedProjectId}
+        setSelectedRepoId={setSelectedRepoId}
+        setRepoMenuAnchorEl={setRepoMenuAnchorEl}
+        setWorkspaceMenuAnchorEl={setWorkspaceMenuAnchorEl}
+        setWorkspaceSearchValue={setWorkspaceSearchValue}
+        t={t}
+      />
+      <ProjectCommandsMenu
         open={isCommandMenuOpen}
         anchorEl={commandMenuAnchorEl}
-        onClose={() => {
+        onClose={() => setCommandMenuAnchorEl(null)}
+        projectCommands={projectCommands}
+        selectedWorkspaceId={selectedWorkspaceId}
+        openTab={openTab}
+        terminalTitle={t("terminal.title")}
+        onOpenAddDialog={() => {
           setCommandMenuAnchorEl(null);
+          setNewCommandNameValue("");
+          setNewCommandLineValue("");
+          setAddCommandError("");
+          setIsAddCommandDialogOpen(true);
         }}
-        slotProps={{
-          paper: {
-            sx: {
-              border: 1,
-              borderColor: "divider",
-            },
-          },
-        }}
-      >
-        {projectCommands.length === 0 ? (
-          <MenuItem disabled>
-            <Typography variant="body2" color="text.secondary">
-              No commands yet
-            </Typography>
-          </MenuItem>
-        ) : null}
-        {projectCommands.map((projectCommand) => (
-          <MenuItem
-            key={`${projectCommand.name}:${projectCommand.command}`}
-            sx={{
-              color: "text.primary",
-              "&:hover": {
-                bgcolor: "action.hover",
-              },
-            }}
-            onClick={() => {
-              if (selectedWorkspaceId) {
-                openTab({
-                  workspaceId: selectedWorkspaceId,
-                  kind: "terminal",
-                  title: t("terminal.title"),
-                  launchCommand: projectCommand.command,
-                  reuseExisting: false,
-                });
-              }
-              setCommandMenuAnchorEl(null);
-            }}
-          >
-            <Box component="span" sx={{ display: "inline-flex", alignItems: "center", mr: 1, color: "text.secondary" }}>
-              <LuPlay size={13} />
-            </Box>
-            <Typography variant="body2" noWrap sx={{ maxWidth: 280 }}>
-              {projectCommand.name}
-            </Typography>
-          </MenuItem>
-        ))}
-        <Divider />
-        <MenuItem
-          sx={{
-            color: "text.secondary",
-            "&:hover": {
-              bgcolor: "action.hover",
-            },
-          }}
-          onClick={() => {
-            setCommandMenuAnchorEl(null);
-            setNewCommandNameValue("");
-            setNewCommandLineValue("");
-            setAddCommandError("");
-            setIsAddCommandDialogOpen(true);
-          }}
-        >
-          <Typography variant="body2">+ Add command</Typography>
-        </MenuItem>
-      </Menu>
-      <Menu
+      />
+      <WorkspaceSelectorMenu
         open={isWorkspaceMenuOpen}
         anchorEl={workspaceMenuAnchorEl}
-        onClose={() => {
-          setWorkspaceMenuAnchorEl(null);
-          setWorkspaceSearchValue("");
-        }}
-      >
-        <MenuSearchField
-          placeholder={t("org.menu.search.workspace")}
-          value={workspaceSearchValue}
-          onChange={setWorkspaceSearchValue}
-        />
-        {filteredWorkspaceOptions.map((workspace) => (
-          <MenuItem
-            key={workspace.id}
-            selected={workspace.id === selectedWorkspaceId}
-            onClick={() => {
-              setSelectedWorkspaceId(workspace.id);
-              setWorkspaceMenuAnchorEl(null);
-              setWorkspaceSearchValue("");
-            }}
-          >
-            <Box
-              component="span"
-              sx={{
-                display: "inline-flex",
-                alignItems: "center",
-                mr: 1,
-                color: resolveWorkspaceIconColor(workspace.id),
-              }}
-            >
-              {renderWorkspaceKindIcon(workspace, workspace.id === primaryWorkspaceId, 14)}
-            </Box>
-            <Typography variant="body2" noWrap>
-              {workspace.name}
-            </Typography>
-          </MenuItem>
-        ))}
-      </Menu>
-      <Dialog
+        workspaceSearchValue={workspaceSearchValue}
+        setWorkspaceSearchValue={setWorkspaceSearchValue}
+        filteredWorkspaceOptions={filteredWorkspaceOptions}
+        selectedWorkspaceId={selectedWorkspaceId}
+        setSelectedWorkspaceId={setSelectedWorkspaceId}
+        setWorkspaceMenuAnchorEl={setWorkspaceMenuAnchorEl}
+        resolveWorkspaceIconColor={resolveWorkspaceIconColor}
+        primaryWorkspaceId={primaryWorkspaceId}
+        t={t}
+      />
+      <AddProjectCommandDialog
         open={isAddCommandDialogOpen}
-        onClose={isSavingCommand ? undefined : () => setIsAddCommandDialogOpen(false)}
-        fullWidth
-        maxWidth="sm"
-      >
-        <DialogTitle>Add project command</DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            size="small"
-            fullWidth
-            label="Name"
-            value={newCommandNameValue}
-            disabled={isSavingCommand}
-            onChange={(event) => setNewCommandNameValue(event.target.value)}
-            placeholder="Start Dev Server"
-            sx={{ mt: 0.5 }}
-          />
-          <TextField
-            size="small"
-            fullWidth
-            label="Command line"
-            value={newCommandLineValue}
-            disabled={isSavingCommand}
-            onChange={(event) => setNewCommandLineValue(event.target.value)}
-            placeholder="bun run dev"
-            sx={{ mt: 1.5 }}
-          />
-          {addCommandError ? (
-            <Typography variant="caption" color="error" sx={{ display: "block", mt: 1 }}>
-              {addCommandError}
-            </Typography>
-          ) : null}
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => {
-              setIsAddCommandDialogOpen(false);
-              setAddCommandError("");
-            }}
-            disabled={isSavingCommand}
-          >
-            {t("common.actions.cancel")}
-          </Button>
-          <Button variant="contained" onClick={() => void handleSaveNewCommand()} disabled={isAddCommandDisabled}>
-            Add
-          </Button>
-        </DialogActions>
-      </Dialog>
+        isSaving={isSavingCommand}
+        commandNameValue={newCommandNameValue}
+        commandLineValue={newCommandLineValue}
+        errorMessage={addCommandError}
+        onClose={() => {
+          setIsAddCommandDialogOpen(false);
+          setAddCommandError("");
+        }}
+        onNameChange={setNewCommandNameValue}
+        onCommandChange={setNewCommandLineValue}
+        onSubmit={() => void handleSaveNewCommand()}
+        isSubmitDisabled={isAddCommandDisabled}
+        cancelLabel={t("common.actions.cancel")}
+      />
     </>
   );
 }
