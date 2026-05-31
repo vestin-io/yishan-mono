@@ -15,8 +15,7 @@ import {
   Typography,
 } from "@mui/material";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useVirtualizer } from "@tanstack/react-virtual";
-import React, { forwardRef, useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { LuClock3, LuCloud, LuGlobe, LuServer } from "react-icons/lu";
 import { api } from "../../api";
@@ -29,61 +28,12 @@ import {
   SUPPORTED_DESKTOP_AGENT_KINDS,
   isDesktopAgentKind,
 } from "../../helpers/agentSettings";
+import { VirtualizedListbox } from "../../components/VirtualizedListbox";
 import { getErrorMessage } from "../../helpers/errorHelpers";
 import { useCommands } from "../../hooks/useCommands";
 import { useDialogRegistration } from "../../hooks/useDialogRegistration";
 import { sessionStore } from "../../store/sessionStore";
 import { workspaceStore } from "../../store/workspaceStore";
-
-// ---------------------------------------------------------------------------
-// Virtualised listbox (same pattern as CreateScheduledJobFormView)
-// ---------------------------------------------------------------------------
-
-const ITEM_HEIGHT = 36;
-const MAX_VISIBLE_ITEMS = 8;
-
-const VirtualizedListbox = forwardRef<HTMLUListElement, React.HTMLAttributes<HTMLElement>>(function VirtualizedListbox(
-  { children, ...rest },
-  ref,
-) {
-  const items = React.Children.toArray(children);
-  const count = items.length;
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const virtualizer = useVirtualizer({
-    count,
-    getScrollElement: () => containerRef.current,
-    estimateSize: () => ITEM_HEIGHT,
-    overscan: 5,
-  });
-
-  const totalHeight = virtualizer.getTotalSize();
-  const visibleHeight = Math.min(count, MAX_VISIBLE_ITEMS) * ITEM_HEIGHT;
-
-  return (
-    <ul ref={ref} {...rest} style={{ ...rest.style, padding: 0, margin: 0, listStyle: "none" }}>
-      <div ref={containerRef} style={{ overflow: "auto", maxHeight: visibleHeight }}>
-        <div style={{ height: totalHeight, position: "relative" }}>
-          {virtualizer.getVirtualItems().map((virtualItem) => (
-            <div
-              key={virtualItem.key}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                height: virtualItem.size,
-                transform: `translateY(${virtualItem.start}px)`,
-              }}
-            >
-              {items[virtualItem.index]}
-            </div>
-          ))}
-        </div>
-      </div>
-    </ul>
-  );
-});
 
 // ---------------------------------------------------------------------------
 // IANA timezones

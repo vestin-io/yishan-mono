@@ -26,6 +26,7 @@ import { readExternalClipboardSourcePathsFromSystem } from "./integrations/exter
 import { DESKTOP_RPC_IPC_CHANNELS, type DesktopUpdateEventPayload, HOST_IPC_CHANNELS } from "./ipc";
 import { createDesktopNotificationHostAdapter } from "./notifications/service";
 import { isDevMode } from "./runtime/environment";
+import { getErrorMessage } from "../shared/helpers/errorHelpers";
 import { checkForUpdatesManually, downloadUpdate, startAutoUpdates } from "./updates/autoUpdateService";
 
 type DispatchActionOptions = {
@@ -427,7 +428,7 @@ export class DesktopApplication {
 
         return { ok: true, copiedPaths };
       } catch (error) {
-        return { ok: false, error: error instanceof Error ? error.message : String(error) };
+        return { ok: false, error: getErrorMessage(error) };
       }
     });
 
@@ -450,7 +451,7 @@ export class DesktopApplication {
         await writeFileAsync(absolutePath, buffer);
         return { ok: true };
       } catch (error) {
-        return { ok: false, error: error instanceof Error ? error.message : String(error) };
+        return { ok: false, error: getErrorMessage(error) };
       }
     });
 

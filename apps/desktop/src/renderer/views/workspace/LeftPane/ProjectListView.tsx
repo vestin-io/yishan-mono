@@ -1,6 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
 import { Box, ListItemIcon, Menu, MenuItem } from "@mui/material";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { LuSettings, LuTrash2 } from "react-icons/lu";
 import {
@@ -22,99 +21,19 @@ import { useContextMenuState } from "../../../hooks/useContextMenuState";
 import { useSuppressNativeContextMenuWhileOpen } from "../../../hooks/useSuppressNativeContextMenuWhileOpen";
 import { getShortcutDisplayLabelById } from "../../../shortcuts/shortcutDisplay";
 import { chatStore } from "../../../store/chatStore";
-import { sessionStore } from "../../../store/sessionStore";
-import { workspaceUiStore } from "../../../store/workspaceUiStore";
 import { workspaceStore } from "../../../store/workspaceStore";
-import { api } from "../../../api/client";
 import { CreateWorkspaceDialogView } from "./CreateWorkspaceDialogView";
 import { ProjectConfigDialogView } from "./ProjectConfigDialogView";
 import { ProjectDeleteDialogView } from "./ProjectDeleteDialogView";
 import { WorkspaceDeleteDialogView } from "./WorkspaceDeleteDialogView";
 import { WorkspaceInfoPopperView } from "./WorkspaceInfoPopperView";
+import { parseNodeRowNodeId, parseProjectRowProjectId, reconcileOrder, reorderIds } from "./projectListHelpers";
 import { useProjectDeletionFlow } from "./useProjectDeletionFlow";
 import { useProjectListDialogState } from "./useProjectListDialogState";
+import { useProjectListFoldState } from "./useProjectListFoldState";
+import { useProjectListTreeData } from "./useProjectListTreeData";
 import { useWorkspaceDeletionFlow } from "./useWorkspaceDeletionFlow";
 import { useWorkspaceInfoHover } from "./useWorkspaceInfoHover";
-
-function resolveWorkspaceNotificationTone(input: {
-  runtimeStatus: "running" | "waiting_input" | "idle";
-  unreadTone?: "success" | "error";
-}): "none" | "waiting_input" | "done" | "failed" {
-  if (input.runtimeStatus === "waiting_input") {
-    return "waiting_input";
-  }
-
-  if (input.unreadTone === "error") {
-    return "failed";
-  }
-
-  if (input.unreadTone === "success") {
-    return "done";
-  }
-
-  return "none";
-}
-
-function reorderIds(input: {
-  ids: string[];
-  draggedId: string;
-  targetId: string;
-  position: "before" | "after";
-}): string[] {
-  const draggedIndex = input.ids.indexOf(input.draggedId);
-  const targetIndex = input.ids.indexOf(input.targetId);
-  if (draggedIndex < 0 || targetIndex < 0) {
-    return input.ids;
-  }
-
-  const nextIds = [...input.ids];
-  const [movedId] = nextIds.splice(draggedIndex, 1);
-  if (!movedId) {
-    return input.ids;
-  }
-
-  const nextTargetIndex = nextIds.indexOf(input.targetId);
-  if (nextTargetIndex < 0) {
-    return input.ids;
-  }
-
-  const insertIndex = input.position === "after" ? nextTargetIndex + 1 : nextTargetIndex;
-  nextIds.splice(insertIndex, 0, movedId);
-  return nextIds;
-}
-
-/**
- * Merge a stored order list with the current live set of IDs.
- * - IDs no longer in liveIds are stripped (unchecked / removed items).
- * - IDs in liveIds but absent from storedOrder are appended at the end
- *   (newly added / re-checked items).
- * The relative order of retained IDs is preserved from storedOrder.
- */
-function reconcileOrder(storedOrder: string[], liveIds: string[]): string[] {
-  const liveSet = new Set(liveIds);
-  const retained = storedOrder.filter((id) => liveSet.has(id));
-  const retainedSet = new Set(retained);
-  const appended = liveIds.filter((id) => !retainedSet.has(id));
-  return [...retained, ...appended];
-}
-
-function parseProjectRowProjectId(rowId: string): string {
-  const value = rowId.replace(/^project:/, "");
-  const splitIndex = value.indexOf(":");
-  if (splitIndex < 0) {
-    return value;
-  }
-  return value.slice(splitIndex + 1);
-}
-
-function parseNodeRowNodeId(rowId: string): string {
-  const value = rowId.replace(/^node:/, "");
-  const splitIndex = value.indexOf(":");
-  if (splitIndex < 0) {
-    return value;
-  }
-  return value.slice(splitIndex + 1);
-}
 
 /** Renders project rows and nested workspace rows with per-project fold controls. */
 export function ProjectListView() {
@@ -123,8 +42,6 @@ export function ProjectListView() {
   const workspaces = workspaceStore((state) => state.workspaces) ?? [];
   const selectedProjectId = workspaceStore((state) => state.selectedProjectId);
   const selectedWorkspaceId = workspaceStore((state) => state.selectedWorkspaceId);
-  const displayProjectIds = workspaceStore((state) => state.displayProjectIds) ?? [];
-  const gitChangeTotalsByWorkspaceId = workspaceStore((state) => state.gitChangeTotalsByWorkspaceId);
   const lastUsedExternalAppId = workspaceStore((state) => state.lastUsedExternalAppId);
   const {
     setSelectedRepoId,
@@ -135,7 +52,6 @@ export function ProjectListView() {
     openEntryInExternalApp,
     setLastUsedExternalAppId,
   } = useCommands();
-  const workspaceAgentStatusByWorkspaceId = chatStore((state) => state.workspaceAgentStatusByWorkspaceId);
   const workspaceUnreadToneByWorkspaceId = chatStore((state) => state.workspaceUnreadToneByWorkspaceId);
   const markWorkspaceNotificationsRead = chatStore((state) => state.markWorkspaceNotificationsRead);
   const {
@@ -194,105 +110,39 @@ export function ProjectListView() {
     projects,
     deleteProject,
   });
-  const [foldStateByMode, setFoldStateByMode] = useState<
-    Record<"by_project" | "by_node", { foldedProjectIds: string[]; foldedNodeKeys: string[] }>
-  >({
-    by_project: { foldedProjectIds: [], foldedNodeKeys: [] },
-    by_node: { foldedProjectIds: [], foldedNodeKeys: [] },
-  });
   const [projectActionsAnchorEl, setProjectActionsAnchorEl] = useState<HTMLElement | null>(null);
   const [projectActionsProjectId, setProjectActionsProjectId] = useState("");
 
-  // Order and fold state is stored per hierarchy mode so that switching
-  // between by_project and by_node gives a fully isolated, clean state for
-  // each mode without any cross-mode bleed.
-  const [orderStateByMode, setOrderStateByMode] = useState<
-    Record<"by_project" | "by_node", { projectOrderIds: string[]; nodeOrderByParentId: Record<string, string[]> }>
-  >({
-    by_project: { projectOrderIds: [], nodeOrderByParentId: {} },
-    by_node: { projectOrderIds: [], nodeOrderByParentId: {} },
+  const {
+    projectOrderIds,
+    nodeOrderByParentId,
+    foldedProjectIds,
+    foldedNodeKeys,
+    setProjectOrderIds,
+    setNodeOrderByParentId,
+    setFoldedProjectIds,
+    setFoldedNodeKeys,
+    toggleProjectFold,
+    workspaceListHierarchyMode,
+  } = useProjectListFoldState();
+
+  const {
+    filteredProjects,
+    treeProjects,
+    treeNodes,
+    treeWorkspaces,
+    expandedTreeItems,
+    displayWorkspaceIdByProjectId,
+    workspaceByProjectId,
+  } = useProjectListTreeData({
+    projectOrderIds,
+    nodeOrderByParentId,
+    foldedProjectIds,
+    foldedNodeKeys,
+    workspaceListHierarchyMode,
   });
-
-  // Keep projectOrderIds in sync with the filter: remove any ID that is no
-  // longer in displayProjectIds so that re-checked projects are appended to
-  // the end of the list (treated as new) rather than snapping back to their
-  // old position. Applied only to the by_project mode bucket since
-  // displayProjectIds does not affect by_node project order (controlled by
-  // per-node drag order instead).
-  useEffect(() => {
-    setOrderStateByMode((current) => {
-      const prev = current.by_project.projectOrderIds;
-      const next = prev.filter((id) => displayProjectIds.includes(id));
-      if (next.length === prev.length) {
-        return current;
-      }
-
-      return {
-        ...current,
-        by_project: { ...current.by_project, projectOrderIds: next },
-      };
-    });
-  }, [displayProjectIds]);
 
   const [isAppFocused, setIsAppFocused] = useState(() => document.hasFocus());
-  const workspaceListHierarchyMode = workspaceUiStore((state) => state.workspaceListHierarchyMode);
-
-  // Derive mode-specific order helpers with stable setter signatures so the
-  // rest of the component does not need to know about the per-mode nesting.
-  const projectOrderIds = orderStateByMode[workspaceListHierarchyMode].projectOrderIds;
-  const nodeOrderByParentId = orderStateByMode[workspaceListHierarchyMode].nodeOrderByParentId;
-
-  const setProjectOrderIds = (next: string[]) => {
-    setOrderStateByMode((current) => ({
-      ...current,
-      [workspaceListHierarchyMode]: { ...current[workspaceListHierarchyMode], projectOrderIds: next },
-    }));
-  };
-
-  const setNodeOrderByParentId = (updater: (prev: Record<string, string[]>) => Record<string, string[]>) => {
-    setOrderStateByMode((current) => ({
-      ...current,
-      [workspaceListHierarchyMode]: {
-        ...current[workspaceListHierarchyMode],
-        nodeOrderByParentId: updater(current[workspaceListHierarchyMode].nodeOrderByParentId),
-      },
-    }));
-  };
-
-  const foldedProjectIds = foldStateByMode[workspaceListHierarchyMode].foldedProjectIds;
-  const foldedNodeKeys = foldStateByMode[workspaceListHierarchyMode].foldedNodeKeys;
-
-  const setFoldedProjectIds = (updater: string[] | ((prev: string[]) => string[])) => {
-    setFoldStateByMode((current) => ({
-      ...current,
-      [workspaceListHierarchyMode]: {
-        ...current[workspaceListHierarchyMode],
-        foldedProjectIds:
-          typeof updater === "function"
-            ? updater(current[workspaceListHierarchyMode].foldedProjectIds)
-            : updater,
-      },
-    }));
-  };
-
-  const setFoldedNodeKeys = (updater: string[] | ((prev: string[]) => string[])) => {
-    setFoldStateByMode((current) => ({
-      ...current,
-      [workspaceListHierarchyMode]: {
-        ...current[workspaceListHierarchyMode],
-        foldedNodeKeys:
-          typeof updater === "function"
-            ? updater(current[workspaceListHierarchyMode].foldedNodeKeys)
-            : updater,
-      },
-    }));
-  };
-  const selectedOrganizationId = sessionStore((state) => state.selectedOrganizationId);
-  const nodesQuery = useQuery({
-    queryKey: ["org-nodes", selectedOrganizationId],
-    queryFn: () => api.node.listByOrg(selectedOrganizationId as string),
-    enabled: Boolean(selectedOrganizationId),
-  });
   const rendererPlatform = getRendererPlatform();
   const canOpenWorkspaceInExternalApp = isExternalAppPlatformSupported(rendererPlatform);
   const openWorkspaceInFileManagerActionLabel =
@@ -352,177 +202,6 @@ export function ProjectListView() {
     setProjectActionsProjectId("");
   };
 
-  const workspaceByProjectId = workspaces.reduce<Record<string, (typeof workspaces)[number][]>>((acc, workspace) => {
-    const existing = acc[workspace.repoId];
-    if (existing) {
-      existing.push(workspace);
-    } else {
-      acc[workspace.repoId] = [workspace];
-    }
-    return acc;
-  }, {});
-  const filteredProjects = useMemo(() => {
-    const projectById = new Map(projects.filter((project) => displayProjectIds.includes(project.id)).map((project) => [project.id, project]));
-    const orderedIds = projectOrderIds.filter((projectId) => projectById.has(projectId));
-    const missingIds = Array.from(projectById.keys()).filter((projectId) => !orderedIds.includes(projectId));
-    const nextIds = [...orderedIds, ...missingIds];
-    return nextIds.map((projectId) => projectById.get(projectId)).filter((project): project is NonNullable<typeof project> => Boolean(project));
-  }, [displayProjectIds, projectOrderIds, projects]);
-  const treeProjects = filteredProjects.map((project) => ({
-    id: project.id,
-    name: project.name,
-    icon: project.icon,
-    color: project.color,
-  }));
-  const treeNodes = (nodesQuery.data ?? []).map((node) => ({
-    id: node.id,
-    name: node.name,
-    kind: node.kind,
-    scope: node.scope,
-    isOnline: node.isOnline,
-  }));
-  const treeWorkspaces: WorkspaceTreeWorkspace[] = useMemo(() => {
-    const rows: WorkspaceTreeWorkspace[] = [];
-    for (const project of filteredProjects) {
-      const projectWorkspaces = workspaceByProjectId[project.id] ?? [];
-      const preferredProjectPath = project.localPath?.trim() || project.path?.trim() || project.worktreePath?.trim() || "";
-      const localDisplayWorkspaceId = preferredProjectPath
-        ? (projectWorkspaces.find(
-            (workspace) => workspace.kind !== "local" && workspace.worktreePath?.trim() === preferredProjectPath,
-          )?.id ?? "")
-        : "";
-      const displayedWorkspaces = localDisplayWorkspaceId
-        ? projectWorkspaces.filter((workspace) => workspace.kind !== "local")
-        : projectWorkspaces;
-
-      const parentNodeOrder = nodeOrderByParentId[`project:${project.id}`] ?? [];
-      const nodeRankById = new Map(parentNodeOrder.map((nodeId, index) => [nodeId, index]));
-      const sortedWorkspaces = [...displayedWorkspaces].sort((a, b) => {
-        const nodeA = a.nodeId?.trim() || "unknown";
-        const nodeB = b.nodeId?.trim() || "unknown";
-        const rankA = nodeRankById.get(nodeA) ?? Number.MAX_SAFE_INTEGER;
-        const rankB = nodeRankById.get(nodeB) ?? Number.MAX_SAFE_INTEGER;
-        if (rankA !== rankB) {
-          return rankA - rankB;
-        }
-        return 0;
-      });
-
-      for (const workspace of sortedWorkspaces) {
-        rows.push({
-          id: workspace.id,
-          name: workspace.kind === "local" || localDisplayWorkspaceId === workspace.id ? "local" : workspace.title,
-          projectId: project.id,
-          nodeId: workspace.nodeId?.trim() || "unknown",
-          kind: workspace.kind === "local" || localDisplayWorkspaceId === workspace.id ? "local" : "managed",
-          additions: gitChangeTotalsByWorkspaceId[workspace.id]?.additions ?? 0,
-          deletions: gitChangeTotalsByWorkspaceId[workspace.id]?.deletions ?? 0,
-          runtimeStatus: workspaceAgentStatusByWorkspaceId[workspace.id] ?? "idle",
-          notificationTone: resolveWorkspaceNotificationTone({
-            runtimeStatus: workspaceAgentStatusByWorkspaceId[workspace.id] ?? "idle",
-            unreadTone: workspaceUnreadToneByWorkspaceId[workspace.id],
-          }),
-        });
-      }
-    }
-    if (workspaceListHierarchyMode !== "by_node") {
-      return rows;
-    }
-
-    const topNodeOrder = nodeOrderByParentId["root:node"] ?? [];
-    const topNodeRankById = new Map(topNodeOrder.map((nodeId, index) => [nodeId, index]));
-    return [...rows].sort((a, b) => {
-      const rankNodeA = topNodeRankById.get(a.nodeId) ?? Number.MAX_SAFE_INTEGER;
-      const rankNodeB = topNodeRankById.get(b.nodeId) ?? Number.MAX_SAFE_INTEGER;
-      if (rankNodeA !== rankNodeB) {
-        return rankNodeA - rankNodeB;
-      }
-
-      const projectOrder = nodeOrderByParentId[`node:${a.nodeId}`] ?? [];
-      const projectRankById = new Map(projectOrder.map((projectId, index) => [projectId, index]));
-      const rankProjectA = projectRankById.get(a.projectId) ?? Number.MAX_SAFE_INTEGER;
-      const rankProjectB = projectRankById.get(b.projectId) ?? Number.MAX_SAFE_INTEGER;
-      if (rankProjectA !== rankProjectB) {
-        return rankProjectA - rankProjectB;
-      }
-
-      return 0;
-    });
-  }, [
-    filteredProjects,
-    gitChangeTotalsByWorkspaceId,
-    nodeOrderByParentId,
-    workspaceListHierarchyMode,
-    workspaceAgentStatusByWorkspaceId,
-    workspaceByProjectId,
-    workspaceUnreadToneByWorkspaceId,
-  ]);
-  const expandedTreeItems = useMemo(() => {
-    const items: string[] = [];
-    const foldedTopSet = new Set(foldedProjectIds);
-    const foldedChildSet = new Set(foldedNodeKeys);
-
-    if (workspaceListHierarchyMode === "by_node") {
-      const nodeIds = Array.from(new Set(treeWorkspaces.map((workspace) => workspace.nodeId)));
-      for (const nodeId of nodeIds) {
-        if (foldedTopSet.has(nodeId)) {
-          continue;
-        }
-
-        items.push(`node:${nodeId}`);
-        const projectIds = Array.from(
-          new Set(
-            treeWorkspaces
-              .filter((workspace) => workspace.nodeId === nodeId)
-              .map((workspace) => workspace.projectId),
-          ),
-        );
-        for (const projectId of projectIds) {
-          const projectKey = `${nodeId}:${projectId}`;
-          if (!foldedChildSet.has(projectKey)) {
-            items.push(`project:${projectKey}`);
-          }
-        }
-      }
-      return items;
-    }
-
-    for (const project of filteredProjects) {
-      if (foldedTopSet.has(project.id)) {
-        continue;
-      }
-
-      items.push(`project:${project.id}`);
-      const projectNodeIds = new Set(treeWorkspaces.filter((workspace) => workspace.projectId === project.id).map((w) => w.nodeId));
-      for (const nodeId of projectNodeIds) {
-        const nodeKey = `${project.id}:${nodeId}`;
-        if (!foldedChildSet.has(nodeKey)) {
-          items.push(`node:${nodeKey}`);
-        }
-      }
-    }
-    return items;
-  }, [filteredProjects, foldedNodeKeys, foldedProjectIds, treeWorkspaces, workspaceListHierarchyMode]);
-  const displayWorkspaceIdByProjectId = useMemo(() => {
-    const displayWorkspaceIdByProjectIdMap: Record<string, string> = {};
-
-    for (const project of projects) {
-      const projectWorkspaces = workspaceByProjectId[project.id] ?? [];
-      const preferredProjectPath = project.localPath?.trim() || project.path?.trim() || project.worktreePath?.trim() || "";
-      if (!preferredProjectPath) {
-        continue;
-      }
-
-      const primaryWorkspace = projectWorkspaces.find(
-        (workspace) => workspace.kind !== "local" && workspace.worktreePath?.trim() === preferredProjectPath,
-      );
-      if (primaryWorkspace) {
-        displayWorkspaceIdByProjectIdMap[project.id] = primaryWorkspace.id;
-      }
-    }
-
-    return displayWorkspaceIdByProjectIdMap;
-  }, [projects, workspaceByProjectId]);
   const workspaceContextTarget =
     workspaceContextMenu &&
     workspaces.find(
@@ -568,13 +247,6 @@ export function ProjectListView() {
     };
   }, [handleOpenCreateWorkspace]);
 
-
-  /** Toggles whether one repository row is folded in the list UI. */
-  const toggleProjectFold = (projectId: string) => {
-    setFoldedProjectIds((current) =>
-      current.includes(projectId) ? current.filter((item) => item !== projectId) : [...current, projectId],
-    );
-  };
 
   useSuppressNativeContextMenuWhileOpen(isProjectContextMenuOpen || isWorkspaceContextMenuOpen);
 
