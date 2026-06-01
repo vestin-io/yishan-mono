@@ -190,6 +190,28 @@ vi.mock("../../components/SplitDropZone", () => ({
   resolveDropResult: () => null,
 }));
 
+vi.mock("./RightPane/RightPaneView", () => ({
+  RightPaneView: () => <div data-testid="mock-right-pane-view" />,
+}));
+
+vi.mock("./RightPane/RightPaneTabBar", () => ({
+  RightPaneTabBar: () => (
+    <div data-testid="mock-right-pane-tab-bar">
+      <button type="button" aria-label="files.files">
+        files
+      </button>
+      <button type="button" aria-label="files.changes">
+        changes
+      </button>
+      <button type="button" aria-label="workspace.pr.tab">
+        pr
+      </button>
+    </div>
+  ),
+  VOICE_RECORD_REQUEST_EVENT: "yishan:voice-record-request",
+  VOICE_RECORDING_VISIBILITY_EVENT: "yishan:voice-recording-visibility",
+}));
+
 vi.mock("../../store/splitPaneStore", () => {
   // Builds a root pane for a given workspace from the current test state.
   function buildRootPaneForWorkspace(workspaceId: string) {
