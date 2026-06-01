@@ -137,8 +137,7 @@ export function RightPaneTabBar({ rightCollapsed, onToggleRightPane, showRightPa
                         theme.palette.mode === "dark"
                           ? DARK_SURFACE_COLORS.mainPane
                           : theme.palette.background.default,
-                      borderBottom: 1,
-                      borderColor: "divider",
+                      boxShadow: (theme) => `inset 0 -1px 0 0 ${theme.palette.divider}99`,
                       borderTopLeftRadius: 0,
                       borderBottomLeftRadius: 0,
                       borderTopRightRadius: 4,

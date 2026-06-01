@@ -419,13 +419,6 @@ const SHORTCUT_REGISTRY: readonly ShortcutRegistryItem[] = [
     target: { command: "workspace.toggleLeftPane" },
   },
   {
-    id: "toggle-right-pane",
-    descriptionKey: "keybindings.actions.toggleRightPane",
-    scope: "workspace",
-    keys: "ctrl+l,command+l",
-    target: { command: "workspace.toggleRightPane" },
-  },
-  {
     id: "select-previous-workspace",
     descriptionKey: "keybindings.actions.selectPreviousWorkspace",
     scope: "workspace",
