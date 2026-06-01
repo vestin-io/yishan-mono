@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { workspaceStore } from "../../../store/workspaceStore";
-import { workspaceUiStore } from "../../../store/workspaceUiStore";
 
 type HierarchyMode = "by_project" | "by_node";
 
@@ -35,7 +34,7 @@ export type ProjectListFoldStateResult = {
  */
 export function useProjectListFoldState(): ProjectListFoldStateResult {
   const displayProjectIds = workspaceStore((state) => state.displayProjectIds) ?? [];
-  const workspaceListHierarchyMode = workspaceUiStore((state) => state.workspaceListHierarchyMode);
+  const workspaceListHierarchyMode = workspaceStore((state) => state.workspaceListHierarchyMode);
 
   const [foldStateByMode, setFoldStateByMode] = useState<Record<HierarchyMode, FoldState>>({
     by_project: { foldedProjectIds: [], foldedNodeKeys: [] },
