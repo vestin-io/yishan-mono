@@ -32,20 +32,20 @@ type claudeSourceRecord struct {
 }
 
 func ScanClaudeHourlyUsage(ctx context.Context, input ScanInput) ([]HourlyUsageRow, error) {
-	files, err := listClaudeTranscriptFiles(input.SessionRoot)
+	files, err := listClaudeTranscriptFiles(input.SessionRoot, input)
 	if err != nil {
 		return nil, err
 	}
 	buckets := make(map[hourlyKey]*hourlyAccumulator)
 	for _, transcriptFile := range files {
-		if err := scanClaudeTranscriptFile(ctx, transcriptFile, input.Worktrees, buckets); err != nil {
+		if err := scanClaudeTranscriptFile(ctx, transcriptFile, input, input.Worktrees, buckets); err != nil {
 			return nil, err
 		}
 	}
 	return materializeHourlyRows(buckets, input), nil
 }
 
-func listClaudeTranscriptFiles(sessionRoot string) ([]string, error) {
+func listClaudeTranscriptFiles(sessionRoot string, input ScanInput) ([]string, error) {
 	roots, err := resolveClaudeRoots(sessionRoot)
 	if err != nil {
 		return nil, err
@@ -61,6 +61,9 @@ func listClaudeTranscriptFiles(sessionRoot string) ([]string, error) {
 				return nil
 			}
 			if !strings.HasSuffix(entry.Name(), ".jsonl") {
+				return nil
+			}
+			if !shouldScanFileWithModTime(path, input) {
 				return nil
 			}
 			if _, exists := seen[path]; exists {
@@ -95,6 +98,7 @@ func resolveClaudeRoots(sessionRoot string) ([]string, error) {
 func scanClaudeTranscriptFile(
 	ctx context.Context,
 	transcriptFile string,
+	input ScanInput,
 	worktrees []WorktreeRef,
 	buckets map[hourlyKey]*hourlyAccumulator,
 ) error {
@@ -113,6 +117,9 @@ func scanClaudeTranscriptFile(
 		}
 		record, ok := parseClaudeUsageRecord(scanner.Bytes(), fallbackSessionID)
 		if !ok {
+			continue
+		}
+		if isBeforeScanWindow(record.Timestamp, input) {
 			continue
 		}
 		workspace, confidence := resolveWorktree(record.CWD, worktrees)

@@ -1,5 +1,9 @@
 package tokenusage
 
+import "time"
+
+const HourlyUsageLocalRetentionWindow = 15 * 24 * time.Hour
+
 type AttributionConfidence string
 
 const (
@@ -38,6 +42,8 @@ type HourlyUsageRow struct {
 	IngestedAt            int64
 	RunID                 string
 	UpdatedAt             int64
+	Dirty                 bool
+	LastSyncedAt          int64
 }
 
 type WorktreeRef struct {
@@ -47,8 +53,9 @@ type WorktreeRef struct {
 }
 
 type ScanInput struct {
-	RunID       string
-	IngestedAt  int64
-	Worktrees   []WorktreeRef
-	SessionRoot string
+	RunID              string
+	IngestedAt         int64
+	ScanSinceUnixMilli int64
+	Worktrees          []WorktreeRef
+	SessionRoot        string
 }
