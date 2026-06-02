@@ -104,8 +104,8 @@ resolve_latest_version() {
   rm -f "$tmpheaders"
 
   if [ -n "${location:-}" ]; then
-    # location header ends with /tag/cli-v0.1.0
-    version="$(echo "$location" | sed 's|.*/cli-v||')"
+    # location header ends with /tag/v0.1.0
+    version="$(echo "$location" | sed 's|.*/v||')"
     if [ -n "$version" ]; then
       echo "$version"
       return
@@ -238,7 +238,7 @@ main() {
 
   # Build download URL
   archive="${NAME}_${version}_${os}_${arch}.tar.gz"
-  base_url="https://github.com/${REPO}/releases/download/cli-v${version}"
+  base_url="https://github.com/${REPO}/releases/download/v${version}"
   archive_url="${base_url}/${archive}"
   checksum_url="${base_url}/checksums.txt"
 
