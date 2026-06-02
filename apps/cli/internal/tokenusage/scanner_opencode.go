@@ -39,7 +39,7 @@ func ScanOpenCodeHourlyUsage(ctx context.Context, input ScanInput) ([]HourlyUsag
 			continue
 		}
 		for _, sessionRow := range rows {
-			applyOpenCodeSessionRow(sessionRow, databasePath, input.Worktrees, buckets)
+			applyOpenCodeSessionRow(sessionRow, databasePath, input, input.Worktrees, buckets)
 		}
 	}
 	return materializeHourlyRows(buckets, input), nil
@@ -167,6 +167,7 @@ func parseOpenCodeTimestamp(rawValue any) string {
 func applyOpenCodeSessionRow(
 	sessionRow openCodeSessionRow,
 	databasePath string,
+	input ScanInput,
 	worktrees []WorktreeRef,
 	buckets map[hourlyKey]*hourlyAccumulator,
 ) {
@@ -175,6 +176,9 @@ func applyOpenCodeSessionRow(
 	}
 	timestamp, err := time.Parse(time.RFC3339Nano, sessionRow.Timestamp)
 	if err != nil {
+		return
+	}
+	if isBeforeScanWindow(timestamp, input) {
 		return
 	}
 	cwd := firstNonEmptyPath(sessionRow.Directory, sessionRow.WorkspaceDir, sessionRow.Worktree)

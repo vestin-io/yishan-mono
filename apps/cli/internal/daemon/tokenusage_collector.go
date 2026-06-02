@@ -20,6 +20,7 @@ const (
 	tokenUsageSyncInterval = 15 * time.Minute
 	tokenUsageSyncChunk    = 100
 	tokenUsageHourLag      = 2 * time.Minute
+	tokenUsageScanOverlap  = 2 * time.Hour
 )
 
 type tokenUsageCollector struct {
@@ -123,11 +124,6 @@ func (c *tokenUsageCollector) runScan(agentKind string, source string) {
 	if err != nil {
 		log.Warn().Err(err).Str("agentKind", agentKind).Str("source", source).Msg("token usage scan failed")
 	} else {
-		c.mu.Lock()
-		if !c.closed {
-			c.pending[agentKind] = rows
-		}
-		c.mu.Unlock()
 		log.Debug().Str("agentKind", agentKind).Str("source", source).Int("rows", len(rows)).Dur("duration", time.Since(startedAt)).Msg("token usage scan completed")
 		c.syncPending("scan")
 	}
@@ -172,9 +168,10 @@ func (c *tokenUsageCollector) filterKnownTokenUsageRows(rows []tokenusage.Hourly
 
 func (c *tokenUsageCollector) scanAgent(agentKind string) ([]tokenusage.HourlyUsageRow, error) {
 	scanInput := tokenusage.ScanInput{
-		RunID:      "daemon-" + agentKind,
-		IngestedAt: time.Now().UnixMilli(),
-		Worktrees:  buildTokenUsageWorktreeRefs(c.manager.List()),
+		RunID:              "daemon-" + agentKind,
+		IngestedAt:         time.Now().UnixMilli(),
+		ScanSinceUnixMilli: c.recentScanStartUnixMilli(),
+		Worktrees:          buildTokenUsageWorktreeRefs(c.manager.List()),
 	}
 	switch agentKind {
 	case "codex":
@@ -190,6 +187,17 @@ func (c *tokenUsageCollector) scanAgent(agentKind string) ([]tokenusage.HourlyUs
 	default:
 		return []tokenusage.HourlyUsageRow{}, nil
 	}
+}
+
+func (c *tokenUsageCollector) recentScanStartUnixMilli() int64 {
+	syncState, err := c.repo.GetHourlyUsageSyncState(context.Background())
+	if err != nil {
+		return 0
+	}
+	if syncState.LastSuccessfulSyncAt == 0 {
+		return 0
+	}
+	return time.UnixMilli(syncState.LastSuccessfulSyncAt).UTC().Add(-tokenUsageScanOverlap).UnixMilli()
 }
 
 func buildTokenUsageWorktreeRefs(workspaces []workspace.Workspace) []tokenusage.WorktreeRef {
@@ -348,7 +356,27 @@ func (c *tokenUsageCollector) syncPending(source string) {
 	if !cliruntime.APIConfigured() {
 		return
 	}
-	pendingByOrg := c.snapshotPendingRowsByOrg()
+	syncState, err := c.repo.GetHourlyUsageSyncState(context.Background())
+	if err != nil {
+		log.Warn().Err(err).Str("source", source).Msg("token usage sync state read failed")
+		return
+	}
+	if syncState.DirtyRows == 0 {
+		return
+	}
+
+	log.Debug().
+		Str("source", source).
+		Int("dirtyRows", syncState.DirtyRows).
+		Int("totalRows", syncState.TotalRows).
+		Str("lastSuccessfulSyncAt", formatTokenUsageSyncTime(syncState.LastSuccessfulSyncAt)).
+		Msg("token usage sync starting")
+
+	pendingByOrg, err := c.snapshotDirtyRowsByOrg()
+	if err != nil {
+		log.Warn().Err(err).Str("source", source).Msg("token usage dirty rows read failed")
+		return
+	}
 	for orgID, rows := range pendingByOrg {
 		if strings.TrimSpace(orgID) == "" || strings.EqualFold(orgID, "unknown") {
 			continue
@@ -356,33 +384,54 @@ func (c *tokenUsageCollector) syncPending(source string) {
 		if len(rows) == 0 {
 			continue
 		}
+		syncedAt := time.Now().UnixMilli()
 		if err := c.syncRowsForOrg(orgID, rows); err != nil {
-			log.Warn().Err(err).Str("orgId", orgID).Str("source", source).Int("rows", len(rows)).Msg("token usage sync failed")
+			log.Warn().Err(err).
+				Str("orgId", orgID).
+				Str("source", source).
+				Int("rows", len(rows)).
+				Str("oldestBucket", formatTokenUsageSyncTime(rows[0].BucketStartHourUTC)).
+				Str("newestBucket", formatTokenUsageSyncTime(rows[len(rows)-1].BucketStartHourUTC)).
+				Msg("token usage sync failed")
 			continue
 		}
-		log.Debug().Str("orgId", orgID).Str("source", source).Int("rows", len(rows)).Msg("token usage sync completed")
-		c.clearPendingForOrg(orgID)
+		if err := c.repo.MarkHourlyRowsSynced(context.Background(), rows, syncedAt); err != nil {
+			log.Warn().Err(err).
+				Str("orgId", orgID).
+				Str("source", source).
+				Int("rows", len(rows)).
+				Msg("token usage sync mark-clean failed")
+			continue
+		}
+		log.Debug().
+			Str("orgId", orgID).
+			Str("source", source).
+			Int("rows", len(rows)).
+			Str("oldestBucket", formatTokenUsageSyncTime(rows[0].BucketStartHourUTC)).
+			Str("newestBucket", formatTokenUsageSyncTime(rows[len(rows)-1].BucketStartHourUTC)).
+			Str("syncedAt", formatTokenUsageSyncTime(syncedAt)).
+			Msg("token usage sync completed")
 	}
 }
 
-func (c *tokenUsageCollector) snapshotPendingRowsByOrg() map[string][]tokenusage.HourlyUsageRow {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	rowsByOrg := make(map[string][]tokenusage.HourlyUsageRow)
-	for _, rows := range c.pending {
-		for _, row := range rows {
-			if strings.TrimSpace(row.WorkspaceID) == "" {
-				continue
-			}
-			// Workspace IDs are local, but OrgID comes from active workspace list lookup.
-			orgID := c.resolveOrgIDForWorkspace(row.WorkspaceID)
-			if orgID == "" {
-				continue
-			}
-			rowsByOrg[orgID] = append(rowsByOrg[orgID], row)
-		}
+func (c *tokenUsageCollector) snapshotDirtyRowsByOrg() (map[string][]tokenusage.HourlyUsageRow, error) {
+	rows, err := c.repo.ListDirtyHourlyRows(context.Background())
+	if err != nil {
+		return nil, err
 	}
-	return rowsByOrg
+
+	rowsByOrg := make(map[string][]tokenusage.HourlyUsageRow)
+	for _, row := range rows {
+		if strings.TrimSpace(row.WorkspaceID) == "" {
+			continue
+		}
+		orgID := c.resolveOrgIDForWorkspace(row.WorkspaceID)
+		if orgID == "" {
+			continue
+		}
+		rowsByOrg[orgID] = append(rowsByOrg[orgID], row)
+	}
+	return rowsByOrg, nil
 }
 
 func (c *tokenUsageCollector) resolveOrgIDForWorkspace(workspaceID string) string {
@@ -431,17 +480,9 @@ func (c *tokenUsageCollector) syncRowsForOrg(orgID string, rows []tokenusage.Hou
 	return nil
 }
 
-func (c *tokenUsageCollector) clearPendingForOrg(orgID string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	for agentKind, rows := range c.pending {
-		kept := make([]tokenusage.HourlyUsageRow, 0, len(rows))
-		for _, row := range rows {
-			if c.resolveOrgIDForWorkspace(row.WorkspaceID) == orgID {
-				continue
-			}
-			kept = append(kept, row)
-		}
-		c.pending[agentKind] = kept
+func formatTokenUsageSyncTime(unixMillis int64) string {
+	if unixMillis <= 0 {
+		return ""
 	}
+	return time.UnixMilli(unixMillis).UTC().Format(time.RFC3339Nano)
 }

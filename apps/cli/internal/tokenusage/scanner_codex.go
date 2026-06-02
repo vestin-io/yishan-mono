@@ -60,21 +60,21 @@ type hourlyAccumulator struct {
 }
 
 func ScanCodexHourlyUsage(ctx context.Context, input ScanInput) ([]HourlyUsageRow, error) {
-	files, err := listCodexSessionFiles(input.SessionRoot)
+	files, err := listCodexSessionFiles(input.SessionRoot, input)
 	if err != nil {
 		return nil, err
 	}
 	buckets := make(map[hourlyKey]*hourlyAccumulator)
 	states := make(map[string]*codexSessionState)
 	for _, sessionFile := range files {
-		if err := scanCodexSessionFile(ctx, sessionFile, input.Worktrees, states, buckets); err != nil {
+		if err := scanCodexSessionFile(ctx, sessionFile, input, input.Worktrees, states, buckets); err != nil {
 			return nil, err
 		}
 	}
 	return materializeHourlyRows(buckets, input), nil
 }
 
-func listCodexSessionFiles(sessionRoot string) ([]string, error) {
+func listCodexSessionFiles(sessionRoot string, input ScanInput) ([]string, error) {
 	resolvedRoot, err := resolveCodexSessionRoot(sessionRoot)
 	if err != nil {
 		return nil, err
@@ -88,6 +88,9 @@ func listCodexSessionFiles(sessionRoot string) ([]string, error) {
 			return nil
 		}
 		if strings.HasSuffix(d.Name(), ".jsonl") {
+			if !shouldScanFileWithModTime(path, input) {
+				return nil
+			}
 			files = append(files, path)
 		}
 		return nil
@@ -116,6 +119,7 @@ func resolveCodexSessionRoot(sessionRoot string) (string, error) {
 func scanCodexSessionFile(
 	ctx context.Context,
 	sessionFile string,
+	input ScanInput,
 	worktrees []WorktreeRef,
 	states map[string]*codexSessionState,
 	buckets map[hourlyKey]*hourlyAccumulator,
@@ -134,6 +138,11 @@ func scanCodexSessionFile(
 		}
 		event, ok := parseCodexEventLine(scanner.Bytes())
 		if !ok {
+			continue
+		}
+		if isBeforeScanWindow(event.Timestamp, input) {
+			state := getSessionState(states, event.SessionID)
+			state.LastTotals = &event.Usage
 			continue
 		}
 		applyCodexEvent(event, sessionFile, worktrees, states, buckets)
