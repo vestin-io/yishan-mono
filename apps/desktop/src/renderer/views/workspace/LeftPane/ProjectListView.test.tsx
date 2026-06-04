@@ -46,6 +46,8 @@ const mocked = vi.hoisted(() => {
       lastUsedExternalAppId?: string;
       pullRequestByWorkspaceId: Record<string, unknown>;
       latestPullRequestByWorkspaceId: Record<string, unknown>;
+      currentBranchByWorkspaceId: Record<string, string>;
+      setWorkspaceCurrentBranch: (workspaceId: string, branch: string) => void;
       gitChangeTotalsByWorkspaceId: Record<string, { additions: number; deletions: number }>;
       setSelectedRepoId: (repoId: string) => void;
       setSelectedWorkspaceId: (workspaceId: string) => void;
@@ -68,6 +70,13 @@ const mocked = vi.hoisted(() => {
       lastUsedExternalAppId: undefined,
       pullRequestByWorkspaceId: {},
       latestPullRequestByWorkspaceId: {},
+      currentBranchByWorkspaceId: {},
+      setWorkspaceCurrentBranch: (workspaceId: string, branch: string) => {
+        stateRef.current.currentBranchByWorkspaceId = {
+          ...stateRef.current.currentBranchByWorkspaceId,
+          [workspaceId]: branch,
+        };
+      },
       gitChangeTotalsByWorkspaceId: {},
       setSelectedRepoId,
       setSelectedWorkspaceId,
@@ -93,7 +102,10 @@ const mocked = vi.hoisted(() => {
   });
   stateRef.current.markWorkspaceNotificationsRead = markWorkspaceNotificationsRead;
 
-  const workspaceStore = vi.fn((selector: (state: typeof stateRef.current) => unknown) => selector(stateRef.current));
+  const workspaceStore = Object.assign(
+    vi.fn((selector: (state: typeof stateRef.current) => unknown) => selector(stateRef.current)),
+    { getState: () => stateRef.current },
+  );
 
   return {
     renameWorkspace,
@@ -105,6 +117,12 @@ const mocked = vi.hoisted(() => {
     setLastUsedExternalAppId,
     openEntryInExternalApp,
     markWorkspaceNotificationsRead,
+    setWorkspaceCurrentBranch: vi.fn((workspaceId: string, branch: string) => {
+      stateRef.current.currentBranchByWorkspaceId = {
+        ...stateRef.current.currentBranchByWorkspaceId,
+        [workspaceId]: branch,
+      };
+    }),
     get rendererPlatform() {
       return rendererPlatform;
     },
@@ -243,6 +261,8 @@ function renderRepoList(
       lastUsedExternalAppId,
       pullRequestByWorkspaceId: {},
       latestPullRequestByWorkspaceId: {},
+      currentBranchByWorkspaceId: {},
+      setWorkspaceCurrentBranch: mocked.setWorkspaceCurrentBranch,
       gitChangeTotalsByWorkspaceId: {
       "workspace-1": { additions: 12, deletions: 4 },
     },
@@ -393,6 +413,8 @@ describe("ProjectListView", () => {
       lastUsedExternalAppId: undefined,
       pullRequestByWorkspaceId: {},
       latestPullRequestByWorkspaceId: {},
+      currentBranchByWorkspaceId: {},
+      setWorkspaceCurrentBranch: mocked.setWorkspaceCurrentBranch,
       gitChangeTotalsByWorkspaceId: {
         "workspace-local-1": { additions: 2, deletions: 1 },
       },
@@ -820,6 +842,7 @@ describe("ProjectListView", () => {
       selectedWorkspaceId: "workspace-1",
       displayProjectIds: ["repo-1"],
       pullRequestByWorkspaceId: {},
+      currentBranchByWorkspaceId: {},
     };
     renderProjectListView();
 
@@ -866,6 +889,7 @@ describe("ProjectListView", () => {
       selectedWorkspaceId: "workspace-1",
       displayProjectIds: ["repo-1"],
       pullRequestByWorkspaceId: {},
+      currentBranchByWorkspaceId: {},
     };
     renderProjectListView();
 
