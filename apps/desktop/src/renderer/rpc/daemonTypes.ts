@@ -226,8 +226,8 @@ export type GitWorktreeInput = {
 };
 
 export type GitInspectInput = {
-  workspaceWorktreePath: string;
-  workspaceId?: string;
+  workspaceWorktreePath?: string;
+  workspaceId: string;
 };
 
 export type GitInspectPathInput = {
