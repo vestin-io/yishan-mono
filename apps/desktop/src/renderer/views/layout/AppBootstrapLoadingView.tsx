@@ -1,4 +1,3 @@
-import { alpha } from "@mui/material/styles";
 import { Box, Button, Stack, Typography } from "@mui/material";
 import { useTranslation } from "react-i18next";
 import yishanLogo from "../../../assets/images/yishan-transparent.png";
@@ -25,7 +24,7 @@ export function AppBootstrapLoadingView(props: AppBootstrapLoadingViewProps) {
           px: 1,
           display: "flex",
           alignItems: "center",
-          borderBottom: (theme) => `1px solid ${alpha(theme.palette.common.white, 0.08)}`,
+          borderBottom: (theme) => `1px solid ${theme.palette.divider}`,
         }}
       />
       <Box
@@ -87,7 +86,7 @@ export function AppBootstrapLoadingView(props: AppBootstrapLoadingViewProps) {
           <Typography variant="overline" color="text.secondary" sx={{ letterSpacing: 2.4 }}>
             {t("app.bootstrap.badge")}
           </Typography>
-          <Typography variant="body2" sx={{ mb: 0.5, color: (theme) => alpha(theme.palette.common.white, 0.46) }}>
+          <Typography variant="body2" sx={{ mb: 0.5, color: "text.secondary" }}>
             {t("app.bootstrap.title")}
           </Typography>
           {props.hasError ? (
