@@ -11,16 +11,12 @@ const resourcesDir = resolve(desktopDir, "dist", "resources");
 const binaryName = process.platform === "win32" ? "yishan.exe" : "yishan";
 const cliBinaryCandidates = [resolve(cliBinDir, binaryName), resolve(cliBinDir, "yishan"), resolve(cliBinDir, "yishan.exe")];
 const outputPath = resolve(resourcesDir, binaryName);
-const cargoTomlPath = resolve(cliDir, "Cargo.toml");
+const packageJson = JSON.parse(readFileSync(resolve(desktopDir, "package.json"), "utf8"));
 const cliVersion =
   process.env.YISHAN_CLI_VERSION?.trim() ||
-  (existsSync(cargoTomlPath)
-    ? (() => {
-        const match = readFileSync(cargoTomlPath, "utf8").match(/^version\s*=\s*"([^"]+)"/m);
-        return match ? match[1] : "";
-      })()
-    : "") ||
-  "dev";
+  process.env.YISHAN_APP_VERSION?.trim() ||
+  (typeof packageJson.version === "string" ? packageJson.version.trim() : "") ||
+  "0.0.0";
 
 mkdirSync(resourcesDir, { recursive: true });
 
