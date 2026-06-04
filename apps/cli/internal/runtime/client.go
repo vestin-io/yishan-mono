@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -157,7 +158,21 @@ func CheckAuthStatus() (authenticated bool, expiresAt string, err error) {
 	}
 	client := APIClient()
 	if _, whoAmIErr := client.WhoAmI(); whoAmIErr != nil {
-		return false, "", nil
+		// A TokenRefreshError means the server explicitly rejected the credentials
+		// (e.g. expired/revoked refresh token). Any other error (network down, server
+		// unavailable) should not be treated as "logged out" — the user's stored
+		// credentials are still valid as far as we know.
+		var tokenErr *api.TokenRefreshError
+		if errors.As(whoAmIErr, &tokenErr) {
+			return false, "", nil
+		}
+		// Network / transient error: report authenticated based on stored token.
+		token, exp, tokenReadErr := GetAccessToken()
+		_ = token
+		if tokenReadErr != nil {
+			return false, "", nil
+		}
+		return true, exp, nil
 	}
 	token, exp, _ := GetAccessToken()
 	_ = token
