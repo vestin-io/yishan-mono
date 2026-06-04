@@ -54,34 +54,19 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            target: aarch64-apple-darwin
             goos: darwin
-            goarch: arm64
-            binary: yishan
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            goos: darwin
-            goarch: amd64
+            targets: aarch64-apple-darwin,x86_64-apple-darwin
+            goarches: arm64,amd64
             binary: yishan
           - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
             goos: linux
-            goarch: amd64
-            binary: yishan
-          - os: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-gnu
-            goos: linux
-            goarch: arm64
+            targets: x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu
+            goarches: amd64,arm64
             binary: yishan
           - os: windows-latest
-            target: x86_64-pc-windows-msvc
             goos: windows
-            goarch: amd64
-            binary: yishan.exe
-          - os: windows-latest
-            target: aarch64-pc-windows-msvc
-            goos: windows
-            goarch: arm64
+            targets: x86_64-pc-windows-msvc,aarch64-pc-windows-msvc
+            goarches: amd64,arm64
             binary: yishan.exe
     runs-on: ${{ matrix.os }}
     env:
@@ -93,47 +78,69 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: ${{ matrix.targets }}
 
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: apps/cli-rs
 
-      - name: Build release binary
+      - name: Install Linux ARM64 cross-linker
+        if: matrix.goos == 'linux'
+        run: sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Build release binaries
         shell: bash
         working-directory: apps/cli-rs
         run: |
-          cargo build --release --target ${{ matrix.target }} \
-            --config "env.YISHAN_VERSION=\"$YISHAN_VERSION\""
+          IFS=',' read -ra targets <<< "${{ matrix.targets }}"
+          for target in "${targets[@]}"; do
+            echo "::group::Building $target"
+            if [[ "$target" == "aarch64-unknown-linux-gnu" ]]; then
+              CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
+                cargo build --release --target "$target" \
+                  --config "env.YISHAN_VERSION=\"$YISHAN_VERSION\""
+            else
+              cargo build --release --target "$target" \
+                --config "env.YISHAN_VERSION=\"$YISHAN_VERSION\""
+            fi
+            echo "::endgroup::"
+          done
 
-      - name: Package archive
+      - name: Package archives
         shell: bash
         working-directory: apps/cli-rs
         run: |
           version="${{ needs.resolve-version.outputs.version }}"
-          archive="yishan-cli_${version}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz"
-          binary="target/${{ matrix.target }}/release/${{ matrix.binary }}"
-          tar -czf "$RUNNER_TEMP/$archive" -C "$(dirname "$binary")" "$(basename "$binary")"
-          echo "ARCHIVE_PATH=$RUNNER_TEMP/$archive" >> "$GITHUB_ENV"
-          echo "ARCHIVE_NAME=$archive" >> "$GITHUB_ENV"
+          IFS=',' read -ra targets  <<< "${{ matrix.targets }}"
+          IFS=',' read -ra goarches <<< "${{ matrix.goarches }}"
+          archives=""
+          for i in "${!targets[@]}"; do
+            target="${targets[$i]}"
+            goarch="${goarches[$i]}"
+            archive="yishan-cli_${version}_${{ matrix.goos }}_${goarch}.tar.gz"
+            binary="target/${target}/release/${{ matrix.binary }}"
+            tar -czf "$RUNNER_TEMP/$archive" -C "$(dirname "$binary")" "$(basename "$binary")"
+            sha256sum "$RUNNER_TEMP/$archive" \
+              | awk "{print \$1, \"$archive\"}" >> "$RUNNER_TEMP/checksums.txt"
+            archives="$archives $RUNNER_TEMP/$archive"
+          done
+          echo "ARCHIVES=$archives" >> "$GITHUB_ENV"
 
-          # Generate checksums
-          sha256sum "$RUNNER_TEMP/$archive" | awk '{print $1, "'"$archive"'"}' >> "$RUNNER_TEMP/checksums.txt"
-
-      - name: Upload CLI archive to release
+      - name: Upload CLI archives to release
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           version="${{ needs.resolve-version.outputs.version }}"
           tag="v${version}"
-          gh release upload "$tag" "$ARCHIVE_PATH" --clobber || \
-            gh release create "$tag" "$ARCHIVE_PATH" \
+          # shellcheck disable=SC2086
+          gh release upload "$tag" $ARCHIVES --clobber || \
+            gh release create "$tag" $ARCHIVES \
               --title "Yishan v${version}" \
               --draft=${{ inputs.draft || 'true' }} \
               --notes "Release v${version}"
-          # Upload per-platform checksums fragment
+          # Upload combined checksums fragment
           gh release upload "$tag" "$RUNNER_TEMP/checksums.txt" --clobber || true
 
   desktop:
