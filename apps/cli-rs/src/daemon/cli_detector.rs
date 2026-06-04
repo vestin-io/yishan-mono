@@ -10,6 +10,43 @@ const DEFAULT_CACHE_TTL_SECS: u64 = 3600; // 1 hour
 #[allow(dead_code)]
 const VERSION_TIMEOUT_SECS: u64 = 5;
 
+// ── Shell PATH resolution ──────────────────────────────────────────────────
+
+/// Resolved shell PATH, cached after the first load.
+static SHELL_PATH: Mutex<Option<String>> = Mutex::new(None);
+
+/// Returns the PATH from a login shell, falling back to the process PATH.
+/// Spawns `$SHELL --login -c 'printenv PATH'` once and caches the result.
+fn shell_path() -> String {
+    let mut guard = SHELL_PATH.lock().unwrap();
+    if let Some(ref p) = *guard {
+        return p.clone();
+    }
+
+    let resolved = resolve_shell_path().unwrap_or_else(|| {
+        std::env::var("PATH").unwrap_or_default()
+    });
+    *guard = Some(resolved.clone());
+    resolved
+}
+
+fn resolve_shell_path() -> Option<String> {
+    let shell = std::env::var("SHELL").ok()?;
+    let output = Command::new(&shell)
+        .args(["--login", "-c", "printenv PATH"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if path.is_empty() { None } else { Some(path) }
+}
+
+fn which_in_shell(cmd: &str) -> Option<std::path::PathBuf> {
+    which::which_in(cmd, Some(shell_path()), std::env::current_dir().unwrap_or_default()).ok()
+}
+
 /// Supported agent CLI definitions.
 static AGENT_CLIS: &[(&str, &str)] = &[
     ("opencode", "opencode"),
@@ -100,14 +137,13 @@ pub fn detect_agent_clis(force_refresh: bool) -> Vec<CliStatus> {
 
 fn detect_one_agent(kind: &str, cmd: &str) -> CliStatus {
     let label = agent_label(kind);
-    let path = which::which(cmd).ok();
-    let (installed, version, detail) = if let Some(p) = path {
-        let version = run_version_check(cmd);
-        let detail = version.as_deref().unwrap_or("installed").to_string();
-        debug!(tool = kind, path = %p.display(), version = ?version, "agent CLI detected");
-        (true, version, detail)
-    } else {
-        (false, None, "not installed".to_string())
+    let (installed, version, detail) = match probe_agent(cmd) {
+        None => (false, None, "not installed".to_string()),
+        Some(ver) => {
+            let detail = ver.as_deref().unwrap_or("installed").to_string();
+            debug!(tool = kind, version = ?ver, "agent CLI detected");
+            (true, ver, detail)
+        }
     };
     CliStatus {
         tool_id: kind.to_string(),
@@ -142,35 +178,60 @@ pub fn detect_gh(force_refresh: bool) -> GhStatus {
 }
 
 fn detect_gh_inner() -> GhStatus {
-    let installed = which::which("gh").is_ok();
-    if !installed {
-        return GhStatus {
-            tool_id: "gh".to_string(),
-            category: "vcs".to_string(),
-            label: "GitHub CLI".to_string(),
-            installed: false,
-            version: None,
-            authenticated: None,
-            account: None,
-            status_detail: "not installed".to_string(),
-        };
-    }
+    let gh_path = match which_in_shell("gh") {
+        Some(p) => p,
+        None => {
+            debug!("gh not found in shell PATH");
+            return GhStatus {
+                tool_id: "gh".to_string(),
+                category: "vcs".to_string(),
+                label: "GitHub CLI".to_string(),
+                installed: false,
+                version: None,
+                authenticated: None,
+                account: None,
+                status_detail: "not installed".to_string(),
+            };
+        }
+    };
 
-    let version = run_version_check("gh");
+    debug!(gh_path = %gh_path.display(), "gh binary found");
+    let version = run_version_check_path(&gh_path);
 
-    // Check auth status: `gh auth status --hostname github.com`
-    let auth_output = std::process::Command::new("gh")
-        .args(["auth", "status"])
+    // Check auth status via structured JSON — avoids fragile text parsing.
+    // `gh auth status --json hosts` exits 0 when at least one account is active.
+    let auth_output = std::process::Command::new(&gh_path)
+        .args(["auth", "status", "--json", "hosts"])
         .output()
         .ok();
 
     let (authenticated, account) = if let Some(out) = auth_output {
-        let combined = String::from_utf8_lossy(&out.stdout).to_string()
-            + &String::from_utf8_lossy(&out.stderr);
-        let authed = out.status.success() || combined.to_lowercase().contains("logged in");
-        let acct = extract_gh_account(&combined);
-        (Some(authed), acct)
+        let exit_code = out.status.code();
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        debug!(exit_code = ?exit_code, stdout = %stdout, stderr = %stderr, "gh auth status output");
+        if out.status.success() {
+            let json: serde_json::Value =
+                serde_json::from_slice(&out.stdout).unwrap_or_default();
+            let hosts = json.get("hosts").and_then(|h| h.as_object());
+            let acct = hosts.and_then(|map| {
+                map.values()
+                    .find_map(|entries| {
+                        entries
+                            .as_array()?
+                            .iter()
+                            .find(|e| e.get("active").and_then(|v| v.as_bool()).unwrap_or(false))
+                            .and_then(|e| e.get("login"))
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string())
+                    })
+            });
+            (Some(true), acct)
+        } else {
+            (Some(false), None)
+        }
     } else {
+        debug!("gh auth status command failed to spawn");
         (None, None)
     };
 
@@ -218,10 +279,31 @@ pub fn detect_all(force_refresh: bool) -> Vec<serde_json::Value> {
 // ── helpers ────────────────────────────────────────────────────────────────
 
 fn run_version_check(cmd: &str) -> Option<String> {
-    let output = Command::new(cmd).arg("--version").output().ok()?;
+    let path = which_in_shell(cmd)?;
+    run_version_check_path(&path)
+}
+
+fn run_version_check_path(path: &std::path::Path) -> Option<String> {
+    let output = Command::new(path).arg("--version").output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
     let text = String::from_utf8_lossy(&output.stdout).to_string()
         + &String::from_utf8_lossy(&output.stderr);
     extract_semver(&text)
+}
+
+/// Returns `None` if the binary is absent or its `--version` invocation fails
+/// (e.g. a stub/wrapper that exits non-zero when the real tool is missing).
+fn probe_agent(cmd: &str) -> Option<Option<String>> {
+    let path = which_in_shell(cmd)?;
+    let output = Command::new(&path).arg("--version").output().ok()?;
+    if !output.status.success() {
+        return None; // wrapper / shim with no real binary behind it
+    }
+    let text = String::from_utf8_lossy(&output.stdout).to_string()
+        + &String::from_utf8_lossy(&output.stderr);
+    Some(extract_semver(&text)) // Some(Some(ver)) or Some(None) if no semver found
 }
 
 static SEMVER_RE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
@@ -230,30 +312,6 @@ static SEMVER_RE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|
 
 fn extract_semver(text: &str) -> Option<String> {
     SEMVER_RE.find(text).map(|m| m.as_str().to_string())
-}
-
-fn extract_gh_account(text: &str) -> Option<String> {
-    // Look for lines like "Logged in to github.com account <user> ..."
-    for line in text.lines() {
-        let l = line.trim().to_lowercase();
-        if l.contains("logged in") || l.contains("account") {
-            let parts: Vec<&str> = line.split_whitespace().collect();
-            // Find "account" keyword and take the next token.
-            for (i, p) in parts.iter().enumerate() {
-                if p.to_lowercase() == "account" {
-                    if let Some(acct) = parts.get(i + 1) {
-                        return Some(
-                            acct.trim_matches(|c: char| {
-                                !c.is_alphanumeric() && c != '-' && c != '_'
-                            })
-                            .to_string(),
-                        );
-                    }
-                }
-            }
-        }
-    }
-    None
 }
 
 fn agent_label(kind: &str) -> String {
