@@ -119,7 +119,7 @@ function resolveCliInvocation(): CliInvocation {
 
     return {
       executablePath: "cargo",
-      prefixArgs: ["run", "--", "--profile", "dev"],
+      prefixArgs: ["run", "--"],
       cwd: cliDir,
     };
   }
@@ -142,7 +142,7 @@ function resolveCliInvocation(): CliInvocation {
 
     return {
       executablePath: "cargo",
-      prefixArgs: ["run", "--", "--profile", "dev"],
+      prefixArgs: ["run", "--"],
       cwd: cliDir,
     };
   }

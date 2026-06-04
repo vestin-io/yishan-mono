@@ -115,8 +115,8 @@ export type DaemonRpcClient = {
   integration: {
     githubStatus: (input?: { refresh?: boolean }) => Promise<{
       installed: boolean;
-      loggedIn: boolean;
-      username?: string;
+      authenticated: boolean;
+      account?: string;
       statusDetail: string;
     }>;
   };
