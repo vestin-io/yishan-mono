@@ -121,8 +121,13 @@ jobs:
             archive="yishan-cli_${version}_${{ matrix.goos }}_${goarch}.tar.gz"
             binary="target/${target}/release/${{ matrix.binary }}"
             tar -czf "$RUNNER_TEMP/$archive" -C "$(dirname "$binary")" "$(basename "$binary")"
-            sha256sum "$RUNNER_TEMP/$archive" \
-              | awk "{print \$1, \"$archive\"}" >> "$RUNNER_TEMP/checksums.txt"
+            # sha256sum is available on Linux/macOS; on Windows Git Bash use certutil
+            if command -v sha256sum &>/dev/null; then
+              checksum=$(sha256sum "$RUNNER_TEMP/$archive" | awk '{print $1}')
+            else
+              checksum=$(certutil -hashfile "$RUNNER_TEMP/$archive" SHA256 | sed -n '2p' | tr -d ' \r')
+            fi
+            echo "$checksum  $archive" >> "$RUNNER_TEMP/checksums.txt"
             archives="$archives $RUNNER_TEMP/$archive"
           done
           echo "ARCHIVES=$archives" >> "$GITHUB_ENV"
