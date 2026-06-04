@@ -238,31 +238,7 @@ pub fn stop(config_path: &str, timeout: Duration) -> anyhow::Result<DaemonState>
 pub fn start_detached(cfg: &StartConfig) -> anyhow::Result<u32> {
     let executable = env::current_exe().context("resolve current executable")?;
 
-    let mut args: Vec<String> = vec![
-        "daemon".into(),
-        "run".into(),
-        "--host".into(),
-        cfg.run.host.clone(),
-        "--port".into(),
-        cfg.run.port.to_string(),
-        format!("--relay-enabled={}", cfg.run.relay_enabled),
-    ];
-    if !cfg.run.relay_url.is_empty() {
-        args.push("--relay-url".into());
-        args.push(cfg.run.relay_url.clone());
-    }
-    if !cfg.config_path.is_empty() {
-        args.push("--config".into());
-        args.push(cfg.config_path.clone());
-    }
-    if !cfg.log_level.is_empty() {
-        args.push("--log-level".into());
-        args.push(cfg.log_level.clone());
-    }
-    if !cfg.log_file.is_empty() {
-        args.push("--log-file".into());
-        args.push(cfg.log_file.clone());
-    }
+    let args = build_start_args(cfg);
 
     let mut envs: Vec<(String, String)> = env::vars().collect();
     envs.push((DETACHED_ENV_KEY.to_string(), "1".to_string()));
@@ -289,6 +265,37 @@ pub fn start_detached(cfg: &StartConfig) -> anyhow::Result<u32> {
     std::mem::forget(child);
 
     Ok(pid)
+}
+
+fn build_start_args(cfg: &StartConfig) -> Vec<String> {
+    let mut args: Vec<String> = vec![
+        "daemon".into(),
+        "run".into(),
+        "--host".into(),
+        cfg.run.host.clone(),
+        "--port".into(),
+        cfg.run.port.to_string(),
+    ];
+    if cfg.run.relay_enabled {
+        args.push("--relay-enabled".into());
+    }
+    if !cfg.run.relay_url.is_empty() {
+        args.push("--relay-url".into());
+        args.push(cfg.run.relay_url.clone());
+    }
+    if !cfg.config_path.is_empty() {
+        args.push("--config".into());
+        args.push(cfg.config_path.clone());
+    }
+    if !cfg.log_level.is_empty() {
+        args.push("--log-level".into());
+        args.push(cfg.log_level.clone());
+    }
+    if !cfg.log_file.is_empty() {
+        args.push("--log-file".into());
+        args.push(cfg.log_file.clone());
+    }
+    args
 }
 
 /// Probe the daemon's /healthz endpoint.
@@ -339,4 +346,45 @@ pub fn restart(
     }
     start_detached(cfg).context("start detached daemon for restart")?;
     wait_for_ready(config_path, ready_timeout)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{build_start_args, RunConfig, StartConfig};
+
+    #[test]
+    fn build_start_args_omits_false_boolean_flags() {
+        let args = build_start_args(&StartConfig {
+            run: RunConfig {
+                host: "127.0.0.1".to_string(),
+                port: 0,
+                relay_enabled: false,
+                relay_url: String::new(),
+                log_file_path: String::new(),
+            },
+            config_path: "/tmp/credential.yaml".to_string(),
+            log_level: String::new(),
+            log_file: String::new(),
+        });
+
+        assert!(!args.iter().any(|arg| arg.starts_with("--relay-enabled")));
+    }
+
+    #[test]
+    fn build_start_args_includes_true_boolean_flags() {
+        let args = build_start_args(&StartConfig {
+            run: RunConfig {
+                host: "127.0.0.1".to_string(),
+                port: 0,
+                relay_enabled: true,
+                relay_url: String::new(),
+                log_file_path: String::new(),
+            },
+            config_path: String::new(),
+            log_level: String::new(),
+            log_file: String::new(),
+        });
+
+        assert!(args.iter().any(|arg| arg == "--relay-enabled"));
+    }
 }

@@ -198,7 +198,6 @@ export function useFileTreeOperations(): UseFileTreeOperationsResult {
   const selectedWorkspaceWorktreePath = workspaceStore(
     (state) => state.workspaces.find((workspace) => workspace.id === state.selectedWorkspaceId)?.worktreePath,
   );
-  const fileTreeRefreshVersion = workspaceStore((state) => state.fileTreeRefreshVersion);
   const changedRelativePathsForSelectedWorkspace = workspaceStore((state) => {
     const workspaceWorktreePath =
       state.workspaces.find((workspace) => workspace.id === state.selectedWorkspaceId)?.worktreePath?.trim() ?? "";
@@ -450,7 +449,7 @@ export function useFileTreeOperations(): UseFileTreeOperationsResult {
 
   useEffect(() => {
     void refreshLoadedRepoFiles(changedRelativePathsForSelectedWorkspace);
-  }, [changedRelativePathsForSelectedWorkspace, fileTreeRefreshVersion, refreshLoadedRepoFiles]);
+  }, [changedRelativePathsForSelectedWorkspace, refreshLoadedRepoFiles]);
 
   return {
     repoFiles,

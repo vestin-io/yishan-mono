@@ -98,8 +98,13 @@ pub async fn run(cmd: DaemonCommands, runtime: &AppRuntime) -> anyhow::Result<()
             };
 
             let _pid = start_detached(&start_cfg).context("start daemon")?;
-            let state = wait_for_ready(&cfg.config_path, Duration::from_secs(10))
-                .context("wait for daemon ready")?;
+            let config_path = cfg.config_path.clone();
+            let state = tokio::task::spawn_blocking(move || {
+                wait_for_ready(&config_path, Duration::from_secs(10))
+            })
+            .await
+            .context("join wait for daemon ready task")?
+            .context("wait for daemon ready")?;
 
             print_any(json!({
                 "status": "started",
@@ -123,12 +128,17 @@ pub async fn run(cmd: DaemonCommands, runtime: &AppRuntime) -> anyhow::Result<()
                 config_path: cfg.config_path.clone(),
                 ..Default::default()
             };
-            let state = restart(
-                &start_cfg,
-                &cfg.config_path,
-                Duration::from_secs(10),
-                Duration::from_secs(10),
-            )
+            let config_path = cfg.config_path.clone();
+            let state = tokio::task::spawn_blocking(move || {
+                restart(
+                    &start_cfg,
+                    &config_path,
+                    Duration::from_secs(10),
+                    Duration::from_secs(10),
+                )
+            })
+            .await
+            .context("join restart daemon task")?
             .context("restart daemon")?;
             print_any(json!({
                 "status": "restarted",
