@@ -114,23 +114,25 @@ jobs:
           version="${{ needs.resolve-version.outputs.version }}"
           IFS=',' read -ra targets  <<< "${{ matrix.targets }}"
           IFS=',' read -ra goarches <<< "${{ matrix.goarches }}"
+          # Convert RUNNER_TEMP to a Unix path (required on Windows where it is a Windows-style path)
+          tmp_dir="$(cygpath -u "$RUNNER_TEMP" 2>/dev/null || echo "$RUNNER_TEMP")"
           archives=""
           for i in "${!targets[@]}"; do
             target="${targets[$i]}"
             goarch="${goarches[$i]}"
             archive="yishan-cli_${version}_${{ matrix.goos }}_${goarch}.tar.gz"
             binary="target/${target}/release/${{ matrix.binary }}"
-            tar -czf "$RUNNER_TEMP/$archive" -C "$(dirname "$binary")" "$(basename "$binary")"
-            # sha256sum is available on Linux/macOS; on Windows Git Bash use certutil
+            tar -czf "$tmp_dir/$archive" -C "$(dirname "$binary")" "$(basename "$binary")"
             if command -v sha256sum &>/dev/null; then
-              checksum=$(sha256sum "$RUNNER_TEMP/$archive" | awk '{print $1}')
+              checksum=$(sha256sum "$tmp_dir/$archive" | awk '{print $1}')
             else
-              checksum=$(certutil -hashfile "$RUNNER_TEMP/$archive" SHA256 | sed -n '2p' | tr -d ' \r')
+              checksum=$(certutil -hashfile "$(cygpath -w "$tmp_dir/$archive")" SHA256 | sed -n '2p' | tr -d ' \r')
             fi
-            echo "$checksum  $archive" >> "$RUNNER_TEMP/checksums.txt"
-            archives="$archives $RUNNER_TEMP/$archive"
+            echo "$checksum  $archive" >> "$tmp_dir/checksums.txt"
+            archives="$archives $tmp_dir/$archive"
           done
           echo "ARCHIVES=$archives" >> "$GITHUB_ENV"
+          echo "TMP_DIR=$tmp_dir" >> "$GITHUB_ENV"
 
       - name: Upload CLI archives to release
         shell: bash
@@ -146,7 +148,7 @@ jobs:
               --draft=${{ inputs.draft || 'true' }} \
               --notes "Release v${version}"
           # Upload combined checksums fragment
-          gh release upload "$tag" "$RUNNER_TEMP/checksums.txt" --clobber || true
+          gh release upload "$tag" "$TMP_DIR/checksums.txt" --clobber || true
 
   desktop:
     needs: [resolve-version, cli]
