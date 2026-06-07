@@ -115,12 +115,7 @@ describe("workspaceCommands", () => {
       targetBranch: " feature-a ",
     });
 
-    expect(createdWorkspaceId).toMatch(/^[0-9a-f-]{36}$/i);
-    expect(workspaceCreateProgressStore.getState().progressByWorkspaceId[createdWorkspaceId!]?.steps[0]).toMatchObject({
-      id: "worktree",
-      label: "Fetch & create worktree",
-      status: "pending",
-    });
+    expect(createdWorkspaceId).toBe("workspace-2");
     expect(addWorkspace).toHaveBeenCalledWith({
       repoId: "repo-1",
       organizationId: "org-1",
@@ -129,10 +124,10 @@ describe("workspaceCommands", () => {
       sourceBranch: "main",
       branch: "feature-a",
       worktreePath: "",
+      nodeId: undefined,
     });
     await vi.waitFor(() => {
       expect(rpcMocks.createWorkspace).toHaveBeenCalledWith({
-        workspaceId: createdWorkspaceId,
         organizationId: "org-1",
         nodeId: undefined,
         projectId: "repo-1",
@@ -145,17 +140,6 @@ describe("workspaceCommands", () => {
       });
     });
     expect(rpcMocks.list).not.toHaveBeenCalled();
-    await vi.waitFor(() => {
-      expect(addWorkspace).toHaveBeenCalledWith({
-        repoId: "repo-1",
-        organizationId: "org-1",
-        workspaceId: createdWorkspaceId,
-        name: "feature-a",
-        sourceBranch: "main",
-        branch: "feature-a",
-        worktreePath: "~/.yishan/worktrees/repo-1/feature-a",
-      });
-    });
     await vi.waitFor(() => {
       expect(setSelectedWorkspaceId).toHaveBeenCalledTimes(1);
     }, { timeout: 3_500 });
@@ -193,7 +177,7 @@ describe("workspaceCommands", () => {
     });
   });
 
-  it("shows system notification when create returns lifecycle script warning", async () => {
+  it("does not call lifecycle warnings from direct create response (warnings come via workspaceCreateCompleted event)", async () => {
     sessionStore.setState({ selectedOrganizationId: "org-1" });
     workspaceStore.setState({
       projects: [
@@ -238,28 +222,14 @@ describe("workspaceCommands", () => {
       targetBranch: "feature-a",
     });
 
-    expect(createdWorkspaceId).toMatch(/^[0-9a-f-]{36}$/i);
-    await vi.waitFor(() => {
-      expect(rpcMocks.enqueueWorkspaceLifecycleWarnings).toHaveBeenCalledWith({
-        workspaceName: "feature-a",
-        warnings: [
-          {
-            scriptKind: "setup",
-            timedOut: false,
-            message: "Workspace setup script failed.",
-            command: "pnpm install",
-            stdoutExcerpt: "",
-            stderrExcerpt: "error",
-            exitCode: 1,
-            signal: null,
-            logFilePath: "/tmp/.yishan-dev/logs/workspace-lifecycle/setup.log",
-          },
-        ],
-      });
-    });
+    // In the two-phase flow, createWorkspace returns immediately after reserving
+    // the workspace ID. Lifecycle warnings are delivered later via the
+    // workspaceCreateCompleted backend event — not from the direct RPC response.
+    expect(createdWorkspaceId).toBe("workspace-2");
+    expect(rpcMocks.enqueueWorkspaceLifecycleWarnings).not.toHaveBeenCalled();
   });
 
-  it("keeps optimistic workspace when backend create fails", async () => {
+  it("does not add workspace to store when backend create fails", async () => {
     sessionStore.setState({ selectedOrganizationId: "org-1" });
     const addWorkspace = vi.fn();
     workspaceStore.setState({
@@ -278,18 +248,27 @@ describe("workspaceCommands", () => {
     });
     rpcMocks.createWorkspace.mockRejectedValueOnce(new Error("boom"));
 
-    await createWorkspace({
+    // In the two-phase flow, createWorkspace catches errors and resolves
+    // undefined rather than propagating the rejection. An in-app error notice
+    // is shown instead.
+    const result = await createWorkspace({
       projectId: "repo-1",
       name: "feature-b",
       sourceBranch: "main",
       targetBranch: "feature-b",
     });
 
+    expect(result).toBeUndefined();
+
     await vi.waitFor(() => {
       expect(rpcMocks.createWorkspace).toHaveBeenCalledTimes(1);
     });
     expect(rpcMocks.list).not.toHaveBeenCalled();
-    expect(addWorkspace).toHaveBeenCalledTimes(1);
+    expect(addWorkspace).not.toHaveBeenCalled();
+    expect(rpcMocks.enqueueWorkspaceErrorNotice).toHaveBeenCalledWith({
+      title: "Failed to create workspace",
+      message: "boom",
+    });
   });
 
   it("deletes local workspace immediately and closes backend workspace in background", async () => {

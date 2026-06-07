@@ -10,6 +10,14 @@ const (
 	MethodWorkspaceSetActive       = "workspace.setActive"
 	MethodWorkspaceSyncContextLink = "workspace.syncContextLink"
 
+	MethodContextGetState          = "context.getState"
+	MethodContextSetCurrentOrg     = "context.setCurrentOrg"
+	MethodContextSetActiveProject  = "context.setActiveProject"
+	MethodContextSetActiveFile     = "context.setActiveFile"
+
+	MethodProjectList = "project.list"
+	MethodNodeList    = "node.list"
+
 	MethodAgentListDetectionStatuses = "agent.listDetectionStatuses"
 	MethodIntegrationGitHubStatus    = "integration.githubStatus"
 	MethodCLIToolListStatuses        = "cliTools.listStatuses"
