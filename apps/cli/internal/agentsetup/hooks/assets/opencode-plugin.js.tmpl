@@ -10,7 +10,9 @@ export const YishanNotifyPlugin = async ({ $, client }) => {
   let rootSessionId = null;
   let stopSent = false;
   let waitingInputSent = false;
-  let taskDoneSent = false;
+  let stopTimer = null;
+
+  const STOP_DEBOUNCE_MS = 2500;
 
   const notify = async (hookEventName) => {
     try {
@@ -34,6 +36,14 @@ export const YishanNotifyPlugin = async ({ $, client }) => {
   };
 
   const handleBusy = async (sessionId) => {
+    // Cancel any pending Stop debounce — a new task started before it fired.
+    if (stopTimer !== null) {
+      clearTimeout(stopTimer);
+      stopTimer = null;
+      // Reset so this new task can emit its own Start/Stop pair.
+      stopSent = false;
+      currentState = "idle";
+    }
     if (!rootSessionId) {
       rootSessionId = sessionId;
     }
@@ -52,23 +62,18 @@ export const YishanNotifyPlugin = async ({ $, client }) => {
     if (rootSessionId && sessionId !== rootSessionId) {
       return;
     }
-    // If we were busy and no waiting input, but the sessionId indicates a task
-    // level completion (not full session end), emit TaskComplete instead of Stop.
-    // Heuristic: when currentState is busy and stopSent is false and no waitingInputSent
-    // we consider emitting a task-level notification.
     if ((currentState === "busy" || currentState === "waiting") && !stopSent) {
-      // Distinguish task-level completions from full session stops. We emit
-      // TaskComplete for quick task finishes and Stop for real session ends.
-      // To keep this simple and deterministic, emit TaskComplete and keep
-      // rootSessionId (do not clear it). Only Stop (session end) clears rootSessionId.
       currentState = "idle";
       stopSent = true;
       waitingInputSent = false;
-      // Emit TaskComplete so the daemon can treat it separately
-      taskDoneSent = true;
-      await notify("TaskComplete");
-      // Keep rootSessionId to indicate the session is still logically active
-      return;
+      // Debounce: wait before emitting Stop in case the next task starts immediately
+      // (e.g. opencode todo list runs sequential root sessions back-to-back).
+      // If handleBusy fires within the window the timer is cancelled and no Stop is sent.
+      rootSessionId = null;
+      stopTimer = setTimeout(async () => {
+        stopTimer = null;
+        await notify("Stop");
+      }, STOP_DEBOUNCE_MS);
     }
   };
 
@@ -84,7 +89,6 @@ export const YishanNotifyPlugin = async ({ $, client }) => {
     currentState = "busy";
     waitingInputSent = false;
     stopSent = false;
-    taskDoneSent = false;
     await notify("Start");
   };
 
@@ -111,6 +115,10 @@ export const YishanNotifyPlugin = async ({ $, client }) => {
         await handleStop(sessionId);
       }
       if (event.type === "session.error") {
+        if (stopTimer !== null) {
+          clearTimeout(stopTimer);
+          stopTimer = null;
+        }
         currentState = "idle";
         stopSent = true;
         waitingInputSent = false;
