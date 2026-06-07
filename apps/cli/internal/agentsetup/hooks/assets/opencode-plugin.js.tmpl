@@ -10,6 +10,7 @@ export const YishanNotifyPlugin = async ({ $, client }) => {
   let rootSessionId = null;
   let stopSent = false;
   let waitingInputSent = false;
+  let taskDoneSent = false;
 
   const notify = async (hookEventName) => {
     try {
@@ -51,12 +52,23 @@ export const YishanNotifyPlugin = async ({ $, client }) => {
     if (rootSessionId && sessionId !== rootSessionId) {
       return;
     }
+    // If we were busy and no waiting input, but the sessionId indicates a task
+    // level completion (not full session end), emit TaskComplete instead of Stop.
+    // Heuristic: when currentState is busy and stopSent is false and no waitingInputSent
+    // we consider emitting a task-level notification.
     if ((currentState === "busy" || currentState === "waiting") && !stopSent) {
+      // Distinguish task-level completions from full session stops. We emit
+      // TaskComplete for quick task finishes and Stop for real session ends.
+      // To keep this simple and deterministic, emit TaskComplete and keep
+      // rootSessionId (do not clear it). Only Stop (session end) clears rootSessionId.
       currentState = "idle";
       stopSent = true;
       waitingInputSent = false;
-      await notify("Stop");
-      rootSessionId = null;
+      // Emit TaskComplete so the daemon can treat it separately
+      taskDoneSent = true;
+      await notify("TaskComplete");
+      // Keep rootSessionId to indicate the session is still logically active
+      return;
     }
   };
 
@@ -72,6 +84,7 @@ export const YishanNotifyPlugin = async ({ $, client }) => {
     currentState = "busy";
     waitingInputSent = false;
     stopSent = false;
+    taskDoneSent = false;
     await notify("Start");
   };
 
