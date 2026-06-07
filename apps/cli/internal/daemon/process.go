@@ -128,6 +128,13 @@ func Run(cfg RunConfig, statePath string, runtime *cliruntime.Runtime) error {
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(stop)
 
+	// Ignore SIGHUP. opencode (Bun) calls setsid() when starting its TUI
+	// inside a PTY session managed by the daemon. On macOS, this causes the
+	// kernel to deliver SIGHUP to the process holding the PTY master fd (the
+	// daemon). The default Go runtime action for an unhandled SIGHUP is to
+	// terminate the process immediately, so we explicitly suppress it here.
+	signal.Ignore(syscall.SIGHUP)
+
 	shutdownCtx, cancelShutdown := context.WithCancel(context.Background())
 	defer cancelShutdown()
 
