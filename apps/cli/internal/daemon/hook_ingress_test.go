@@ -57,7 +57,7 @@ func TestServeAgentHookPublishesFailedNotificationEvent(t *testing.T) {
 		"workspaceId":  "ws-1",
 		"tabId":        "tab-1",
 		"paneId":       "pane-1",
-		"rawEventType": "PostToolUseFailure",
+		"rawEventType": "Failed",
 	})
 	if response.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, response.Code)
@@ -73,6 +73,31 @@ func TestServeAgentHookPublishesFailedNotificationEvent(t *testing.T) {
 	}
 	if _, ok := payload["showSystemNotification"]; ok {
 		t.Fatalf("expected renderer to resolve system notification preference, got %#v", payload)
+	}
+}
+
+func TestServeAgentHookSilencesPerToolFailureEvents(t *testing.T) {
+	handler := NewJSONRPCHandler(workspace.NewManager(), nil, "node-1", "", nil, "")
+	subscriptionID, events := handler.events.Subscribe()
+	defer handler.events.Unsubscribe(subscriptionID)
+
+	response := postHookPayload(t, handler, map[string]any{
+		"agent":        "claude",
+		"workspaceId":  "ws-1",
+		"tabId":        "tab-1",
+		"paneId":       "pane-1",
+		"rawEventType": "PostToolUseFailure",
+	})
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, response.Code)
+	}
+
+	// PostToolUseFailure is a per-tool event — it should not produce a notification.
+	select {
+	case event := <-events:
+		t.Fatalf("expected no notification for PostToolUseFailure, got topic=%q", event.Topic)
+	case <-time.After(50 * time.Millisecond):
+		// No event published — correct.
 	}
 }
 
@@ -129,6 +154,32 @@ func TestServeAgentHookNormalizesSupportedAgentNames(t *testing.T) {
 				t.Fatalf("expected agent %q, got %#v", agent, payload["agent"])
 			}
 		})
+	}
+}
+
+func TestServeAgentHookNormalizesCursorAgentAlias(t *testing.T) {
+	handler := NewJSONRPCHandler(workspace.NewManager(), nil, "node-1", "", nil, "")
+	subscriptionID, events := handler.events.Subscribe()
+	defer handler.events.Unsubscribe(subscriptionID)
+
+	response := postHookPayload(t, handler, map[string]any{
+		"agent":       "cursor-agent",
+		"workspaceId": "ws-1",
+		"tabId":       "tab-1",
+		"paneId":      "pane-1",
+		"event":       "Stop",
+	})
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, response.Code)
+	}
+
+	event := readPublishedEvent(t, events)
+	payload, ok := event.Payload.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map payload, got %T", event.Payload)
+	}
+	if payload["agent"] != "cursor" {
+		t.Fatalf("expected agent %q, got %q", "cursor", payload["agent"])
 	}
 }
 

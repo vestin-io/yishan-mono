@@ -122,6 +122,12 @@ func normalizeHookIngressPayload(payload hookIngressEvent) (normalizedHookEvent,
 }
 
 func buildHookNotificationPayload(event normalizedHookEvent) map[string]any {
+	// Ignore explicit TaskComplete events from plugins — they are task-level
+	// notifications and should not be treated as session-level terminal events.
+	if strings.Contains(strings.ToLower(event.rawEventType), "taskcomplete") {
+		return nil
+	}
+
 	switch event.eventType {
 	case "start":
 		return hookNotificationPayload(event, "Run Started", "Workspace "+event.workspaceID+" is running.", "success", true, "")
@@ -159,17 +165,38 @@ func hookNotificationPayload(event normalizedHookEvent, title string, body strin
 }
 
 func normalizeHookAgent(agent string) string {
-	switch strings.ToLower(strings.TrimSpace(agent)) {
+	normalized := strings.ToLower(strings.TrimSpace(agent))
+	switch normalized {
 	case "codex", "claude", "opencode", "gemini", "pi", "copilot", "cursor":
-		return strings.ToLower(strings.TrimSpace(agent))
+		return normalized
+	case "cursor-agent":
+		return "cursor"
 	default:
 		return "unknown"
 	}
 }
 
+// isPerToolHookEvent returns true for hook events that fire per tool invocation
+// rather than per session. These are intermediate events that should not trigger
+// session-level notifications (e.g. "PostToolUse", "PostToolUseFailure").
+func isPerToolHookEvent(normalized string) bool {
+	return strings.HasPrefix(normalized, "posttooluse")
+}
+
 func normalizeHookEventType(rawEventType string) string {
 	normalized := strings.ToLower(strings.TrimSpace(rawEventType))
 	if normalized == "" || normalized == "unknown" {
+		return "unknown"
+	}
+	// Treat explicit TaskComplete events as non-terminal — they represent task-level
+	// completions inside a session and should not be normalized to a session "stop".
+	if strings.Contains(normalized, "taskcomplete") {
+		return "unknown"
+	}
+
+	// Per-tool events are intermediate — they do not represent session-level
+	// lifecycle transitions and must not trigger start/stop/wait_input notifications.
+	if isPerToolHookEvent(normalized) {
 		return "unknown"
 	}
 	if strings.Contains(normalized, "start") || strings.Contains(normalized, "begin") || strings.Contains(normalized, "submit") {
