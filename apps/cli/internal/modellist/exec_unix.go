@@ -5,34 +5,27 @@ package modellist
 import (
 	"os"
 	"os/exec"
-	"path/filepath"
-	"strings"
+	"sync"
 	"syscall"
 
 	"yishan/apps/cli/internal/runtime/shellenv"
 )
 
-// enrichedPath is the PATH value computed once at package init by merging the
-// process PATH with known user-local bin directories. Using init() avoids
-// spawning a login shell on every subprocess invocation.
-var enrichedPath string
+// enrichedEnv is the full subprocess environment with an enriched PATH,
+// computed once on first use. It uses ResolveEnvWithUserPath (same as
+// cli_detector) which spawns a login shell to capture the user's full PATH
+// including directories like ~/.opencode/bin. The result is cached so the
+// login shell is only spawned once per daemon lifetime.
+var (
+	enrichedEnv     []string
+	enrichedEnvOnce sync.Once
+)
 
-func init() {
-	dirs := shellenv.CommonUserBinDirectories()
-	existing := os.Getenv("PATH")
-	parts := strings.Split(existing, string(os.PathListSeparator))
-	seen := make(map[string]bool, len(parts))
-	for _, p := range parts {
-		seen[p] = true
-	}
-	for _, d := range dirs {
-		d = filepath.Clean(d)
-		if !seen[d] {
-			parts = append([]string{d}, parts...)
-			seen[d] = true
-		}
-	}
-	enrichedPath = strings.Join(parts, string(os.PathListSeparator))
+func getEnrichedEnv() []string {
+	enrichedEnvOnce.Do(func() {
+		enrichedEnv = shellenv.ResolveEnvWithUserPath(os.Environ(), os.Getenv("SHELL"))
+	})
+	return enrichedEnv
 }
 
 // isolateCmd prevents the subprocess from triggering SIGHUP delivery to the
@@ -41,21 +34,10 @@ func init() {
 // to the daemon. Setting Setsid:true here puts the child in its own session
 // before it can attempt that, eliminating the signal entirely.
 //
-// It also sets an enriched PATH so CLI tools in user-local directories
-// (e.g. ~/.opencode/bin, ~/.local/bin, ~/.yishan/bin) are findable even when
+// It also sets an enriched PATH (resolved once via the login shell, same
+// approach as cli_detector) so tools like opencode are findable even when
 // the daemon was launched from a GUI context with a minimal system PATH.
-// The enriched PATH is computed once at init time to avoid spawning a login
-// shell on every invocation.
 func isolateCmd(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	env := os.Environ()
-	enriched := make([]string, 0, len(env))
-	for _, e := range env {
-		if strings.HasPrefix(e, "PATH=") {
-			enriched = append(enriched, "PATH="+enrichedPath)
-		} else {
-			enriched = append(enriched, e)
-		}
-	}
-	cmd.Env = enriched
+	cmd.Env = getEnrichedEnv()
 }
