@@ -14,6 +14,7 @@ func (f opencodeFetcher) AgentKind() string { return opencodeAgentKind }
 
 func (f opencodeFetcher) Fetch() ([]ModelInfo, error) {
 	cmd := exec.Command("opencode", "models")
+	isolateCmd(cmd)
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, err

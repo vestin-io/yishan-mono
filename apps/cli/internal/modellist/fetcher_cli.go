@@ -12,6 +12,7 @@ func (f piFetcher) AgentKind() string { return "pi" }
 
 func (f piFetcher) Fetch() ([]ModelInfo, error) {
 	cmd := exec.Command("pi", "--list-models")
+	isolateCmd(cmd)
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	stdout, err := cmd.Output()
@@ -82,6 +83,7 @@ func (f cursorFetcher) AgentKind() string { return "cursor" }
 
 func (f cursorFetcher) Fetch() ([]ModelInfo, error) {
 	cmd := exec.Command("cursor", "--list-models")
+	isolateCmd(cmd)
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, err

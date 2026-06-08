@@ -44,6 +44,7 @@ func discoverCopilotACP() ([]ModelInfo, error) {
 	}
 
 	cmd := exec.Command("copilot", "--acp")
+	isolateCmd(cmd)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, fmt.Errorf("open stdin: %w", err)
