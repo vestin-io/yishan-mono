@@ -128,7 +128,7 @@ func scanClaudeTranscriptFile(
 			InputTokens:        record.InputTokens,
 			OutputTokens:       record.OutputTokens,
 			CachedInputTokens:  record.CacheReadTokens,
-			CachedOutputTokens: record.CacheWriteTokens,
+			CachedWriteTokens:  record.CacheWriteTokens,
 			ReasoningTokens:    0,
 			TotalTokens:        record.InputTokens + record.OutputTokens,
 		}

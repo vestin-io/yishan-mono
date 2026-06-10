@@ -23,6 +23,8 @@ const (
 	tokenUsageScanOverlap  = 2 * time.Hour
 )
 
+var tokenUsageScannableAgentKinds = agentKindsWithActiveTokenScanners
+
 type tokenUsageCollector struct {
 	mu         sync.Mutex
 	manager    *workspace.Manager
@@ -66,7 +68,7 @@ func (c *tokenUsageCollector) StartStartupScan() {
 	c.startSyncLoop()
 	c.startHourRolloverLoop()
 	timer := time.AfterFunc(tokenUsageStartupDelay, func() {
-		for _, agentKind := range []string{"codex", "claude", "opencode"} {
+		for _, agentKind := range tokenUsageScannableAgentKinds {
 			c.Trigger(agentKind, "startup")
 		}
 	})
@@ -78,6 +80,29 @@ func (c *tokenUsageCollector) StartStartupScan() {
 	}
 	c.timers["startup"] = timer
 	c.mu.Unlock()
+}
+
+func (c *tokenUsageCollector) SyncNow(source string) {
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return
+	}
+	c.mu.Unlock()
+
+	for _, agentKind := range tokenUsageScannableAgentKinds {
+		c.mu.Lock()
+		if c.inFlight[agentKind] {
+			c.mu.Unlock()
+			continue
+		}
+		if timer := c.timers[agentKind]; timer != nil {
+			timer.Stop()
+			delete(c.timers, agentKind)
+		}
+		c.mu.Unlock()
+		c.runScan(agentKind, source)
+	}
 }
 
 func (c *tokenUsageCollector) Trigger(agentKind string, source string) {
@@ -219,14 +244,11 @@ func buildTokenUsageWorktreeRefs(workspaces []workspace.Workspace) []tokenusage.
 }
 
 func normalizeTokenUsageAgentKind(agentKind string) string {
-	switch strings.ToLower(strings.TrimSpace(agentKind)) {
-	case "codex", "claude", "opencode", "gemini", "pi":
-		return strings.ToLower(strings.TrimSpace(agentKind))
-	case "cursor", "cursor-agent", "copilot", "unknown", "":
-		return ""
-	default:
-		return ""
+	normalized := strings.ToLower(strings.TrimSpace(agentKind))
+	if isTokenTrackingAgentKind(normalized) {
+		return normalized
 	}
+	return ""
 }
 
 func (c *tokenUsageCollector) Close() {
@@ -459,7 +481,7 @@ func (c *tokenUsageCollector) syncRowsForOrg(orgID string, rows []tokenusage.Hou
 			InputTokens:           row.InputTokens,
 			OutputTokens:          row.OutputTokens,
 			CachedInputTokens:     row.CachedInputTokens,
-			CachedOutputTokens:    row.CachedOutputTokens,
+			CachedWriteTokens:    row.CachedWriteTokens,
 			ReasoningTokens:       row.ReasoningTokens,
 			TotalTokens:           row.TotalTokens,
 			EventCount:            row.EventCount,
