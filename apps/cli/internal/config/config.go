@@ -19,7 +19,10 @@ const (
 	KeyAPIRefreshToken          = "api_refresh_token"
 	KeyAPIAccessTokenExpiresAt  = "api_access_token_expires_at"
 	KeyAPIRefreshTokenExpiresAt = "api_refresh_token_expires_at"
-	KeyCurrentOrgID             = "current_org_id"
+
+	// KeyCurrentOrgID is kept for migration reads from legacy credential.yaml.
+	// New writes go to context.yaml via KeyDefaultOrgID.
+	KeyCurrentOrgID = "current_org_id"
 )
 
 func HomeDir() (string, error) {
@@ -49,7 +52,8 @@ type Config struct {
 	LogLevel     string
 	LogFormat    string
 	ConfigPath   string
-	CurrentOrgID string
+	ContextPath  string
+	DefaultOrgID string
 	API          APIConfig
 	Daemon       DaemonConfig
 }
@@ -64,11 +68,39 @@ func Load(v *viper.Viper, explicitConfigPath string) (Config, error) {
 		return Config{}, err
 	}
 
+	contextPath := ContextFilePath(filepath.Dir(configPath))
+
+	// Load default org from context.yaml. If missing or empty, fall back to
+	// credential.yaml for backwards-compatibility and migrate the value.
+	contextCfg, err := LoadContext(contextPath)
+	if err != nil {
+		return Config{}, fmt.Errorf("load context file: %w", err)
+	}
+
+	defaultOrgID := contextCfg.DefaultOrgID
+	if defaultOrgID == "" {
+		// Migration: read from legacy credential.yaml location.
+		legacyOrgID := v.GetString(KeyCurrentOrgID)
+		if legacyOrgID != "" {
+			defaultOrgID = legacyOrgID
+			// Persist to the new location so subsequent invocations use context.yaml.
+			if migrateErr := UpdateContext(contextPath, func(cfg *viper.Viper) {
+				cfg.Set(KeyDefaultOrgID, legacyOrgID)
+			}); migrateErr == nil {
+				_ = DeleteKeys(configPath, KeyCurrentOrgID)
+			}
+		}
+	} else {
+		// Already migrated — still clean up any leftover empty key in credential.yaml.
+		_ = DeleteKeys(configPath, KeyCurrentOrgID)
+	}
+
 	return Config{
 		LogLevel:     v.GetString("log_level"),
 		LogFormat:    v.GetString("log_format"),
 		ConfigPath:   configPath,
-		CurrentOrgID: v.GetString(KeyCurrentOrgID),
+		ContextPath:  contextPath,
+		DefaultOrgID: defaultOrgID,
 		API: APIConfig{
 			BaseURL:               v.GetString(KeyAPIBaseURL),
 			Token:                 v.GetString(KeyAPIToken),

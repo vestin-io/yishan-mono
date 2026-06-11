@@ -156,52 +156,50 @@ var orgMemberCmd = &cobra.Command{
 	Long:  `Add and remove members from a Yishan organization.`,
 }
 
-var orgUseCmd = &cobra.Command{
-	Use:   "use",
-	Short: "Set current organization",
-	Long: `Set the current organization used by all commands that accept --org-id.
+var orgDefaultCmd = &cobra.Command{
+	Use:   "default",
+	Short: "Get or set the default organization",
+	Long: `Print the default organization used by CLI commands, or set it with --org-id.
 
-Preferred usage:
-  yishan org use --org-id <org-id>
+The default org is used whenever --org-id is not passed explicitly. It is
+stored in context.yaml and is independent of which org is selected in the app.
 
-Passing the org ID as a positional argument is deprecated and will be removed
-in a future release:
-  yishan org use <org-id>   # deprecated`,
-	Args: cobra.MaximumNArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		flagOrgID, err := cmd.Flags().GetString("org-id")
+Examples:
+  yishan org default                      # print current default
+  yishan org default --org-id <org-id>    # set default interactively
+  yishan org default --org-id <org-id>    # set default to a specific org`,
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		orgID, err := cmd.Flags().GetString("org-id")
 		if err != nil {
 			return err
 		}
 
-		var orgID string
-		switch {
-		case strings.TrimSpace(flagOrgID) != "":
-			orgID = strings.TrimSpace(flagOrgID)
-		case len(args) == 1:
-			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Warning: passing org-id as a positional argument is deprecated. Use --org-id instead.\n")
-			orgID = args[0]
-		default:
-			selectedOrgID, selectionErr := selectOrganizationInteractive(cmd)
-			if selectionErr != nil {
-				return selectionErr
+		// Set mode: --org-id provided.
+		if strings.TrimSpace(orgID) != "" {
+			orgID = strings.TrimSpace(orgID)
+			if err := config.UpdateContext(appConfig.ContextPath, func(cfg *viper.Viper) {
+				cfg.Set(config.KeyDefaultOrgID, orgID)
+			}); err != nil {
+				return err
 			}
-			orgID = selectedOrgID
+			appConfig.DefaultOrgID = orgID
+			if !output.IsJSONOutput() {
+				fmt.Printf("Default organization: %s\n", orgID)
+				return nil
+			}
+			return output.PrintAny(map[string]string{"orgId": orgID, "status": "default"})
 		}
 
-		if err := config.UpdateFile(appConfig.ConfigPath, func(cfg *viper.Viper) {
-			cfg.Set(config.KeyCurrentOrgID, orgID)
-		}); err != nil {
-			return err
+		// Get mode: print the current default.
+		if appConfig.DefaultOrgID == "" {
+			return fmt.Errorf("no default org set: run `yishan org default --org-id <org-id>`")
 		}
 
-		appConfig.CurrentOrgID = orgID
 		if !output.IsJSONOutput() {
-			fmt.Printf("Active organization: %s\n", orgID)
+			fmt.Println(appConfig.DefaultOrgID)
 			return nil
 		}
-
-		return output.PrintAny(map[string]string{"orgId": orgID, "status": "active"})
+		return output.PrintAny(map[string]string{"orgId": appConfig.DefaultOrgID})
 	},
 }
 
@@ -237,51 +235,17 @@ func selectOrganizationInteractive(cmd *cobra.Command) (string, error) {
 	return response.Organizations[index].ID, nil
 }
 
-var orgCurrentCmd = &cobra.Command{
-	Use:   "current",
-	Short: "Show current organization",
-	RunE: func(_ *cobra.Command, _ []string) error {
-		if appConfig.CurrentOrgID == "" {
-			return fmt.Errorf("no active org: run `yishan org use <org-id>`")
-		}
-
-		response, err := apiClient.ListOrganizations()
-		if err != nil {
-			return err
-		}
-
-		for _, organization := range response.Organizations {
-			if organization.ID == appConfig.CurrentOrgID {
-				// In JSON mode emit a single combined object so consumers get
-				// one parseable document. In default mode keep the two-table
-				// human-readable layout.
-				if output.IsJSONOutput() {
-					return output.PrintAny(toOrgCurrentCombinedObject(organization))
-				}
-
-				if err := output.PrintRenderData(toOrgCurrentRenderData(organization)); err != nil {
-					return err
-				}
-
-				return output.PrintRenderData(toOrgMembersRenderData(organization))
-			}
-		}
-
-		return fmt.Errorf("current org %s not found in accessible organizations", appConfig.CurrentOrgID)
-	},
-}
-
 var orgClearCmd = &cobra.Command{
 	Use:   "clear",
-	Short: "Clear current organization",
+	Short: "Clear the default organization",
 	RunE: func(_ *cobra.Command, _ []string) error {
-		if err := config.UpdateFile(appConfig.ConfigPath, func(cfg *viper.Viper) {
-			cfg.Set(config.KeyCurrentOrgID, "")
+		if err := config.UpdateContext(appConfig.ContextPath, func(cfg *viper.Viper) {
+			cfg.Set(config.KeyDefaultOrgID, "")
 		}); err != nil {
 			return err
 		}
 
-		appConfig.CurrentOrgID = ""
+		appConfig.DefaultOrgID = ""
 		return output.PrintAny(map[string]string{"status": "cleared"})
 	},
 }
@@ -292,8 +256,7 @@ func init() {
 	orgCmd.AddCommand(orgListCmd)
 	orgCmd.AddCommand(orgCreateCmd)
 	orgCmd.AddCommand(orgDeleteCmd)
-	orgCmd.AddCommand(orgUseCmd)
-	orgCmd.AddCommand(orgCurrentCmd)
+	orgCmd.AddCommand(orgDefaultCmd)
 	orgCmd.AddCommand(orgClearCmd)
 	orgCmd.AddCommand(orgMemberCmd)
 	orgMemberCmd.AddCommand(orgMemberAddCmd)
@@ -307,7 +270,7 @@ func init() {
 
 	addOrgIDFlag(orgDeleteCmd)
 
-	orgUseCmd.Flags().String("org-id", "", "organization ID to activate")
+	orgDefaultCmd.Flags().String("org-id", "", "organization ID to set as default")
 
 	addOrgIDFlag(orgMemberAddCmd)
 	orgMemberAddCmd.Flags().String("user-id", "", "member user ID")
