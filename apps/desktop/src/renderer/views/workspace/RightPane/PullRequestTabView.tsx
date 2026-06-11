@@ -7,19 +7,22 @@ import {
   Chip,
   Divider,
   FormControlLabel,
+  IconButton,
   Link,
   Menu,
   MenuItem,
   Stack,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { LuArrowRight, LuCheck, LuChevronDown, LuCircleDashed, LuX } from "react-icons/lu";
+import { LuArrowRight, LuCheck, LuChevronDown, LuCircleDashed, LuRefreshCw, LuX } from "react-icons/lu";
 import type { WorkspacePullRequestRecord } from "../../../api/types";
 import { openLink } from "../../../commands/appCommands";
 import { closePullRequest, mergePullRequest } from "../../../commands/gitCommands";
 import { getErrorMessage } from "../../../helpers/errorHelpers";
+import { useCommands } from "../../../hooks/useCommands";
 import { BranchBadge } from "../../../components/BranchBadge";
 import { PaneLoadingBar } from "../../../components/PaneLoadingBar";
 import { PullRequestIcon } from "../../../components/PullRequestIcon";
@@ -29,6 +32,18 @@ import { workspaceStore } from "../../../store/workspaceStore";
 import { useWorkspacePullRequestState } from "./useWorkspacePullRequestState";
 
 type MergeMethod = "merge" | "squash" | "rebase";
+
+const refreshIconSx = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  transformOrigin: "center",
+  animation: "pr-refresh-spin 0.9s linear infinite",
+  "@keyframes pr-refresh-spin": {
+    from: { transform: "rotate(0deg)" },
+    to: { transform: "rotate(360deg)" },
+  },
+};
 
 function CheckStateIcon({ state }: { state: string }) {
   const s = state.toUpperCase();
@@ -96,10 +111,12 @@ function HistoricalPullRequestRow({ pr }: { pr: WorkspacePullRequestRecord }) {
 /** Renders pull request, checks, and deployment details for the selected workspace. */
 export function PullRequestTabView({ active = true }: { active?: boolean }) {
   const { t } = useTranslation();
-  const { pullRequest, historicalPullRequests, isLoading } = useWorkspacePullRequestState(active);
+  const { refreshWorkspacePullRequest } = useCommands();
+  const { selectedWorkspaceId, pullRequest, historicalPullRequests, isLoading } = useWorkspacePullRequestState(active);
   const worktreePath = workspaceStore((state) => state.workspaces.find((w) => w.id === state.selectedWorkspaceId)?.worktreePath);
 
   const hasLivePr = Boolean(pullRequest);
+  const liveStatus = pullRequest ? livePrStatus(pullRequest) : undefined;
   const checks = pullRequest?.checks ?? [];
   const deployments = pullRequest?.deployments ?? [];
   const livePrId = pullRequest?.number != null ? String(pullRequest.number) : null;
@@ -121,7 +138,7 @@ export function PullRequestTabView({ active = true }: { active?: boolean }) {
   const prBaseBranch = pullRequest?.baseBranch ?? bestOpenHistoryPr?.baseBranch ?? undefined;
   const mergeEnabled = pullRequest ? canMergePR(pullRequest) : true;
   const prOpen = hasLivePr && pullRequest
-    ? !pullRequest.complete && livePrStatus(pullRequest) !== "closed"
+    ? !pullRequest.complete && liveStatus !== "closed"
     : Boolean(bestOpenHistoryPr);
 
   const [mergeAnchorEl, setMergeAnchorEl] = useState<null | HTMLElement>(null);
@@ -129,6 +146,7 @@ export function PullRequestTabView({ active = true }: { active?: boolean }) {
   const [deleteBranch, setDeleteBranch] = useState(true);
   const [isMerging, setIsMerging] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const mergeMenuOpen = Boolean(mergeAnchorEl);
 
@@ -219,6 +237,23 @@ export function PullRequestTabView({ active = true }: { active?: boolean }) {
     }
   }, [prNumber, worktreePath, isClosing, hasLivePr, pullRequest, prTitle, prUrl, prBranch, prBaseBranch]);
 
+  const handleRefresh = useCallback(async () => {
+    if (!selectedWorkspaceId || !worktreePath || isRefreshing) {
+      return;
+    }
+
+    setIsRefreshing(true);
+    setActionError(null);
+    try {
+      await refreshWorkspacePullRequest(selectedWorkspaceId, worktreePath);
+    } catch (error: unknown) {
+      console.error("[PullRequestTabView] refresh failed", error);
+      setActionError(getErrorMessage(error));
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [isRefreshing, refreshWorkspacePullRequest, selectedWorkspaceId, worktreePath]);
+
   if (isLoading && isEmpty) {
     return <PaneLoadingBar />;
   }
@@ -226,9 +261,15 @@ export function PullRequestTabView({ active = true }: { active?: boolean }) {
   if (isEmpty) {
     return (
       <Box sx={{ flex: 1, minHeight: 0, display: "flex", alignItems: "center", justifyContent: "center", px: 3 }}>
-        <Typography variant="body2" sx={{ color: "#999" }}>
-          {t("workspace.pr.empty")}
-        </Typography>
+        <Stack spacing={1.5} alignItems="center">
+          <Typography variant="body2" sx={{ color: "#999", textAlign: "center" }}>
+            {t("workspace.pr.empty")}
+          </Typography>
+          <Button variant="outlined" size="small" onClick={() => void handleRefresh()} disabled={isRefreshing || !worktreePath}>
+            {isRefreshing ? t("workspace.pr.refreshing") : t("workspace.pr.refresh")}
+          </Button>
+          {actionError ? <Alert severity="error">{actionError}</Alert> : null}
+        </Stack>
       </Box>
     );
   }
@@ -241,11 +282,28 @@ export function PullRequestTabView({ active = true }: { active?: boolean }) {
           <>
             <Stack spacing={0.75}>
               <Stack direction="row" spacing={1} alignItems="center">
-                <PullRequestIcon state={hasLivePr && pullRequest ? livePrStatus(pullRequest) : "open"} size={18} />
-                <Typography variant="subtitle1" noWrap>
+                <PullRequestIcon state={hasLivePr && pullRequest ? liveStatus ?? "open" : "open"} size={18} />
+                <Typography variant="subtitle1" noWrap sx={{ flex: 1, minWidth: 0 }}>
                   #{prNumber}
                   {prTitle ? ` ${prTitle}` : ""}
                 </Typography>
+                {liveStatus === "approved" ? (
+                  <Chip size="small" color="success" variant="outlined" label={t("workspace.pr.approved")} />
+                ) : null}
+                <Tooltip title={isRefreshing ? t("workspace.pr.refreshing") : t("workspace.pr.refresh")} arrow>
+                  <span>
+                    <IconButton
+                      size="small"
+                      aria-label={t("workspace.pr.refresh")}
+                      onClick={() => void handleRefresh()}
+                      disabled={isRefreshing || !worktreePath}
+                    >
+                      <Box component="span" sx={isRefreshing ? refreshIconSx : undefined}>
+                        <LuRefreshCw size={16} />
+                      </Box>
+                    </IconButton>
+                  </span>
+                </Tooltip>
               </Stack>
               <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0, overflow: "hidden", mt: 0.25 }}>
                 <BranchBadge name={prBranch || t("workspace.info.unavailable")} />
