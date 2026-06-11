@@ -91,10 +91,10 @@ and use it to manage workspaces.`,
 
 var setupSkillCmd = &cobra.Command{
 	Use:   "skill",
-	Short: "Install or remove the yishan agent skill",
-	Long: `Install the yishan-workspace skill so AI agents can use the
-yishan CLI to create and close workspaces. Creates symlinks
-in opencode, claude, and agents config directories.`,
+	Short: "Install or remove yishan agent skills",
+	Long: `Install the ys-workspace, ys-memory, and ys-tasks skills so AI agents
+can manage workspaces, keep project memory up to date, and track personal tasks.
+Creates symlinks in opencode, claude, and agents config directories.`,
 	Example: `  yishan setup skill
   yishan setup skill --remove`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
@@ -106,20 +106,34 @@ in opencode, claude, and agents config directories.`,
 			if err := setup.RemoveWorkspaceSkill(); err != nil {
 				return err
 			}
+			if err := setup.RemoveMemorySkill(); err != nil {
+				return err
+			}
+			if err := setup.RemoveTasksSkill(); err != nil {
+				return err
+			}
 			return output.PrintAny(map[string]any{
 				"action":  "removed",
-				"message": "yishan-workspace skill removed from all agent config directories",
+				"message": "ys-workspace, ys-memory, and ys-tasks skills removed from all agent config directories",
 			})
 		}
-		result, err := setup.EnsureWorkspaceSkill()
+		wsResult, err := setup.EnsureWorkspaceSkill()
+		if err != nil {
+			return err
+		}
+		memResult, err := setup.EnsureMemorySkill()
+		if err != nil {
+			return err
+		}
+		tasksResult, err := setup.EnsureTasksSkill()
 		if err != nil {
 			return err
 		}
 		return output.PrintAny(map[string]any{
 			"action":   "installed",
-			"skill":    result.SkillPath,
-			"symlinks": result.Symlinks,
-			"message":  "yishan-workspace skill installed for opencode, claude, and other agents",
+			"skills":   []string{wsResult.SkillPath, memResult.SkillPath, tasksResult.SkillPath},
+			"symlinks": append(append(wsResult.Symlinks, memResult.Symlinks...), tasksResult.Symlinks...),
+			"message":  "ys-workspace, ys-memory, and ys-tasks skills installed for opencode, claude, and other agents",
 		})
 	},
 }
@@ -150,8 +164,18 @@ func runSetupAll(_ *cobra.Command, _ []string) error {
 	}
 
 	if _, err := setup.EnsureWorkspaceSkill(); err != nil {
-		log.Warn().Err(err).Msg("setup: skill install failed")
-		allErrors = append(allErrors, "skill: "+err.Error())
+		log.Warn().Err(err).Msg("setup: workspace skill install failed")
+		allErrors = append(allErrors, "skill(ys-workspace): "+err.Error())
+	}
+
+	if _, err := setup.EnsureMemorySkill(); err != nil {
+		log.Warn().Err(err).Msg("setup: memory skill install failed")
+		allErrors = append(allErrors, "skill(ys-memory): "+err.Error())
+	}
+
+	if _, err := setup.EnsureTasksSkill(); err != nil {
+		log.Warn().Err(err).Msg("setup: tasks skill install failed")
+		allErrors = append(allErrors, "skill(ys-tasks): "+err.Error())
 	}
 
 	if len(allErrors) > 0 {

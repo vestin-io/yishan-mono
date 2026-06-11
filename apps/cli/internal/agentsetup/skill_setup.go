@@ -10,10 +10,23 @@ import (
 	"yishan/apps/cli/internal/config"
 )
 
-//go:embed assets/skills/yishan-workspace/SKILL.md
+//go:embed assets/skills/ys-workspace/SKILL.md
 var workspaceSkillContent string
 
-const skillName = "yishan-workspace"
+//go:embed assets/skills/ys-memory/SKILL.md
+var memorySkillContent string
+
+//go:embed assets/skills/ys-memory/MEMORY.md.tmpl
+var memoryFileTemplate string
+
+//go:embed assets/skills/ys-tasks/SKILL.md
+var tasksSkillContent string
+
+const (
+	workspaceSkillName = "ys-workspace"
+	memorySkillName    = "ys-memory"
+	tasksSkillName     = "ys-tasks"
+)
 
 type SkillInstallResult struct {
 	SkillPath string
@@ -21,18 +34,36 @@ type SkillInstallResult struct {
 }
 
 func EnsureWorkspaceSkill() (*SkillInstallResult, error) {
+	return ensureSkill(workspaceSkillName, workspaceSkillContent)
+}
+
+func EnsureMemorySkill() (*SkillInstallResult, error) {
+	return ensureSkill(memorySkillName, memorySkillContent)
+}
+
+func EnsureTasksSkill() (*SkillInstallResult, error) {
+	return ensureSkill(tasksSkillName, tasksSkillContent)
+}
+
+// MemoryFileTemplate returns the starter MEMORY.md content to be written into a
+// new project's .my-context/ directory.
+func MemoryFileTemplate() string {
+	return memoryFileTemplate
+}
+
+func ensureSkill(name string, content string) (*SkillInstallResult, error) {
 	yishanHome, err := config.HomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("resolve yishan home: %w", err)
 	}
 
-	skillDir := filepath.Join(yishanHome, "skills", skillName)
+	skillDir := filepath.Join(yishanHome, "skills", name)
 	skillPath := filepath.Join(skillDir, "SKILL.md")
 
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
 		return nil, fmt.Errorf("create skill dir: %w", err)
 	}
-	if err := os.WriteFile(skillPath, []byte(workspaceSkillContent), 0o644); err != nil {
+	if err := os.WriteFile(skillPath, []byte(content), 0o644); err != nil {
 		return nil, fmt.Errorf("write skill file: %w", err)
 	}
 
@@ -42,9 +73,9 @@ func EnsureWorkspaceSkill() (*SkillInstallResult, error) {
 	}
 
 	linkDirs := []string{
-		filepath.Join(homeDir, ".config", "opencode", "skills", skillName),
-		filepath.Join(homeDir, ".claude", "skills", skillName),
-		filepath.Join(homeDir, ".agents", "skills", skillName),
+		filepath.Join(homeDir, ".config", "opencode", "skills", name),
+		filepath.Join(homeDir, ".claude", "skills", name),
+		filepath.Join(homeDir, ".agents", "skills", name),
 	}
 
 	result := &SkillInstallResult{SkillPath: skillPath}
@@ -60,15 +91,27 @@ func EnsureWorkspaceSkill() (*SkillInstallResult, error) {
 }
 
 func RemoveWorkspaceSkill() error {
+	return removeSkill(workspaceSkillName)
+}
+
+func RemoveMemorySkill() error {
+	return removeSkill(memorySkillName)
+}
+
+func RemoveTasksSkill() error {
+	return removeSkill(tasksSkillName)
+}
+
+func removeSkill(name string) error {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("resolve home dir: %w", err)
 	}
 
 	linkDirs := []string{
-		filepath.Join(homeDir, ".config", "opencode", "skills", skillName),
-		filepath.Join(homeDir, ".claude", "skills", skillName),
-		filepath.Join(homeDir, ".agents", "skills", skillName),
+		filepath.Join(homeDir, ".config", "opencode", "skills", name),
+		filepath.Join(homeDir, ".claude", "skills", name),
+		filepath.Join(homeDir, ".agents", "skills", name),
 	}
 
 	for _, linkDir := range linkDirs {
@@ -88,7 +131,7 @@ func RemoveWorkspaceSkill() error {
 		return fmt.Errorf("resolve yishan home: %w", err)
 	}
 
-	skillDir := filepath.Join(yishanHome, "skills", skillName)
+	skillDir := filepath.Join(yishanHome, "skills", name)
 	if err := os.RemoveAll(skillDir); err != nil {
 		return fmt.Errorf("remove skill dir: %w", err)
 	}
