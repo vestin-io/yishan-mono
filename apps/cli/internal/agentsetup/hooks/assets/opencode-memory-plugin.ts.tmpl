@@ -1,6 +1,10 @@
 {{.PluginMarker}}
 // Reads .my-context/ from the current project root and injects a context
-// block into the system prompt at the start of every agent session.
+// block into the first user message at the start of every agent session.
+//
+// Injects into the first user message (not system prompt) to avoid:
+//   1. Token bloat from system messages repeated every turn
+//   2. Cache invalidation from continuously changing the system prompt
 //
 // The injected block:
 //   1. Establishes .my-context/ as the primary lookup source for project context
@@ -8,11 +12,91 @@
 //   3. Inlines MEMORY.md as the session entry point
 //
 // Hooks used:
-//   experimental.chat.system.transform — prepends context block to the system prompt
+//   experimental.chat.messages.transform — prepends context block to first user message
 
 import type { Plugin } from "@opencode-ai/plugin";
 import { readFileSync, readdirSync, statSync, existsSync } from "fs";
 import { join } from "path";
+
+// Module-level cache for the static instructions + directory listing.
+// The hook fires on every agent step (not just every turn), so we must
+// not do repeated filesystem work. Static parts never change during a
+// session; MEMORY.md is re-read live on each injection attempt.
+let _staticBlockCache: string | null | undefined = undefined;
+// undefined = not yet built, null = .my-context/ doesn't exist
+
+const CONTEXT_MARKER = "## Personal Project Context (.my-context/)";
+
+const readFile = (p: string): string | null => {
+  try {
+    return readFileSync(p, "utf-8").trim();
+  } catch {
+    return null;
+  }
+};
+
+const buildStaticBlock = (myContextPath: string): string | null => {
+  if (_staticBlockCache !== undefined) return _staticBlockCache;
+
+  if (!existsSync(myContextPath)) {
+    _staticBlockCache = null;
+    return null;
+  }
+
+  const lines: string[] = [];
+
+  lines.push(CONTEXT_MARKER);
+  lines.push("");
+  lines.push(
+    "`.my-context/` is the owner's personal context directory — never committed, " +
+    "never shared. Check it before searching the codebase. It records where work " +
+    "was left off, decisions already made, and non-obvious things learned about this project."
+  );
+  lines.push("");
+  lines.push(
+    "**Lookup priority:** `.my-context/MEMORY.md` (personal session memory) → " +
+    "other `.my-context/` docs → codebase."
+  );
+  lines.push("");
+
+  // Shallow scan: top-level .md files + subdirectory names.
+  const files: string[] = [];
+  const dirs: string[] = [];
+  try {
+    for (const entry of readdirSync(myContextPath)) {
+      if (entry.startsWith(".")) continue;
+      const full = join(myContextPath, entry);
+      const stat = statSync(full);
+      if (stat.isDirectory()) {
+        dirs.push(entry);
+      } else if (entry.endsWith(".md") && entry !== "MEMORY.md") {
+        files.push(entry);
+      }
+    }
+  } catch {
+    // fail-open
+  }
+
+  if (files.length > 0 || dirs.length > 0) {
+    lines.push("### Contents of .my-context/");
+    lines.push("");
+    for (const f of files) {
+      lines.push(`- \`.my-context/${f}\``);
+    }
+    for (const d of dirs) {
+      lines.push(`- \`.my-context/${d}/\` (subdirectory — list it when relevant)`);
+    }
+    lines.push("");
+    lines.push(
+      "When a task touches an area covered by one of the docs above, read that doc " +
+      "before proceeding. Do not re-derive information that is already recorded there."
+    );
+    lines.push("");
+  }
+
+  _staticBlockCache = lines.join("\n");
+  return _staticBlockCache;
+};
 
 export const YishanMemoryPlugin = (async ({ project }) => {
   if (globalThis.__yishanMemoryPluginV1) return {};
@@ -22,98 +106,36 @@ export const YishanMemoryPlugin = (async ({ project }) => {
   const myContextPath = join(projectRoot, ".my-context");
   const memoryPath = join(myContextPath, "MEMORY.md");
 
-  const readFile = (p: string): string | null => {
-    try {
-      return readFileSync(p, "utf-8").trim();
-    } catch {
-      return null;
-    }
-  };
-
-  // Shallow scan: top-level .md files + subdirectory names.
-  // Gives the agent enough orientation without flooding context with every file path.
-  const scanMyContext = (dir: string): { files: string[]; dirs: string[] } => {
-    const files: string[] = [];
-    const dirs: string[] = [];
-    try {
-      for (const entry of readdirSync(dir)) {
-        if (entry.startsWith(".")) continue;
-        const full = join(dir, entry);
-        const stat = statSync(full);
-        if (stat.isDirectory()) {
-          dirs.push(entry);
-        } else if (entry.endsWith(".md") && entry !== "MEMORY.md") {
-          files.push(entry);
-        }
-      }
-    } catch {
-      // fail-open
-    }
-    return { files, dirs };
-  };
-
-  const myContextExists = existsSync(myContextPath);
-
   return {
-    "experimental.chat.system.transform": async (_input, output) => {
-      if (!myContextExists) return;
+    "experimental.chat.messages.transform": async (_input, output) => {
+      const staticBlock = buildStaticBlock(myContextPath);
+      if (!staticBlock || !output.messages.length) return;
 
-      const lines: string[] = [];
+      const firstUser = output.messages.find(m => m.info.role === 'user');
+      if (!firstUser || !firstUser.parts.length) return;
 
-      lines.push("## Personal Project Context (.my-context/)");
-      lines.push("");
-      lines.push(
-        "`.my-context/` is the owner's personal context directory — never committed, " +
-        "never shared. Check it before searching the codebase. It records where work " +
-        "was left off, decisions already made, and non-obvious things learned about this project."
-      );
-      lines.push("");
-      lines.push(
-        "**Lookup priority:** `.my-context/MEMORY.md` (personal session memory) → " +
-        "other `.my-context/` docs → codebase."
-      );
-      lines.push("");
+      // Guard: skip if already injected. Prevents double injection when
+      // opencode passes an already-transformed message array through again,
+      // and avoids cache busting from repeated prompt mutations.
+      if (firstUser.parts.some(p => p.type === 'text' && p.text.includes(CONTEXT_MARKER))) return;
 
-      // Surface the shallow structure so the agent knows what reference material exists.
-      const { files, dirs } = scanMyContext(myContextPath);
-      if (files.length > 0 || dirs.length > 0) {
-        lines.push("### Contents of .my-context/");
-        lines.push("");
-        for (const f of files) {
-          lines.push(`- \`.my-context/${f}\``);
-        }
-        for (const d of dirs) {
-          lines.push(`- \`.my-context/${d}/\` (subdirectory — list it when relevant)`);
-        }
-        lines.push("");
-        lines.push(
-          "When a task touches an area covered by one of the docs above, read that doc " +
-          "before proceeding. Do not re-derive information that is already recorded there."
-        );
-        lines.push("");
-      }
-
-      // Inline MEMORY.md as the entry-point summary.
+      // Build full block: cached static part + live MEMORY.md content.
+      // MEMORY.md is re-read on first injection so freshly-written content
+      // is picked up even if the plugin module stays loaded across sessions.
       const memory = readFile(memoryPath);
+      let contextBlock: string;
       if (memory) {
-        lines.push("### Current session memory (.my-context/MEMORY.md)");
-        lines.push("");
-        lines.push(memory);
-        lines.push("");
-        lines.push(
-          "At the end of this session, update `.my-context/MEMORY.md`: rewrite " +
-          "\"Where I Left Off\", add to \"My Decisions\" for any choices made, and add to " +
-          "\"What I Learned\" for anything non-obvious discovered."
-        );
+        contextBlock = `${staticBlock}\n\n### Current session memory (.my-context/MEMORY.md)\n\n${memory}\n\nAt the end of this session, update \`.my-context/MEMORY.md\`: rewrite "Where I Left Off", add to "My Decisions" for any choices made, and add to "What I Learned" for anything non-obvious discovered.\n`;
       } else {
-        lines.push(
-          "`.my-context/MEMORY.md` does not exist yet. " +
-          "If you are about to do significant work, use the `ys-memory` skill to create it."
-        );
+        contextBlock = `${staticBlock}\n\n\`.my-context/MEMORY.md\` does not exist yet. If you are about to do significant work, use the \`ys-memory\` skill to create it.\n`;
       }
 
-      lines.push("");
-      output.system = lines.join("\n") + "\n\n" + (output.system ?? "");
+      const ref = firstUser.parts[0];
+      firstUser.parts.unshift({
+        ...ref,
+        type: 'text',
+        text: contextBlock,
+      });
     },
   };
 }) satisfies Plugin;
