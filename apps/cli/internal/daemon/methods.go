@@ -81,4 +81,10 @@ const (
 	MethodTerminalResize       = "terminal.resize"
 	MethodTerminalSubscribe    = "terminal.subscribe"
 	MethodTerminalUnsubscribe  = "terminal.unsubscribe"
+
+	MethodMemorySearch       = "memory.search"
+	MethodMemoryReconcile    = "memory.reconcile"
+	MethodMemoryStatus       = "memory.status"
+	MethodMemoryUpdateConfig = "memory.updateConfig"
+	MethodMemoryGetConfig    = "memory.getConfig"
 )

@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"yishan/apps/cli/internal/agentkind"
 )
 
 const agentHookIngestPath = "/v1/agent-hook/ingest"
@@ -66,6 +68,13 @@ func (h *JSONRPCHandler) ServeAgentHook(w http.ResponseWriter, r *http.Request) 
 	}
 	if h.tokenUsage != nil {
 		h.tokenUsage.Trigger(event.agent, "hook")
+	}
+
+	if event.eventType == "stop" && h.memory != nil {
+		if handle, err := h.manager.WorkspaceHandle(event.workspaceID); err == nil {
+			ws := handle.Workspace()
+			h.memory.SummarizeSession(event.agent, ws.Path, ws.ProjectID)
+		}
 	}
 
 	if notification := buildHookNotificationPayload(event); notification != nil {
@@ -167,7 +176,7 @@ func hookNotificationPayload(event normalizedHookEvent, title string, body strin
 func normalizeHookAgent(agent string) string {
 	normalized := strings.ToLower(strings.TrimSpace(agent))
 	if normalized == "cursor-agent" {
-		return "cursor"
+		return agentkind.Cursor
 	}
 	if isKnownAgentKind(normalized) {
 		return normalized

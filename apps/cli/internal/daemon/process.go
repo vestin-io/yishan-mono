@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strconv"
@@ -17,6 +18,8 @@ import (
 	"yishan/apps/cli/internal/buildinfo"
 	agentsetup "yishan/apps/cli/internal/agentsetup"
 	"yishan/apps/cli/internal/config"
+	"yishan/apps/cli/internal/daemon/agentcmd"
+	"yishan/apps/cli/internal/memory"
 	"yishan/apps/cli/internal/nodeid"
 	cliruntime "yishan/apps/cli/internal/runtime"
 	"yishan/apps/cli/internal/workspace"
@@ -29,10 +32,13 @@ var ErrNotRunning = errors.New("daemon is not running")
 const detachedEnvKey = "YISHAN_DAEMON_DETACHED"
 
 type RunConfig struct {
-	Host         string
-	Port         int
-	RelayEnabled bool
-	RelayURL     string
+	Host                    string
+	Port                    int
+	RelayEnabled            bool
+	RelayURL                string
+	MemorySummarizer        bool
+	MemorySummarizerAgent   string
+	MemorySummarizerModel   string
 	// LogFilePath is the resolved path to the daemon log file.
 	// Set by the command layer; passed through to handlers for diagnostics.
 	LogFilePath string
@@ -83,12 +89,30 @@ func Run(cfg RunConfig, statePath string, runtime *cliruntime.Runtime) error {
 	if err != nil {
 		return fmt.Errorf("create workspace cleanup store: %w", err)
 	}
-	contextFilePath := config.ContextFilePath(filepath.Dir(statePath))
-	contextStore := NewAppContextStore(contextFilePath)
-	handler := NewJSONRPCHandler(workspaceManager, runtime, daemonID, cfg.LogFilePath, cleanupStore, statePath, contextStore)
+	settingsFilePath := config.SettingsFilePath(filepath.Dir(statePath))
+	contextStore := NewAppContextStore(settingsFilePath)
+	wsIndexStore, err := newWorkspaceIndexStore(statePath)
+	if err != nil {
+		return fmt.Errorf("create workspace index store: %w", err)
+	}
+	handler := NewJSONRPCHandler(workspaceManager, runtime, daemonID, cfg.LogFilePath, cleanupStore, wsIndexStore, statePath, contextStore)
+
+	memoryDBPath := filepath.Join(filepath.Dir(statePath), "memory.db")
+	memSvc, memErr := memory.NewService(memoryDBPath, memory.SummarizerConfig{
+		Enabled:   cfg.MemorySummarizer,
+		AgentKind: cfg.MemorySummarizerAgent,
+		Model:     cfg.MemorySummarizerModel,
+	}, buildRunAgentFunc())
+	if memErr != nil {
+		log.Warn().Err(memErr).Msg("memory service initialization failed, memory features disabled")
+	} else {
+		handler.SetMemoryService(memSvc, context.Background())
+	}
+
 	if handler.tokenUsage != nil {
 		handler.tokenUsage.StartStartupScan()
 	}
+
 	relayStatus := NewRelayStatus(cfg.RelayEnabled, cfg.RelayURL)
 
 	// ── Phase 4: HTTP server ───────────────────────────────────────────────
@@ -199,4 +223,20 @@ func startDaemonServices(cfg RunConfig, statePath string, actualAddr string, dae
 		}
 	}
 	return nil
+}
+
+// buildRunAgentFunc returns a memory.RunAgentFunc that uses agentcmd to
+// invoke the appropriate agent CLI in non-interactive (print) mode.
+func buildRunAgentFunc() memory.RunAgentFunc {
+	return func(ctx context.Context, agentKind, model, prompt string) (string, error) {
+		cmd, err := agentcmd.BuildRunCommand(agentKind, prompt, model, false)
+		if err != nil {
+			return "", fmt.Errorf("build agent command: %w", err)
+		}
+		out, err := exec.CommandContext(ctx, cmd.Binary, cmd.Args...).Output()
+		if err != nil {
+			return "", fmt.Errorf("run %s: %w", cmd.Binary, err)
+		}
+		return string(out), nil
+	}
 }
