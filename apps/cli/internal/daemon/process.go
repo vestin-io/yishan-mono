@@ -15,8 +15,9 @@ import (
 	"syscall"
 	"time"
 
-	"yishan/apps/cli/internal/buildinfo"
 	agentsetup "yishan/apps/cli/internal/agentsetup"
+	"yishan/apps/cli/internal/buildinfo"
+	"yishan/apps/cli/internal/computer"
 	"yishan/apps/cli/internal/config"
 	"yishan/apps/cli/internal/daemon/agentcmd"
 	"yishan/apps/cli/internal/memory"
@@ -32,13 +33,13 @@ var ErrNotRunning = errors.New("daemon is not running")
 const detachedEnvKey = "YISHAN_DAEMON_DETACHED"
 
 type RunConfig struct {
-	Host                    string
-	Port                    int
-	RelayEnabled            bool
-	RelayURL                string
-	MemorySummarizer        bool
-	MemorySummarizerAgent   string
-	MemorySummarizerModel   string
+	Host                  string
+	Port                  int
+	RelayEnabled          bool
+	RelayURL              string
+	MemorySummarizer      bool
+	MemorySummarizerAgent string
+	MemorySummarizerModel string
 	// LogFilePath is the resolved path to the daemon log file.
 	// Set by the command layer; passed through to handlers for diagnostics.
 	LogFilePath string
@@ -229,6 +230,10 @@ func buildHandler(cfg RunConfig, statePath string, runtime *cliruntime.Runtime, 
 		return nil, nil, fmt.Errorf("create workspace index store: %w", err)
 	}
 	handler := NewJSONRPCHandler(workspaceManager, runtime, daemonID, cfg.LogFilePath, cleanupStore, wsIndexStore, statePath, contextStore)
+	handler.SetComputerService(newDefaultComputerService())
+	if err := initComputerConfig(handler); err != nil {
+		return nil, nil, err
+	}
 
 	if err := initMemoryService(handler, statePath, cfg, runtime); err != nil {
 		return nil, nil, err
@@ -242,6 +247,29 @@ func buildHandler(cfg RunConfig, statePath string, runtime *cliruntime.Runtime, 
 
 	relayStatus := NewRelayStatus(cfg.RelayEnabled, cfg.RelayURL)
 	return handler, relayStatus, nil
+}
+
+func initComputerConfig(handler *JSONRPCHandler) error {
+	if handler.settingsPath == "" || handler.computer == nil {
+		return nil
+	}
+	cfg, err := config.LoadSettings(handler.settingsPath, nil)
+	if err != nil {
+		return fmt.Errorf("load computer settings: %w", err)
+	}
+	handler.computer.UpdateConfig(computer.FeatureConfig{
+		Enabled:            cfg.ComputerUse.Enabled,
+		Observe:            cfg.ComputerUse.Observe,
+		Capture:            cfg.ComputerUse.Capture,
+		Inspect:            cfg.ComputerUse.Inspect,
+		Actions:            cfg.ComputerUse.Actions,
+		Mouse:              cfg.ComputerUse.Mouse,
+		Keyboard:           cfg.ComputerUse.Keyboard,
+		ClipboardRead:      cfg.ComputerUse.ClipboardRead,
+		ClipboardWrite:     cfg.ComputerUse.ClipboardWrite,
+		ApplicationControl: cfg.ComputerUse.ApplicationControl,
+	})
+	return nil
 }
 
 func initMemoryService(handler *JSONRPCHandler, statePath string, cfg RunConfig, runtime *cliruntime.Runtime) error {

@@ -1,5 +1,6 @@
 import {
   Box,
+  Chip,
   IconButton,
   List,
   ListItemButton,
@@ -22,6 +23,7 @@ import { getRendererPlatform } from "../helpers/platform";
 import { useThemePreference } from "../hooks/useThemePreference";
 import { AccountSettingsView } from "./settings/AccountSettingsView";
 import { CLIToolsSettingsView } from "./settings/CLIToolsSettingsView";
+import { ComputerUseSettingsView } from "./settings/ComputerUseSettingsView";
 import { DaemonSettingsView } from "./settings/DaemonSettingsView";
 import { IntegrationSettingsView } from "./settings/IntegrationSettingsView";
 import { KeybindingsSettingsView } from "./settings/KeybindingsSettingsView";
@@ -60,6 +62,17 @@ function renderSidebarLabel(label: ReactNode) {
     <Typography variant="body2" sx={{ lineHeight: 1.35 }}>
       {label}
     </Typography>
+  );
+}
+
+function renderExperimentalSidebarLabel(label: string, chipLabel: string) {
+  return (
+    <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
+      <Typography variant="body2" sx={{ lineHeight: 1.35 }} noWrap>
+        {label}
+      </Typography>
+      <Chip size="small" label={chipLabel} variant="outlined" sx={{ height: 18, flexShrink: 0 }} />
+    </Box>
   );
 }
 
@@ -104,6 +117,7 @@ export function SettingsView() {
       selectedTabParam === "account" ||
       selectedTabParam === "agents" ||
       selectedTabParam === "appearance" ||
+      selectedTabParam === "computerUse" ||
       selectedTabParam === "daemon" ||
       selectedTabParam === "integrations" ||
       selectedTabParam === "keybindings" ||
@@ -163,6 +177,7 @@ export function SettingsView() {
           <CLIToolsSettingsView />
         </SettingsErrorBoundary>
       ),
+      computerUse: <ComputerUseSettingsView />,
       appearance: (
         <Stack spacing={2}>
           <ThemePreferencePicker
@@ -265,7 +280,11 @@ export function SettingsView() {
                           <Icon size={16} />
                         </ListItemIcon>
                         <ListItemText
-                          primary={renderSidebarLabel(result.label)}
+                          primary={
+                            result.tab === "computerUse"
+                              ? renderExperimentalSidebarLabel(result.label, t("settings.computerUse.experimental"))
+                              : renderSidebarLabel(result.label)
+                          }
                           secondary={
                             <Typography variant="caption" color="text.secondary">
                               {result.sectionLabel}
@@ -306,7 +325,16 @@ export function SettingsView() {
                             <ListItemIcon sx={{ minWidth: 28 }}>
                               <Icon size={16} />
                             </ListItemIcon>
-                            <ListItemText primary={renderSidebarLabel(t(item.labelKey))} />
+                            <ListItemText
+                              primary={
+                                item.tab === "computerUse"
+                                  ? renderExperimentalSidebarLabel(
+                                      t(item.labelKey),
+                                      t("settings.computerUse.experimental"),
+                                    )
+                                  : renderSidebarLabel(t(item.labelKey))
+                              }
+                            />
                           </ListItemButton>
                         );
                       })}
