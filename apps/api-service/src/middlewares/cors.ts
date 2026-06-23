@@ -2,7 +2,7 @@ import type { Context } from "hono";
 import { cors } from "hono/cors";
 
 /** Origins allowed in development when no CORS_ORIGINS env var is set. */
-const DEFAULT_DEV_ORIGINS = ["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:5173"] as const;
+const DEFAULT_DEV_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"] as const;
 
 /**
  * Cache of already-computed allowed-origins sets, keyed by the raw CORS_ORIGINS
@@ -10,10 +10,6 @@ const DEFAULT_DEV_ORIGINS = ["http://localhost:3000", "http://localhost:5173", "
  * when the env var does not change between requests.
  */
 const allowedOriginsCache = new Map<string, Set<string>>();
-
-function isLoopbackHost(hostname: string): boolean {
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
-}
 
 function readEnv(c: Context, key: string): string | undefined {
   const bindings = c.env as Record<string, string | undefined> | undefined;
@@ -27,21 +23,6 @@ function normalizeOrigin(value: string): string | null {
     return new URL(value).origin;
   } catch {
     return null;
-  }
-}
-
-function isEquivalentLoopbackOrigin(left: string, right: string): boolean {
-  try {
-    const leftUrl = new URL(left);
-    const rightUrl = new URL(right);
-    return (
-      leftUrl.protocol === rightUrl.protocol &&
-      leftUrl.port === rightUrl.port &&
-      isLoopbackHost(leftUrl.hostname) &&
-      isLoopbackHost(rightUrl.hostname)
-    );
-  } catch {
-    return false;
   }
 }
 
@@ -103,12 +84,6 @@ export const corsMiddleware = cors({
 
     if (allowedOrigins.has(normalizedOrigin)) {
       return normalizedOrigin;
-    }
-
-    for (const allowedOrigin of allowedOrigins) {
-      if (isEquivalentLoopbackOrigin(allowedOrigin, normalizedOrigin)) {
-        return normalizedOrigin;
-      }
     }
 
     return "";

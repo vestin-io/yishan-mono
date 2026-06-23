@@ -4,7 +4,6 @@ import { websocket } from "hono/bun";
 const DEFAULT_HOST = "127.0.0.1";
 const port = Number(process.env.PORT ?? 8787);
 const host = process.env.HOST ?? DEFAULT_HOST;
-const listenLabel = host === "0.0.0.0" ? "all interfaces" : host;
 
 Bun.serve({
   hostname: host,
@@ -16,4 +15,4 @@ Bun.serve({
   websocket,
 });
 
-console.log(`API service listening on ${listenLabel}:${port}`);
+console.log(`API service listening on ${host}:${port}`);
