@@ -118,7 +118,6 @@ export async function stopWorkspaceTerminalViaRelay(
     method: "terminal.stop",
     params: {
       sessionId: input.sessionId,
-      workspaceId: input.workspaceId,
     },
   });
 }

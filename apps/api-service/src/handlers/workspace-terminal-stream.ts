@@ -114,7 +114,6 @@ export const workspaceTerminalStreamHandler = upgradeWebSocket((c) => {
             await relayClient.sendRequest("terminal.send", {
               input: message.input,
               sessionId: params.sessionId,
-              workspaceId: params.workspaceId,
             });
             return;
           }
@@ -127,7 +126,6 @@ export const workspaceTerminalStreamHandler = upgradeWebSocket((c) => {
             cols: message.cols,
             rows: message.rows,
             sessionId: params.sessionId,
-            workspaceId: params.workspaceId,
           });
         } catch (error) {
           if (!state.closed) {
@@ -173,7 +171,6 @@ export const workspaceTerminalStreamHandler = upgradeWebSocket((c) => {
           });
           const subscribeResult = await relayClient.sendRequest<TerminalSubscribeResult>("terminal.subscribe", {
             sessionId: params.sessionId,
-            workspaceId: params.workspaceId,
           });
 
           const snapshot = subscribeResult.snapshot;

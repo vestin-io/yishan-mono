@@ -269,7 +269,7 @@ func TestListSessions(t *testing.T) {
 	}
 }
 
-func TestSessionOperationsRejectWorkspaceMismatch(t *testing.T) {
+func TestSessionOperationsUseSessionIDOnly(t *testing.T) {
 	m := NewManager()
 
 	start, err := m.Start(context.Background(), t.TempDir(), StartRequest{WorkspaceID: "workspace-1", Command: "cat"})
@@ -280,20 +280,20 @@ func TestSessionOperationsRejectWorkspaceMismatch(t *testing.T) {
 		_, _ = m.Stop(StopRequest{SessionID: start.SessionID})
 	})
 
-	if _, err := m.Send(SendRequest{WorkspaceID: "workspace-2", SessionID: start.SessionID, Input: "ping\n"}); err == nil {
-		t.Fatal("expected send to reject workspace mismatch")
+	if _, err := m.Send(SendRequest{SessionID: start.SessionID, Input: "ping\n"}); err != nil {
+		t.Fatalf("expected send to succeed with session id only, got %v", err)
 	}
-	if _, err := m.Read(ReadRequest{WorkspaceID: "workspace-2", SessionID: start.SessionID}); err == nil {
-		t.Fatal("expected read to reject workspace mismatch")
+	if _, err := m.Read(ReadRequest{SessionID: start.SessionID}); err != nil {
+		t.Fatalf("expected read to succeed with session id only, got %v", err)
 	}
-	if _, err := m.Resize(ResizeRequest{WorkspaceID: "workspace-2", SessionID: start.SessionID, Cols: 80, Rows: 24}); err == nil {
-		t.Fatal("expected resize to reject workspace mismatch")
+	if _, err := m.Resize(ResizeRequest{SessionID: start.SessionID, Cols: 80, Rows: 24}); err != nil {
+		t.Fatalf("expected resize to succeed with session id only, got %v", err)
 	}
-	if _, err := m.Subscribe(SubscribeRequest{WorkspaceID: "workspace-2", SessionID: start.SessionID}); err == nil {
-		t.Fatal("expected subscribe to reject workspace mismatch")
+	if _, err := m.Subscribe(SubscribeRequest{SessionID: start.SessionID}); err != nil {
+		t.Fatalf("expected subscribe to succeed with session id only, got %v", err)
 	}
-	if _, err := m.Stop(StopRequest{WorkspaceID: "workspace-2", SessionID: start.SessionID}); err == nil {
-		t.Fatal("expected stop to reject workspace mismatch")
+	if _, err := m.Stop(StopRequest{SessionID: start.SessionID}); err != nil {
+		t.Fatalf("expected stop to succeed with session id only, got %v", err)
 	}
 }
 
@@ -635,7 +635,7 @@ func TestExitedSessionsRemainReadableUntilStopped(t *testing.T) {
 	if len(sessions) != 1 {
 		t.Fatalf("expected exited session to remain listed until stop, got %d session(s)", len(sessions))
 	}
-	if _, err := m.Read(ReadRequest{WorkspaceID: "workspace-1", SessionID: start.SessionID}); err != nil {
+	if _, err := m.Read(ReadRequest{SessionID: start.SessionID}); err != nil {
 		t.Fatalf("expected exited session to remain readable until stop, got %v", err)
 	}
 }

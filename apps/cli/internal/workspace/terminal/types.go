@@ -18,9 +18,8 @@ type StartResponse struct {
 }
 
 type SendRequest struct {
-	WorkspaceID string `json:"workspaceId,omitempty"`
-	SessionID   string `json:"sessionId"`
-	Input       string `json:"input"`
+	SessionID string `json:"sessionId"`
+	Input     string `json:"input"`
 }
 
 type SendResponse struct {
@@ -28,8 +27,7 @@ type SendResponse struct {
 }
 
 type ReadRequest struct {
-	WorkspaceID string `json:"workspaceId,omitempty"`
-	SessionID   string `json:"sessionId"`
+	SessionID string `json:"sessionId"`
 }
 
 type ReadResponse struct {
@@ -39,8 +37,7 @@ type ReadResponse struct {
 }
 
 type StopRequest struct {
-	WorkspaceID string `json:"workspaceId,omitempty"`
-	SessionID   string `json:"sessionId"`
+	SessionID string `json:"sessionId"`
 }
 
 type StopResponse struct {
@@ -89,10 +86,9 @@ type SetActiveWorkspaceResponse struct {
 }
 
 type ResizeRequest struct {
-	WorkspaceID string `json:"workspaceId,omitempty"`
-	SessionID   string `json:"sessionId"`
-	Cols        uint16 `json:"cols"`
-	Rows        uint16 `json:"rows"`
+	SessionID string `json:"sessionId"`
+	Cols      uint16 `json:"cols"`
+	Rows      uint16 `json:"rows"`
 }
 
 type ResizeResponse struct {
@@ -100,8 +96,7 @@ type ResizeResponse struct {
 }
 
 type SubscribeRequest struct {
-	WorkspaceID string `json:"workspaceId,omitempty"`
-	SessionID   string `json:"sessionId"`
+	SessionID string `json:"sessionId"`
 }
 
 type SubscribeResponse struct {
@@ -110,7 +105,6 @@ type SubscribeResponse struct {
 }
 
 type UnsubscribeRequest struct {
-	WorkspaceID    string `json:"workspaceId,omitempty"`
 	SessionID      string `json:"sessionId"`
 	SubscriptionID uint64 `json:"subscriptionId"`
 }

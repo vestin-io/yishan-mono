@@ -485,7 +485,7 @@ func (m *Manager) publishPortsChanged(ports []DetectedPort) {
 }
 
 func (m *Manager) Send(req SendRequest) (SendResponse, error) {
-	s, err := m.session(req.SessionID, req.WorkspaceID)
+	s, err := m.session(req.SessionID)
 	if err != nil {
 		return SendResponse{}, err
 	}
@@ -508,7 +508,7 @@ func (m *Manager) Send(req SendRequest) (SendResponse, error) {
 // SendRaw writes raw bytes directly to a PTY session without any
 // string conversion. Used by the binary WebSocket fast-path.
 func (m *Manager) SendRaw(sessionID string, data []byte) {
-	s, err := m.session(sessionID, "")
+	s, err := m.session(sessionID)
 	if err != nil {
 		return
 	}
@@ -526,7 +526,7 @@ func (m *Manager) SendRaw(sessionID string, data []byte) {
 }
 
 func (m *Manager) Read(req ReadRequest) (ReadResponse, error) {
-	s, err := m.session(req.SessionID, req.WorkspaceID)
+	s, err := m.session(req.SessionID)
 	if err != nil {
 		return ReadResponse{}, err
 	}
@@ -569,7 +569,7 @@ func (m *Manager) buildSessionLifecycleEvent(s *session, action string, status s
 }
 
 func (m *Manager) Stop(req StopRequest) (StopResponse, error) {
-	s, err := m.session(req.SessionID, req.WorkspaceID)
+	s, err := m.session(req.SessionID)
 	if err != nil {
 		return StopResponse{}, err
 	}
@@ -718,7 +718,7 @@ func buildPIDToRootMap(rootPIDs []int, processes []processInfo) map[int]int {
 }
 
 func (m *Manager) Resize(req ResizeRequest) (ResizeResponse, error) {
-	s, err := m.session(req.SessionID, req.WorkspaceID)
+	s, err := m.session(req.SessionID)
 	if err != nil {
 		return ResizeResponse{}, err
 	}
@@ -735,7 +735,7 @@ func (m *Manager) Resize(req ResizeRequest) (ResizeResponse, error) {
 }
 
 func (m *Manager) Subscribe(req SubscribeRequest) (Subscription, error) {
-	s, err := m.session(req.SessionID, req.WorkspaceID)
+	s, err := m.session(req.SessionID)
 	if err != nil {
 		return Subscription{}, err
 	}
@@ -773,7 +773,7 @@ func (m *Manager) Subscribe(req SubscribeRequest) (Subscription, error) {
 }
 
 func (m *Manager) Unsubscribe(req UnsubscribeRequest) (UnsubscribeResponse, error) {
-	s, err := m.session(req.SessionID, req.WorkspaceID)
+	s, err := m.session(req.SessionID)
 	if err != nil {
 		return UnsubscribeResponse{}, err
 	}
@@ -793,7 +793,7 @@ func (m *Manager) Unsubscribe(req UnsubscribeRequest) (UnsubscribeResponse, erro
 	return UnsubscribeResponse{Unsubscribed: true}, nil
 }
 
-func (m *Manager) session(id string, workspaceID string) (*session, error) {
+func (m *Manager) session(id string) (*session, error) {
 	if id == "" {
 		return nil, rpcerror.New(rpcCodeInvalidParams, "sessionId is required")
 	}
@@ -802,9 +802,6 @@ func (m *Manager) session(id string, workspaceID string) (*session, error) {
 	s, ok := m.sessions[id]
 	m.mu.RUnlock()
 	if !ok {
-		return nil, rpcerror.New(rpcCodeNotFound, "terminal session not found")
-	}
-	if workspaceID != "" && s.workspaceID != workspaceID {
 		return nil, rpcerror.New(rpcCodeNotFound, "terminal session not found")
 	}
 	return s, nil
