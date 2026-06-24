@@ -339,7 +339,6 @@ func TestListAgentCLIDetectionStatusesCachesWithinTTL(t *testing.T) {
 	t.Setenv(agentDetectionCacheTTLEnvKey, "5m")
 	resetAgentDetectionCacheForTest()
 	t.Cleanup(resetAgentDetectionCacheForTest)
-	stubDetectionRuntimeResolvers(t)
 
 	if runtime.GOOS == "windows" {
 		t.Skip("test currently targets unix-style executable permissions")
@@ -375,7 +374,6 @@ func TestListAgentCLIDetectionStatusesRefreshesAfterTTLExpiry(t *testing.T) {
 	t.Setenv(agentDetectionCacheTTLEnvKey, "50ms")
 	resetAgentDetectionCacheForTest()
 	t.Cleanup(resetAgentDetectionCacheForTest)
-	stubDetectionRuntimeResolvers(t)
 
 	if runtime.GOOS == "windows" {
 		t.Skip("test currently targets unix-style executable permissions")
@@ -404,7 +402,6 @@ func TestListAgentCLIDetectionStatusesUsesCachedResultWhenPathChangesWithinTTL(t
 	t.Setenv(agentDetectionCacheTTLEnvKey, "5m")
 	resetAgentDetectionCacheForTest()
 	t.Cleanup(resetAgentDetectionCacheForTest)
-	stubDetectionRuntimeResolvers(t)
 
 	if runtime.GOOS == "windows" {
 		t.Skip("test currently targets unix-style executable permissions")
@@ -435,7 +432,6 @@ func TestListAgentCLIDetectionStatusesForceRefreshBypassesTTLCache(t *testing.T)
 	t.Setenv(agentDetectionCacheTTLEnvKey, "5m")
 	resetAgentDetectionCacheForTest()
 	t.Cleanup(resetAgentDetectionCacheForTest)
-	stubDetectionRuntimeResolvers(t)
 
 	if runtime.GOOS == "windows" {
 		t.Skip("test currently targets unix-style executable permissions")
@@ -467,23 +463,4 @@ func writeExecutableScript(t *testing.T, dir string, commandName string, version
 	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
 		t.Fatalf("write executable script %q: %v", scriptPath, err)
 	}
-}
-
-func stubDetectionRuntimeResolvers(t *testing.T) {
-	t.Helper()
-
-	previousResolveDetectionPathValueFunc := resolveDetectionPathValueFunc
-	previousResolveDetectionCommandEnvFunc := resolveDetectionCommandEnvFunc
-
-	resolveDetectionPathValueFunc = func() string {
-		return os.Getenv("PATH")
-	}
-	resolveDetectionCommandEnvFunc = func() []string {
-		return []string{"PATH=" + os.Getenv("PATH")}
-	}
-
-	t.Cleanup(func() {
-		resolveDetectionPathValueFunc = previousResolveDetectionPathValueFunc
-		resolveDetectionCommandEnvFunc = previousResolveDetectionCommandEnvFunc
-	})
 }

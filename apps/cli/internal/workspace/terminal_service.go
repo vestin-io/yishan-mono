@@ -21,7 +21,6 @@ type TerminalResizeRequest = terminal.ResizeRequest
 type TerminalResizeResponse = terminal.ResizeResponse
 type TerminalSubscribeRequest = terminal.SubscribeRequest
 type TerminalSubscribeResponse = terminal.SubscribeResponse
-type SubscribeResult = terminal.SubscribeResult
 type TerminalUnsubscribeRequest = terminal.UnsubscribeRequest
 type TerminalUnsubscribeResponse = terminal.UnsubscribeResponse
 type TerminalEvent = terminal.Event
