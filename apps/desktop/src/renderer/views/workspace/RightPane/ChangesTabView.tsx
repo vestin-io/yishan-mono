@@ -4,24 +4,11 @@ import { LuEye } from "react-icons/lu";
 import { PaneLoadingBar } from "../../../components/PaneLoadingBar";
 import { ProjectCommitComparison } from "../../../components/ProjectCommitComparison";
 import { ProjectGitChangesList } from "../../../components/ProjectGitChangesList";
-import type { ProjectGitChangeItem } from "../../../components/ProjectGitChangesList";
 import { useChangesTabActions } from "./useChangesTabActions";
 import { useChangesTabState } from "./useChangesTabState";
 
-function normalizeWorkspaceDiffKind(kind: ProjectGitChangeItem["kind"]): "added" | "modified" | "deleted" | "renamed" {
-  return kind === "untracked" ? "added" : kind;
-}
-
 /** Renders change-related right pane content for comparison scope and file lists. */
-export function ChangesTabView({ active = true }: { active?: boolean }) {
-  if (!active) {
-    return null;
-  }
-
-  return <ActiveChangesTabView />;
-}
-
-function ActiveChangesTabView() {
+export function ChangesTabView() {
   const { t } = useTranslation();
   const {
     selectedWorkspaceWorktreePath,
@@ -165,10 +152,7 @@ function ActiveChangesTabView() {
                 return;
               }
 
-              await selectWorkspaceFile({
-                ...file,
-                kind: normalizeWorkspaceDiffKind(file.kind),
-              });
+              await selectWorkspaceFile(file);
             }}
           />
         </>
