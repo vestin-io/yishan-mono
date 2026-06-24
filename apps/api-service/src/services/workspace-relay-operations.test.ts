@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { RelayRequestFailedError } from "@/errors";
 import { invokeWorkspaceRelay } from "@/services/workspace-relay";
 import { listWorkspaceGitBranchesViaRelay, readWorkspaceFileViaRelay } from "@/services/workspace-relay-operations";
 import { listWorkspaceTerminalSessionsViaRelay } from "@/services/workspace-relay-terminal-operations";
@@ -41,26 +42,22 @@ describe("readWorkspaceFileViaRelay", () => {
     });
   });
 
-  it("still supports legacy string relay payloads", async () => {
+  it("throws when the daemon returns an invalid file payload", async () => {
     invokeWorkspaceRelayMock.mockResolvedValueOnce({
       result: "abcdef",
       workspace: relayWorkspace,
     });
 
-    const result = await readWorkspaceFileViaRelay(stubDeps, {
-      actorUserId: "user-1",
-      maxChars: 3,
-      organizationId: "org-1",
-      path: "README.md",
-      projectId: "project-1",
-      workspaceId: "workspace-1",
-    });
-
-    expect(result).toEqual({
-      content: "abc",
-      path: "README.md",
-      truncated: true,
-    });
+    await expect(
+      readWorkspaceFileViaRelay(stubDeps, {
+        actorUserId: "user-1",
+        maxChars: 3,
+        organizationId: "org-1",
+        path: "README.md",
+        projectId: "project-1",
+        workspaceId: "workspace-1",
+      }),
+    ).rejects.toBeInstanceOf(RelayRequestFailedError);
   });
 });
 
@@ -72,7 +69,7 @@ describe("listWorkspaceGitBranchesViaRelay", () => {
   it("returns trimmed branch lists grouped by daemon response sections", async () => {
     invokeWorkspaceRelayMock.mockResolvedValueOnce({
       result: {
-        branches: [" origin/main ", "feature/test", "dev/alpha", ""],
+        branches: [" origin/main ", "feature/test", "dev/alpha"],
         currentBranch: " feature/test ",
         localBranches: ["feature/test", "main"],
         remoteBranches: [" origin/main ", "origin/dev"],
@@ -137,5 +134,28 @@ describe("listWorkspaceTerminalSessionsViaRelay", () => {
         workspaceId: "workspace-1",
       },
     ]);
+  });
+
+  it("throws when the daemon returns a session for another workspace", async () => {
+    invokeWorkspaceRelayMock.mockResolvedValueOnce({
+      result: [
+        {
+          pid: 321,
+          sessionId: "session-1",
+          status: "running",
+          workspaceId: "workspace-2",
+        },
+      ],
+      workspace: relayWorkspace,
+    });
+
+    await expect(
+      listWorkspaceTerminalSessionsViaRelay(stubDeps, {
+        actorUserId: "user-1",
+        organizationId: "org-1",
+        projectId: "project-1",
+        workspaceId: "workspace-1",
+      }),
+    ).rejects.toBeInstanceOf(RelayRequestFailedError);
   });
 });

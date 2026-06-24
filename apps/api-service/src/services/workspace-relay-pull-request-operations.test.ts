@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { RelayRequestFailedError } from "@/errors";
 import { invokeWorkspaceRelay } from "@/services/workspace-relay";
 import { refreshWorkspacePullRequestViaRelay } from "@/services/workspace-relay-pull-request-operations";
 
@@ -75,5 +76,25 @@ describe("refreshWorkspacePullRequestViaRelay", () => {
     });
 
     expect(result).toBeNull();
+  });
+
+  it("throws when the daemon returns a malformed pull request payload", async () => {
+    invokeWorkspaceRelayMock.mockResolvedValueOnce({
+      result: {
+        pullRequest: {
+          title: "Missing number",
+        },
+      },
+      workspace: { id: "workspace-1", localPath: "/tmp/workspace-1", nodeId: "node-1" },
+    });
+
+    await expect(
+      refreshWorkspacePullRequestViaRelay(stubDeps, {
+        actorUserId: "user-1",
+        organizationId: "org-1",
+        projectId: "project-1",
+        workspaceId: "workspace-1",
+      }),
+    ).rejects.toBeInstanceOf(RelayRequestFailedError);
   });
 });

@@ -16,16 +16,43 @@ export type WorkspaceTerminalStartView = {
   sessionId: string;
 };
 
+function invalidRelayPayload(
+  method: string,
+  workspaceId: string,
+  reason: string,
+  details?: Record<string, unknown>,
+): RelayRequestFailedError {
+  return new RelayRequestFailedError(method, {
+    reason,
+    workspaceId,
+    ...(details ?? {}),
+  });
+}
+
+function readRecord(
+  method: string,
+  workspaceId: string,
+  value: unknown,
+  field?: string,
+): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw invalidRelayPayload(method, workspaceId, "invalid_payload", field ? { field } : undefined);
+  }
+
+  return value as Record<string, unknown>;
+}
+
 export async function listWorkspaceTerminalSessionsViaRelay(
   deps: WorkspaceRelayDeps,
   input: WorkspaceRelayContext & {
     includeExited?: boolean;
   },
 ): Promise<WorkspaceTerminalSessionView[]> {
+  const method = "terminal.listSessions";
   const { result } = await invokeWorkspaceRelay<unknown[]>({
     ...deps,
     ...input,
-    method: "terminal.listSessions",
+    method,
     params: {
       includeExited: input.includeExited ?? false,
       workspaceId: input.workspaceId,
@@ -33,36 +60,30 @@ export async function listWorkspaceTerminalSessionsViaRelay(
   });
 
   if (!Array.isArray(result)) {
-    return [];
+    throw invalidRelayPayload(method, input.workspaceId, "invalid_payload");
   }
 
-  return result.flatMap((entry) => {
-    if (!entry || typeof entry !== "object") {
-      return [];
-    }
-
-    const record = entry as Record<string, unknown>;
+  return result.map((entry) => {
+    const record = readRecord(method, input.workspaceId, entry);
     const sessionId = typeof record.sessionId === "string" ? record.sessionId : null;
     const workspaceId = typeof record.workspaceId === "string" ? record.workspaceId : null;
     const pid = typeof record.pid === "number" ? record.pid : null;
     const status = record.status === "running" || record.status === "exited" ? record.status : null;
 
     if (!sessionId || !workspaceId || pid === null || !status || workspaceId !== input.workspaceId) {
-      return [];
+      throw invalidRelayPayload(method, input.workspaceId, "invalid_payload");
     }
 
-    return [
-      {
-        exitedAt: typeof record.exitedAt === "string" ? record.exitedAt : undefined,
-        paneId: typeof record.paneId === "string" ? record.paneId : undefined,
-        pid,
-        sessionId,
-        startedAt: typeof record.startedAt === "string" ? record.startedAt : undefined,
-        status,
-        tabId: typeof record.tabId === "string" ? record.tabId : undefined,
-        workspaceId,
-      },
-    ];
+    return {
+      exitedAt: typeof record.exitedAt === "string" ? record.exitedAt : undefined,
+      paneId: typeof record.paneId === "string" ? record.paneId : undefined,
+      pid,
+      sessionId,
+      startedAt: typeof record.startedAt === "string" ? record.startedAt : undefined,
+      status,
+      tabId: typeof record.tabId === "string" ? record.tabId : undefined,
+      workspaceId,
+    };
   });
 }
 
@@ -78,10 +99,11 @@ export async function startWorkspaceTerminalViaRelay(
     tabId?: string;
   },
 ): Promise<WorkspaceTerminalStartView> {
+  const method = "terminal.start";
   const { result } = await invokeWorkspaceRelay<unknown>({
     ...deps,
     ...input,
-    method: "terminal.start",
+    method,
     params: {
       args: input.args ?? [],
       cols: typeof input.cols === "number" ? input.cols : undefined,
@@ -94,13 +116,10 @@ export async function startWorkspaceTerminalViaRelay(
     },
   });
 
-  const record = result && typeof result === "object" ? (result as Record<string, unknown>) : {};
+  const record = readRecord(method, input.workspaceId, result);
   const sessionId = typeof record.sessionId === "string" ? record.sessionId : "";
   if (!sessionId) {
-    throw new RelayRequestFailedError("terminal.start", {
-      reason: "missing_session_id",
-      workspaceId: input.workspaceId,
-    });
+    throw invalidRelayPayload(method, input.workspaceId, "missing_session_id");
   }
 
   return { sessionId };

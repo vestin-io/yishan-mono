@@ -22,7 +22,6 @@ export type WorkspaceProvisionRequest = {
 
 export type WorkspaceProvisionResult = {
   localPath: string;
-  workspaceId: string;
 };
 
 export interface WorkspaceProvisioner {
@@ -31,7 +30,6 @@ export interface WorkspaceProvisioner {
 
 type RelayWorkspaceCreateResult = {
   id?: string;
-  status?: string;
   worktreePath?: string;
 };
 
@@ -39,7 +37,6 @@ export class NoopWorkspaceProvisioner implements WorkspaceProvisioner {
   async enqueueWorkspaceProvision(request: WorkspaceProvisionRequest): Promise<WorkspaceProvisionResult> {
     return {
       localPath: request.localPath,
-      workspaceId: request.workspaceId,
     };
   }
 }
@@ -51,7 +48,6 @@ export class RelayWorkspaceProvisioner implements WorkspaceProvisioner {
     if (request.kind !== "worktree") {
       return {
         localPath: request.localPath,
-        workspaceId: request.workspaceId,
       };
     }
 
@@ -99,7 +95,6 @@ export class RelayWorkspaceProvisioner implements WorkspaceProvisioner {
 
       return {
         localPath,
-        workspaceId,
       };
     } catch (error) {
       if (error instanceof RelayRpcError && error.code === -32002) {

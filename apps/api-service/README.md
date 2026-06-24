@@ -28,8 +28,9 @@ Copy `.dev.vars.example` to `.dev.vars` for Wrangler local dev. Reuse the same v
 - `COOKIE_DOMAIN` (optional)
 - `CORS_ORIGINS` (optional, comma-separated origins)
 - `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_ID_IOS` (optional)
+- `GOOGLE_CLIENT_ID_ANDROID` (optional)
 - `GOOGLE_CLIENT_SECRET`
-- `GOOGLE_MOBILE_CLIENT_IDS` (optional comma-separated allowlist for native mobile OAuth client IDs)
 - `GITHUB_CLIENT_ID`
 - `GITHUB_CLIENT_SECRET`
 - `RESEND_API_KEY`
@@ -89,7 +90,7 @@ Notes:
 - OAuth login only accepts provider accounts with verified email addresses.
 - Account resolution order is: provider account link first, then local user by email.
 - `GET /auth/:provider` supports `mode=cli&redirect_uri=http://127.0.0.1:<port>/callback&state=<random>` and redirects back with API tokens for CLI login flows.
-- `POST /auth/oauth/mobile/exchange` accepts one OAuth `code`, one PKCE `codeVerifier`, one exact `redirectUri`, and one allowed mobile Google `clientId`, then returns normal API access and refresh tokens without creating a web session cookie.
+- `POST /auth/oauth/mobile/exchange` accepts one OAuth `code`, one PKCE `codeVerifier`, one exact `redirectUri`, and one allowed native Google `clientId` matching `GOOGLE_CLIENT_ID_IOS` or `GOOGLE_CLIENT_ID_ANDROID`, then returns normal API access and refresh tokens without creating a web session cookie.
 - `POST /orgs` accepts `{ "name": string, "memberUserIds"?: string[] }` and always includes the authenticated user as an `owner` member.
 - `DELETE /orgs/:orgId` is owner-only and removes the org with cascading memberships.
 - `POST /orgs/:orgId/members` accepts `{ "userId": string, "role"?: "member" | "admin" }` and is allowed for org owners/admins.
@@ -266,7 +267,6 @@ Secrets are stored encrypted in Cloudflare and injected at runtime. Set each req
 ```sh
 wrangler secret put SESSION_SECRET
 wrangler secret put JWT_ACCESS_SECRET
-wrangler secret put GOOGLE_CLIENT_ID
 wrangler secret put GOOGLE_CLIENT_SECRET
 wrangler secret put GITHUB_CLIENT_ID
 wrangler secret put GITHUB_CLIENT_SECRET
@@ -283,6 +283,9 @@ Non-secret variables are defined in the `[vars]` section of `wrangler.toml`. Upd
 | Variable | Description |
 |---|---|
 | `APP_BASE_URL` | Public URL of the deployed Worker (e.g. `https://api.yishan.io`) |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID for desktop/web redirect flows |
+| `GOOGLE_CLIENT_ID_IOS` | Google OAuth client ID for native iOS sign-in |
+| `GOOGLE_CLIENT_ID_ANDROID` | Google OAuth client ID for native Android sign-in |
 | `SESSION_TTL_DAYS` | Session lifetime in days (default `30`) |
 | `JWT_ACCESS_TTL_SECONDS` | Access token lifetime in seconds (default `900`) |
 | `REFRESH_TOKEN_TTL_DAYS` | Refresh token lifetime in days (default `30`) |

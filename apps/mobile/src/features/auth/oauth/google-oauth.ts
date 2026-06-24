@@ -89,20 +89,17 @@ export function supportsGoogleOAuthBrowserFlow(): boolean {
 
 export function getGoogleOAuthClientId(): string {
   if (Platform.OS === "ios") {
-    return (
-      process.env.EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_IOS?.trim() ||
-      required("EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID", process.env.EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID)
-    );
+    return required("EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS", process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS?.trim());
   }
 
   if (Platform.OS === "android") {
-    return (
-      process.env.EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_ANDROID?.trim() ||
-      required("EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID", process.env.EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID)
+    return required(
+      "EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID",
+      process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID?.trim(),
     );
   }
 
-  return required("EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID", process.env.EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID);
+  throw new Error(`Unsupported platform for Google OAuth client: ${Platform.OS}`);
 }
 
 export function getGoogleOAuthScheme(): string {

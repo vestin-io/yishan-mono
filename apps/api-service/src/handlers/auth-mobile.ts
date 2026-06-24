@@ -7,8 +7,11 @@ import type { MobileOAuthExchangeBodyInput } from "@/validation/auth";
 export async function exchangeMobileOAuthHandler(c: AppContext, body: MobileOAuthExchangeBodyInput) {
   const config = c.get("config");
   const authService = c.get("services").auth;
+  const supportedClientIds = [config.googleClientIdIos, config.googleClientIdAndroid].filter(
+    (clientId): clientId is string => Boolean(clientId),
+  );
 
-  if (!config.googleMobileClientIds.includes(body.clientId)) {
+  if (!supportedClientIds.includes(body.clientId)) {
     return c.json({ error: "Unsupported mobile Google client" }, StatusCodes.BAD_REQUEST);
   }
 

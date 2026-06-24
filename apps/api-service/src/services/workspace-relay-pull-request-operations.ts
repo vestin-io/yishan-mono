@@ -4,20 +4,47 @@ import type {
   WorkspaceCurrentPullRequestDeployment,
 } from "@yishan/core";
 
+import { RelayRequestFailedError } from "@/errors";
 import { type WorkspaceRelayContext, type WorkspaceRelayDeps, invokeWorkspaceRelay } from "@/services/workspace-relay";
 
 export type WorkspaceCurrentPullRequestView = WorkspaceCurrentPullRequest | null;
 
-function readWorkspaceCurrentPullRequestCheck(value: unknown): WorkspaceCurrentPullRequestCheck | undefined {
-  if (!value || typeof value !== "object") {
-    return undefined;
+function invalidRelayPayload(
+  method: string,
+  workspaceId: string,
+  reason: string,
+  details?: Record<string, unknown>,
+): RelayRequestFailedError {
+  return new RelayRequestFailedError(method, {
+    reason,
+    workspaceId,
+    ...(details ?? {}),
+  });
+}
+
+function readRecord(
+  method: string,
+  workspaceId: string,
+  value: unknown,
+  field?: string,
+): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw invalidRelayPayload(method, workspaceId, "invalid_payload", field ? { field } : undefined);
   }
 
-  const record = value as Record<string, unknown>;
+  return value as Record<string, unknown>;
+}
+
+function readWorkspaceCurrentPullRequestCheck(
+  method: string,
+  workspaceId: string,
+  value: unknown,
+): WorkspaceCurrentPullRequestCheck {
+  const record = readRecord(method, workspaceId, value, "checks");
   const name = typeof record.name === "string" ? record.name : null;
   const state = typeof record.state === "string" ? record.state : null;
   if (!name || !state) {
-    return undefined;
+    throw invalidRelayPayload(method, workspaceId, "invalid_payload", { field: "checks" });
   }
 
   return {
@@ -29,15 +56,15 @@ function readWorkspaceCurrentPullRequestCheck(value: unknown): WorkspaceCurrentP
   };
 }
 
-function readWorkspaceCurrentPullRequestDeployment(value: unknown): WorkspaceCurrentPullRequestDeployment | undefined {
-  if (!value || typeof value !== "object") {
-    return undefined;
-  }
-
-  const record = value as Record<string, unknown>;
+function readWorkspaceCurrentPullRequestDeployment(
+  method: string,
+  workspaceId: string,
+  value: unknown,
+): WorkspaceCurrentPullRequestDeployment {
+  const record = readRecord(method, workspaceId, value, "deployments");
   const id = typeof record.id === "number" && Number.isFinite(record.id) ? record.id : null;
   if (id === null) {
-    return undefined;
+    throw invalidRelayPayload(method, workspaceId, "invalid_payload", { field: "deployments.id" });
   }
 
   return {
@@ -52,30 +79,26 @@ function readWorkspaceCurrentPullRequestDeployment(value: unknown): WorkspaceCur
   };
 }
 
-function readWorkspaceCurrentPullRequest(value: unknown): WorkspaceCurrentPullRequest | null {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-
-  const record = value as Record<string, unknown>;
+function readWorkspaceCurrentPullRequest(
+  method: string,
+  workspaceId: string,
+  value: unknown,
+): WorkspaceCurrentPullRequest {
+  const record = readRecord(method, workspaceId, value, "pullRequest");
   const number = typeof record.number === "number" && Number.isFinite(record.number) ? record.number : null;
   if (number === null) {
-    return null;
+    throw invalidRelayPayload(method, workspaceId, "invalid_payload", { field: "pullRequest.number" });
   }
 
   return {
     baseBranch: typeof record.baseBranch === "string" ? record.baseBranch : undefined,
     branch: typeof record.branch === "string" ? record.branch : undefined,
     checks: Array.isArray(record.checks)
-      ? record.checks
-          .map((entry) => readWorkspaceCurrentPullRequestCheck(entry))
-          .filter((entry): entry is WorkspaceCurrentPullRequestCheck => entry !== undefined)
+      ? record.checks.map((entry) => readWorkspaceCurrentPullRequestCheck(method, workspaceId, entry))
       : undefined,
     complete: typeof record.complete === "boolean" ? record.complete : undefined,
     deployments: Array.isArray(record.deployments)
-      ? record.deployments
-          .map((entry) => readWorkspaceCurrentPullRequestDeployment(entry))
-          .filter((entry): entry is WorkspaceCurrentPullRequestDeployment => entry !== undefined)
+      ? record.deployments.map((entry) => readWorkspaceCurrentPullRequestDeployment(method, workspaceId, entry))
       : undefined,
     githubState: typeof record.githubState === "string" ? record.githubState : undefined,
     isDraft: typeof record.isDraft === "boolean" ? record.isDraft : undefined,
@@ -92,19 +115,16 @@ export async function refreshWorkspacePullRequestViaRelay(
   deps: WorkspaceRelayDeps,
   input: WorkspaceRelayContext,
 ): Promise<WorkspaceCurrentPullRequestView> {
+  const method = "workspace.refreshPullRequest";
   const { result } = await invokeWorkspaceRelay<unknown>({
     ...deps,
     ...input,
-    method: "workspace.refreshPullRequest",
+    method,
     params: {
       workspaceId: input.workspaceId,
     },
   });
 
-  if (!result || typeof result !== "object") {
-    return null;
-  }
-
-  const record = result as Record<string, unknown>;
-  return readWorkspaceCurrentPullRequest(record.pullRequest);
+  const record = readRecord(method, input.workspaceId, result);
+  return record.pullRequest === null ? null : readWorkspaceCurrentPullRequest(method, input.workspaceId, record.pullRequest);
 }

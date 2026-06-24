@@ -49,9 +49,8 @@ const WORKSPACE_ROW = {
 const stubProvisioner = {
   enqueueWorkspaceProvision: vi
     .fn()
-    .mockImplementation(async (request: { localPath: string; workspaceId: string }) => ({
+    .mockImplementation(async (request: { localPath: string }) => ({
       localPath: request.localPath,
-      workspaceId: request.workspaceId,
     })),
 } satisfies WorkspaceProvisioner;
 function makeOrgService(role: string | null = "member") {
@@ -285,7 +284,6 @@ describe("WorkspaceService.createWorkspace", () => {
     const provisionedPath = "/Users/test/.yishan/worktrees/owner/repo/mobile-workspace";
     stubProvisioner.enqueueWorkspaceProvision.mockResolvedValueOnce({
       localPath: provisionedPath,
-      workspaceId: worktreeRow.id,
     });
 
     const { db, outerUpdate } = makeDb({ insertedRows: [worktreeRow] });

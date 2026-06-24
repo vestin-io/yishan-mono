@@ -1,4 +1,11 @@
 import { and, eq, isNull } from "drizzle-orm";
+import type {
+  WorkspaceFileContent,
+  WorkspaceFileDiff,
+  WorkspaceFileEntry,
+  WorkspaceGitBranchList,
+  WorkspaceGitChanges,
+} from "@yishan/core";
 
 import type { AppDb } from "@/db/client";
 import { organizationMembers, projects, workspaces } from "@/db/schema";
@@ -18,14 +25,12 @@ import { assertNodeOwnedByActor } from "@/services/shared/assertNodeOwnedByActor
 import { assertOrganizationMember } from "@/services/shared/assertOrganizationMember";
 import type { WorkspaceProvisioner } from "@/services/workspace-provisioner";
 import { fetchLatestPrByWorkspaceId } from "@/services/workspace-pull-request-service";
-import { type WorkspaceRelayDeps, resolveWorkspaceRelayAccess } from "@/services/workspace-relay";
 import {
-  type WorkspaceFileContentView,
-  type WorkspaceFileDiffView,
-  type WorkspaceFileView,
-  type WorkspaceGitBranchListView,
-  type WorkspaceGitChangesView,
-  type WorkspaceRelayConnectionView,
+  type RelayWorkspaceConnectionAccess,
+  type WorkspaceRelayDeps,
+  resolveWorkspaceRelayAccess,
+} from "@/services/workspace-relay";
+import {
   listWorkspaceFilesViaRelay,
   listWorkspaceGitBranchesViaRelay,
   listWorkspaceGitChangesViaRelay,
@@ -75,15 +80,15 @@ export type WorkspaceView = {
 };
 
 export type {
-  WorkspaceFileContentView,
-  WorkspaceFileDiffView,
-  WorkspaceFileView,
-  WorkspaceGitBranchListView,
+  WorkspaceFileContent as WorkspaceFileContentView,
+  WorkspaceFileDiff as WorkspaceFileDiffView,
+  WorkspaceFileEntry as WorkspaceFileView,
+  WorkspaceGitBranchList as WorkspaceGitBranchListView,
+  WorkspaceGitChange as WorkspaceGitChangeView,
   WorkspaceGitChangeKind,
-  WorkspaceGitChangeView,
-  WorkspaceGitChangesView,
-  WorkspaceRelayConnectionView,
-} from "@/services/workspace-relay-operations";
+  WorkspaceGitChanges as WorkspaceGitChangesView,
+} from "@yishan/core";
+export type { RelayWorkspaceConnectionAccess as WorkspaceRelayConnectionView } from "@/services/workspace-relay";
 export type { WorkspaceCurrentPullRequestView } from "@/services/workspace-relay-pull-request-operations";
 export type {
   WorkspaceTerminalSessionView,
@@ -148,7 +153,7 @@ export class WorkspaceService {
     organizationId: string;
     projectId: string;
     workspaceId: string;
-  }): Promise<WorkspaceRelayConnectionView> {
+  }): Promise<RelayWorkspaceConnectionAccess> {
     return resolveWorkspaceRelayAccess({
       ...this.getRelayDeps(),
       ...input,
@@ -448,7 +453,7 @@ export class WorkspaceService {
     projectId: string;
     recursive?: boolean;
     workspaceId: string;
-  }): Promise<WorkspaceFileView[]> {
+  }): Promise<WorkspaceFileEntry[]> {
     return listWorkspaceFilesViaRelay(this.getRelayDeps(), input);
   }
 
@@ -459,7 +464,7 @@ export class WorkspaceService {
     path: string;
     projectId: string;
     workspaceId: string;
-  }): Promise<WorkspaceFileContentView> {
+  }): Promise<WorkspaceFileContent> {
     return readWorkspaceFileViaRelay(this.getRelayDeps(), input);
   }
 
@@ -470,7 +475,7 @@ export class WorkspaceService {
     path: string;
     projectId: string;
     workspaceId: string;
-  }): Promise<WorkspaceFileDiffView> {
+  }): Promise<WorkspaceFileDiff> {
     return readWorkspaceDiffViaRelay(this.getRelayDeps(), input);
   }
 
@@ -479,7 +484,7 @@ export class WorkspaceService {
     organizationId: string;
     projectId: string;
     workspaceId: string;
-  }): Promise<WorkspaceGitChangesView> {
+  }): Promise<WorkspaceGitChanges> {
     return listWorkspaceGitChangesViaRelay(this.getRelayDeps(), input);
   }
 
@@ -488,7 +493,7 @@ export class WorkspaceService {
     organizationId: string;
     projectId: string;
     workspaceId: string;
-  }): Promise<WorkspaceGitBranchListView> {
+  }): Promise<WorkspaceGitBranchList> {
     return listWorkspaceGitBranchesViaRelay(this.getRelayDeps(), input);
   }
 

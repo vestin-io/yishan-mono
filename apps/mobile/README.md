@@ -64,9 +64,9 @@ Important implementation note:
 
 - `EXPO_PUBLIC_API_BASE_URL`
   - required for real backend calls
-- `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_IOS`
+- `EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS`
   - required for direct Google sign-in on iOS
-- `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_ANDROID`
+- `EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID`
   - reserved for the future native Google Sign-In / Credential Manager flow on Android
 - `EXPO_PUBLIC_GOOGLE_OAUTH_IOS_SCHEME`
   - required native URL scheme for the iOS Google OAuth client
@@ -79,10 +79,6 @@ callback path `oauth/google/callback`. For example:
 
 Android does not use this browser callback path. Its Google sign-in integration
 must move to a native Credential Manager flow instead.
-
-Legacy `EXPO_PUBLIC_GOOGLE_OAUTH_REDIRECT_URI*` env vars and the older
-`EXPO_PUBLIC_GOOGLE_OAUTH_SCHEME_IOS` name are still accepted as fallbacks
-during migration, but new iOS config should use `EXPO_PUBLIC_GOOGLE_OAUTH_IOS_SCHEME`.
 
 ## Local commands
 

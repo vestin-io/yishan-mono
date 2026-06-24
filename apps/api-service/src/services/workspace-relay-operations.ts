@@ -9,55 +9,58 @@ import {
   type WorkspaceGitChanges,
 } from "@yishan/core";
 
+import { RelayRequestFailedError } from "@/errors";
 import {
-  type RelayWorkspaceConnectionAccess,
   type WorkspaceRelayContext,
   type WorkspaceRelayDeps,
   invokeWorkspaceRelay,
 } from "@/services/workspace-relay";
 
-export type WorkspaceFileView = WorkspaceFileEntry;
-
-export type WorkspaceFileContentView = WorkspaceFileContent;
-
-export type WorkspaceFileDiffView = WorkspaceFileDiff;
-
 export type { WorkspaceGitChangeKind } from "@yishan/core";
 
-export type WorkspaceGitChangeView = WorkspaceGitChange;
-
-export type WorkspaceGitChangesView = WorkspaceGitChanges;
-
-export type WorkspaceGitBranchListView = WorkspaceGitBranchList;
-
-export type WorkspaceRelayConnectionView = RelayWorkspaceConnectionAccess;
-
-function readBranchNames(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value.flatMap((entry) => {
-    if (typeof entry !== "string") {
-      return [];
-    }
-
-    const normalizedBranch = entry.trim();
-    return normalizedBranch ? [normalizedBranch] : [];
+function invalidRelayPayload(
+  method: string,
+  workspaceId: string,
+  reason: string,
+  details?: Record<string, unknown>,
+): RelayRequestFailedError {
+  return new RelayRequestFailedError(method, {
+    reason,
+    workspaceId,
+    ...(details ?? {}),
   });
 }
 
-function readWorkspaceFileContent(result: unknown): string {
-  if (typeof result === "string") {
-    return result;
+function readRecord(
+  method: string,
+  workspaceId: string,
+  value: unknown,
+  field?: string,
+): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw invalidRelayPayload(method, workspaceId, "invalid_payload", field ? { field } : undefined);
   }
 
-  if (!result || typeof result !== "object") {
-    return "";
+  return value as Record<string, unknown>;
+}
+
+function readBranchNames(method: string, workspaceId: string, field: string, value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    throw invalidRelayPayload(method, workspaceId, "invalid_payload", { field });
   }
 
-  const content = (result as Record<string, unknown>).content;
-  return typeof content === "string" ? content : "";
+  return value.map((entry) => {
+    if (typeof entry !== "string") {
+      throw invalidRelayPayload(method, workspaceId, "invalid_payload", { field });
+    }
+
+    const normalizedBranch = entry.trim();
+    if (!normalizedBranch) {
+      throw invalidRelayPayload(method, workspaceId, "invalid_payload", { field });
+    }
+
+    return normalizedBranch;
+  });
 }
 
 export async function listWorkspaceFilesViaRelay(
@@ -66,11 +69,12 @@ export async function listWorkspaceFilesViaRelay(
     path?: string;
     recursive?: boolean;
   },
-): Promise<WorkspaceFileView[]> {
+): Promise<WorkspaceFileEntry[]> {
+  const method = "file.list";
   const { result } = await invokeWorkspaceRelay<unknown[]>({
     ...deps,
     ...input,
-    method: "file.list",
+    method,
     params: {
       path: input.path?.trim() ?? "",
       recursive: input.recursive ?? false,
@@ -79,33 +83,27 @@ export async function listWorkspaceFilesViaRelay(
   });
 
   if (!Array.isArray(result)) {
-    return [];
+    throw invalidRelayPayload(method, input.workspaceId, "invalid_payload");
   }
 
-  return result.flatMap((entry) => {
-    if (!entry || typeof entry !== "object") {
-      return [];
-    }
-
-    const record = entry as Record<string, unknown>;
-    const path = typeof record.path === "string" ? record.path : null;
-    const name = typeof record.name === "string" ? record.name : null;
+  return result.map((entry) => {
+    const record = readRecord(method, input.workspaceId, entry);
+    const path = typeof record.path === "string" ? record.path.trim() : "";
+    const name = typeof record.name === "string" ? record.name.trim() : "";
     const isDir = typeof record.isDir === "boolean" ? record.isDir : null;
 
     if (!path || !name || isDir === null) {
-      return [];
+      throw invalidRelayPayload(method, input.workspaceId, "invalid_payload");
     }
 
-    return [
-      {
-        isDir,
-        isIgnored: typeof record.isIgnored === "boolean" ? record.isIgnored : undefined,
-        mode: typeof record.mode === "number" ? record.mode : 0,
-        name,
-        path,
-        size: typeof record.size === "number" ? record.size : 0,
-      },
-    ];
+    return {
+      isDir,
+      isIgnored: typeof record.isIgnored === "boolean" ? record.isIgnored : undefined,
+      mode: typeof record.mode === "number" ? record.mode : 0,
+      name,
+      path,
+      size: typeof record.size === "number" ? record.size : 0,
+    };
   });
 }
 
@@ -115,18 +113,24 @@ export async function readWorkspaceFileViaRelay(
     maxChars?: number;
     path: string;
   },
-): Promise<WorkspaceFileContentView> {
+): Promise<WorkspaceFileContent> {
+  const method = "file.read";
   const { result } = await invokeWorkspaceRelay<unknown>({
     ...deps,
     ...input,
-    method: "file.read",
+    method,
     params: {
       path: input.path.trim(),
       workspaceId: input.workspaceId,
     },
   });
 
-  const content = readWorkspaceFileContent(result);
+  const record = readRecord(method, input.workspaceId, result);
+  const content = record.content;
+  if (typeof content !== "string") {
+    throw invalidRelayPayload(method, input.workspaceId, "invalid_payload", { field: "content" });
+  }
+
   const maxChars = input.maxChars && input.maxChars > 0 ? input.maxChars : null;
   const truncated = maxChars !== null && content.length > maxChars;
 
@@ -143,20 +147,25 @@ export async function readWorkspaceDiffViaRelay(
     maxChars?: number;
     path: string;
   },
-): Promise<WorkspaceFileDiffView> {
+): Promise<WorkspaceFileDiff> {
+  const method = "file.diff";
   const { result } = await invokeWorkspaceRelay<unknown>({
     ...deps,
     ...input,
-    method: "file.diff",
+    method,
     params: {
       path: input.path.trim(),
       workspaceId: input.workspaceId,
     },
   });
 
-  const record = result && typeof result === "object" ? (result as Record<string, unknown>) : {};
-  const oldContent = typeof record.oldContent === "string" ? record.oldContent : "";
-  const newContent = typeof record.newContent === "string" ? record.newContent : "";
+  const record = readRecord(method, input.workspaceId, result);
+  const oldContent = record.oldContent;
+  const newContent = record.newContent;
+  if (typeof oldContent !== "string" || typeof newContent !== "string") {
+    throw invalidRelayPayload(method, input.workspaceId, "invalid_payload");
+  }
+
   const maxChars = input.maxChars && input.maxChars > 0 ? input.maxChars : null;
   const truncated = maxChars !== null && (oldContent.length > maxChars || newContent.length > maxChars);
 
@@ -171,80 +180,90 @@ export async function readWorkspaceDiffViaRelay(
 export async function listWorkspaceGitChangesViaRelay(
   deps: WorkspaceRelayDeps,
   input: WorkspaceRelayContext,
-): Promise<WorkspaceGitChangesView> {
+): Promise<WorkspaceGitChanges> {
+  const method = "git.listChanges";
   const { result } = await invokeWorkspaceRelay<unknown>({
     ...deps,
     ...input,
-    method: "git.listChanges",
+    method,
     params: {
       workspaceId: input.workspaceId,
     },
   });
 
-  const record = result && typeof result === "object" ? (result as Record<string, unknown>) : {};
+  const record = readRecord(method, input.workspaceId, result);
 
   return {
-    staged: parseGitChanges(record.staged),
-    unstaged: parseGitChanges(record.unstaged),
-    untracked: parseGitChanges(record.untracked),
+    staged: parseGitChanges(method, input.workspaceId, "staged", record.staged),
+    unstaged: parseGitChanges(method, input.workspaceId, "unstaged", record.unstaged),
+    untracked: parseGitChanges(method, input.workspaceId, "untracked", record.untracked),
   };
 }
 
 export async function listWorkspaceGitBranchesViaRelay(
   deps: WorkspaceRelayDeps,
   input: WorkspaceRelayContext,
-): Promise<WorkspaceGitBranchListView> {
+): Promise<WorkspaceGitBranchList> {
+  const method = "git.branches";
   const { result } = await invokeWorkspaceRelay<unknown>({
     ...deps,
     ...input,
-    method: "git.branches",
+    method,
     params: {
       workspaceId: input.workspaceId,
     },
   });
 
-  const record = result && typeof result === "object" ? (result as Record<string, unknown>) : {};
+  const record = readRecord(method, input.workspaceId, result);
+  const currentBranch = record.currentBranch;
+  if (typeof currentBranch !== "string") {
+    throw invalidRelayPayload(method, input.workspaceId, "invalid_payload", { field: "currentBranch" });
+  }
 
   return {
-    branches: readBranchNames(record.branches),
-    currentBranch: typeof record.currentBranch === "string" ? record.currentBranch.trim() : "",
-    localBranches: readBranchNames(record.localBranches),
-    remoteBranches: readBranchNames(record.remoteBranches),
-    worktreeBranches: readBranchNames(record.worktreeBranches),
+    branches: readBranchNames(method, input.workspaceId, "branches", record.branches),
+    currentBranch: currentBranch.trim(),
+    localBranches: readBranchNames(method, input.workspaceId, "localBranches", record.localBranches),
+    remoteBranches: readBranchNames(method, input.workspaceId, "remoteBranches", record.remoteBranches),
+    worktreeBranches: readBranchNames(method, input.workspaceId, "worktreeBranches", record.worktreeBranches),
   };
 }
 
-function parseGitChanges(value: unknown): WorkspaceGitChange[] {
+function parseGitChanges(
+  method: string,
+  workspaceId: string,
+  field: string,
+  value: unknown,
+): WorkspaceGitChange[] {
   if (!Array.isArray(value)) {
-    return [];
+    throw invalidRelayPayload(method, workspaceId, "invalid_payload", { field });
   }
 
-  return value.flatMap((entry) => {
-    if (!entry || typeof entry !== "object") {
-      return [];
-    }
-
-    const record = entry as Record<string, unknown>;
+  return value.map((entry) => {
+    const record = readRecord(method, workspaceId, entry, field);
     const path = typeof record.path === "string" ? record.path.trim() : "";
     if (!path || path.endsWith("/")) {
-      return [];
+      throw invalidRelayPayload(method, workspaceId, "invalid_payload", { field: `${field}.path` });
     }
 
-    return [
-      {
-        additions: typeof record.additions === "number" ? record.additions : 0,
-        deletions: typeof record.deletions === "number" ? record.deletions : 0,
-        kind: normalizeGitChangeKind(record.kind),
-        path,
-      },
-    ];
+    return {
+      additions: typeof record.additions === "number" ? record.additions : 0,
+      deletions: typeof record.deletions === "number" ? record.deletions : 0,
+      kind: normalizeGitChangeKind(method, workspaceId, field, record.kind),
+      path,
+    };
   });
 }
 
-function normalizeGitChangeKind(value: unknown): WorkspaceGitChangeKind {
+function normalizeGitChangeKind(
+  method: string,
+  workspaceId: string,
+  field: string,
+  value: unknown,
+): WorkspaceGitChangeKind {
   if (typeof value === "string" && WORKSPACE_GIT_CHANGE_KINDS.includes(value as WorkspaceGitChangeKind)) {
     return value as WorkspaceGitChangeKind;
   }
 
-  return "modified";
+  throw invalidRelayPayload(method, workspaceId, "invalid_payload", { field: `${field}.kind` });
 }
