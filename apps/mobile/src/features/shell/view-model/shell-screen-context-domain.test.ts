@@ -2,12 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import type { Node } from "@/features/nodes/nodes.types";
 import type { Workspace } from "@/features/workspaces/workspaces.types";
-import type { ShellSelection, TerminalItem } from "../state/shell.types";
+import type { TerminalItem } from "../state/shell.types";
 import {
   filterRecentTerminalsByScope,
   filterTerminalsByWorkspaceIdForNode,
-  readSelectedWorkspaceContext,
-  readWorkspaceLabelFromPrimaryTerminal,
   resolveCurrentNodeId,
   resolveSelectedWorkspace,
 } from "./shell-screen-context-domain";
@@ -63,23 +61,6 @@ function createWorkspace(overrides: Partial<Workspace> = {}): Workspace {
 }
 
 describe("shell-screen-context-domain", () => {
-  it("reads workspace selection context only for workspace selections", () => {
-    const homeSelection: ShellSelection = { kind: "home" };
-    const workspaceSelection: ShellSelection = {
-      kind: "workspace",
-      orgId: "org-1",
-      projectId: "project-1",
-      workspaceId: "workspace-1",
-    };
-
-    expect(readSelectedWorkspaceContext(homeSelection)).toBeNull();
-    expect(readSelectedWorkspaceContext(workspaceSelection)).toEqual({
-      organizationId: "org-1",
-      projectId: "project-1",
-      workspaceId: "workspace-1",
-    });
-  });
-
   it("resolves current node id only when the persisted node still exists", () => {
     expect(
       resolveCurrentNodeId({
@@ -147,16 +128,5 @@ describe("shell-screen-context-domain", () => {
         },
       })?.id,
     ).toBe("workspace-1");
-  });
-
-  it("reads workspace label from the primary terminal subtitle", () => {
-    expect(
-      readWorkspaceLabelFromPrimaryTerminal(
-        {
-          "workspace-1": [createTerminal({ subtitle: "base" })],
-        },
-        "workspace-1",
-      ),
-    ).toBe("base");
   });
 });

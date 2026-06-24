@@ -93,10 +93,7 @@ export function getGoogleOAuthClientId(): string {
   }
 
   if (Platform.OS === "android") {
-    return required(
-      "EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID",
-      process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID?.trim(),
-    );
+    return required("EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID", process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID?.trim());
   }
 
   throw new Error(`Unsupported platform for Google OAuth client: ${Platform.OS}`);

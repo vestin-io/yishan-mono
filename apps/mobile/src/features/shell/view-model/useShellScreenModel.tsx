@@ -1,17 +1,11 @@
-import { usePathname, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo } from "react";
+import { useMemo } from "react";
 
 import {
   resolveAggregateWorkspaceIndicator,
   useNotificationRuntime,
 } from "@/features/notifications/notification-runtime-context";
-import { useShellCreateTerminalAction } from "../commands/useShellCreateTerminalAction";
-import { useShellMenuActions } from "../commands/useShellMenuActions";
 import type { useShellMutations } from "../commands/useShellMutations";
-import { useShellNavigationCommands } from "../commands/useShellNavigationCommands";
-import { useShellPaneTabActions } from "../commands/useShellPaneTabActions";
-import { useShellQuickActionCommands } from "../commands/useShellQuickActionCommands";
-import { useShellRecoveryCommands } from "../commands/useShellRecoveryCommands";
+import { useShellScreenCommands } from "../commands/useShellScreenCommands";
 import type { ShellChatModel } from "../components/ShellChatSurface";
 import type { ShellDrawerPanelModel, ShellDrawerTopBarModel } from "../components/ShellDrawer";
 import type { ShellFocusPanePreviewContext } from "../components/ShellFocusPane";
@@ -51,86 +45,40 @@ export function useShellScreenModel({
   terminalMessages,
   screenContext,
 }: UseShellScreenModelInput) {
-  const pathname = usePathname();
-  const router = useRouter();
   const { workspaceAgentStatusByWorkspaceId, workspaceUnreadToneByWorkspaceId } = useNotificationRuntime();
-
-  const navigationCommands = useShellNavigationCommands({
-    closeDrawer,
-    currentNodeId: screenContext.currentNodeId,
-    currentOrganizationId: screenContext.currentOrganizationId,
-    currentOrganizationName: screenContext.currentOrganization?.name ?? null,
-    router,
-  });
-  const createTerminal = useShellCreateTerminalAction({
-    closeDrawer,
-    shell,
-    t,
-  });
-  const { onOpenProjectCreate, projectMenuActions, workspaceMenuActions } = useShellMenuActions({
-    createTerminal: (workspace) => createTerminal(workspace, { label: t("shell.newTerminal") }),
-    currentOrganizationId: screenContext.currentOrganizationId,
-    mutations,
-    openWorkspaceBrowser: navigationCommands.openWorkspaceBrowser,
-    sheets,
-    t,
-  });
   const {
     agentQuickActions,
     browserOpenHandler,
+    closePaneTab,
     createTerminalHandler,
+    openProfileControls,
+    onOpenProjectCreate,
     openChangesHandler,
     openFilesHandler,
+    openPaneTabSheet,
+    openProjectMenu,
     openPullRequestsHandler,
+    openQuickActions,
+    openWorkspaceMenu,
+    projectMenuActions,
     refreshSessionsHandler,
-  } = useShellQuickActionCommands({
-    createTerminal,
-    openWorkspaceBrowser: navigationCommands.openWorkspaceBrowser,
-    shell,
-    screenContext,
-    t,
-    terminalMessages,
-  });
-  const terminalsById = useMemo(
-    () =>
-      Object.fromEntries(
-        Object.values(shell.terminalsByWorkspaceId)
-          .flat()
-          .map((terminal) => [terminal.id, terminal] as const),
-      ),
-    [shell.terminalsByWorkspaceId],
-  );
-  const { closePaneTab, renameTerminal } = useShellPaneTabActions({
-    shell,
-    terminalMessages,
+    refreshWorkspaceTreeHandler,
+    renameTerminal,
+    retryProjects,
+    selectOrganization,
     terminalsById,
-  });
-
-  useShellRecoveryCommands({
+    workspaceMenuActions,
+  } = useShellScreenCommands({
+    closeDrawer,
     dismissDrawer,
-    pathname,
-    router,
-    shell,
+    mutations,
+    paneTabSheet,
     screenContext,
+    sheets,
+    shell,
     t,
-    terminalsById,
+    terminalMessages,
   });
-
-  const hasQuickActions =
-    !!createTerminalHandler ||
-    !!openFilesHandler ||
-    !!openChangesHandler ||
-    !!openPullRequestsHandler ||
-    !!agentQuickActions?.length;
-  const canOpenQuickActionsFromTopBar = hasQuickActions && shell.paneTabs.length > 0;
-  const openQuickActions = canOpenQuickActionsFromTopBar ? sheets.openQuickActions : null;
-  const openPaneTabSheet = shell.paneTabs.length > 0 ? paneTabSheet.open : null;
-
-  useEffect(() => {
-    if (!canOpenQuickActionsFromTopBar && sheets.quickActionsOpen) {
-      sheets.closeQuickActions();
-    }
-  }, [canOpenQuickActionsFromTopBar, sheets]);
 
   const topBarTitle =
     screenContext.selectedProjectName ??
@@ -157,36 +105,6 @@ export function useShellScreenModel({
     [workspaceAgentStatusByWorkspaceId, workspaceUnreadToneByWorkspaceId],
   );
 
-  const retryProjects = useCallback(() => {
-    void screenContext.currentOrgProjectsQuery.refetch();
-  }, [screenContext.currentOrgProjectsQuery]);
-
-  const refreshWorkspaceTreeHandler = useCallback(() => {
-    void Promise.all([screenContext.currentOrgNodesQuery.refetch(), screenContext.currentOrgProjectsQuery.refetch()]);
-  }, [screenContext.currentOrgNodesQuery, screenContext.currentOrgProjectsQuery]);
-
-  const selectOrganization = useCallback(
-    (orgId: string) => {
-      sheets.closeOrgSelector();
-      shell.selectOrganization(orgId, { keepNavOpen: true });
-    },
-    [sheets, shell],
-  );
-
-  const openProjectMenu = useCallback(
-    (project: Parameters<ReturnType<typeof useShellSheets>["openProjectMenu"]>[0]) => {
-      sheets.openProjectMenu(project, screenContext.currentOrganizationId ?? null);
-    },
-    [screenContext.currentOrganizationId, sheets],
-  );
-
-  const openWorkspaceMenu = useCallback(
-    (...args: Parameters<ReturnType<typeof useShellSheets>["openWorkspaceMenu"]>) => {
-      sheets.openWorkspaceMenu(...args);
-    },
-    [sheets],
-  );
-
   const drawerPanel: ShellDrawerPanelModel = {
     currentNodes: screenContext.currentNodes,
     currentOrganizationId: screenContext.currentOrganizationId,
@@ -194,7 +112,7 @@ export function useShellScreenModel({
     currentProjects: screenContext.currentProjects,
     isProjectsError: screenContext.currentOrgProjectsQuery.isError,
     isProjectsLoading: screenContext.currentOrgProjectsQuery.isLoading,
-    onOpenProfileControls: navigationCommands.openProfileControls,
+    onOpenProfileControls: openProfileControls,
     onOpenOrganizationSelector: sheets.openOrgSelector,
     onOpenProjectMenu: openProjectMenu,
     onRefreshWorkspaceTree: refreshWorkspaceTreeHandler,

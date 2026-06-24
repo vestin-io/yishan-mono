@@ -79,10 +79,8 @@ function buildHunkLines(ops: DiffOp[]): UnifiedDiffLine[] {
 function buildHunkHeader(hunkOps: DiffOp[]): UnifiedDiffLine {
   const firstOldLine = hunkOps.find((line) => line.oldLineNumber !== null)?.oldLineNumber ?? 0;
   const firstNewLine = hunkOps.find((line) => line.newLineNumber !== null)?.newLineNumber ?? 0;
-  const oldStart =
-    firstOldLine || (hunkOps.find((line) => line.newLineNumber !== null)?.newLineNumber ?? 1) - 1;
-  const newStart =
-    firstNewLine || (hunkOps.find((line) => line.oldLineNumber !== null)?.oldLineNumber ?? 1) - 1;
+  const oldStart = firstOldLine || (hunkOps.find((line) => line.newLineNumber !== null)?.newLineNumber ?? 1) - 1;
+  const newStart = firstNewLine || (hunkOps.find((line) => line.oldLineNumber !== null)?.oldLineNumber ?? 1) - 1;
   const oldLength = hunkOps.filter((line) => line.oldLineNumber !== null).length;
   const newLength = hunkOps.filter((line) => line.newLineNumber !== null).length;
 
@@ -194,11 +192,17 @@ function computeLcsPairs(oldLines: string[], newLines: string[]): Array<[number,
   const table: number[][] = Array.from({ length: rowCount + 1 }, () => new Array(colCount + 1).fill(0));
 
   for (let row = 1; row <= rowCount; row += 1) {
+    const currentRow = table[row];
+    const previousRow = table[row - 1];
+    if (!currentRow || !previousRow) {
+      continue;
+    }
+
     for (let column = 1; column <= colCount; column += 1) {
       if (oldLines[row - 1] === newLines[column - 1]) {
-        table[row]![column] = table[row - 1]![column - 1]! + 1;
+        currentRow[column] = (previousRow[column - 1] ?? 0) + 1;
       } else {
-        table[row]![column] = Math.max(table[row - 1]![column]!, table[row]![column - 1]!);
+        currentRow[column] = Math.max(previousRow[column] ?? 0, currentRow[column - 1] ?? 0);
       }
     }
   }
@@ -207,6 +211,12 @@ function computeLcsPairs(oldLines: string[], newLines: string[]): Array<[number,
   let row = rowCount;
   let column = colCount;
   while (row > 0 && column > 0) {
+    const currentRow = table[row];
+    const previousRow = table[row - 1];
+    if (!currentRow || !previousRow) {
+      break;
+    }
+
     if (oldLines[row - 1] === newLines[column - 1]) {
       pairs.push([row - 1, column - 1]);
       row -= 1;
@@ -214,7 +224,7 @@ function computeLcsPairs(oldLines: string[], newLines: string[]): Array<[number,
       continue;
     }
 
-    if (table[row - 1]![column]! >= table[row]![column - 1]!) {
+    if ((previousRow[column] ?? 0) >= (currentRow[column - 1] ?? 0)) {
       row -= 1;
     } else {
       column -= 1;

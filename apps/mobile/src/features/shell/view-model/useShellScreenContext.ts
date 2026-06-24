@@ -8,14 +8,13 @@ import { useProjectsQuery } from "@/features/projects/queries/useProjectsQuery";
 import { useWorkspaceFilesQuery } from "@/features/workspaces/queries/useWorkspaceFilesQuery";
 import type { Workspace } from "@/features/workspaces/workspaces.types";
 import type { ShellTerminalMessages } from "../hooks/useShellTerminalMessages";
-import { findProjectName, findTerminal } from "../state/shell-selectors";
+import { findProjectName } from "../state/shell-selectors";
 import { getCurrentOrganizationId } from "../state/shell-selectors";
 import type { ShellState } from "../state/useShellState";
 import { workspaceSidebarLabel } from "./shell-labels";
 import {
   filterRecentTerminalsByScope,
   filterTerminalsByWorkspaceIdForNode,
-  readSelectedWorkspaceContext,
   resolveCurrentNodeId,
   resolveSelectedWorkspace,
 } from "./shell-screen-context-domain";
@@ -90,31 +89,6 @@ export function useShellScreenContext({
     [currentNodeId, shell.terminalsByWorkspaceId],
   );
 
-  const selectedWorkspaceContext = useMemo(() => readSelectedWorkspaceContext(shell.selection), [shell.selection]);
-
-  const selectedTerminalId = shell.activeTerminalId;
-
-  const selectedTerminal = useMemo(() => {
-    if (!selectedTerminalId || !selectedWorkspaceContext) return null;
-
-    const allTerminalsForWorkspace = shell.terminalsByWorkspaceId[selectedWorkspaceContext.workspaceId] ?? [];
-    const terminalsForWorkspace = displayedTerminalsByWorkspaceId[selectedWorkspaceContext.workspaceId] ?? [];
-    const recentTerminalsForWorkspace = displayedRecentTerminals.filter(
-      (terminal) => terminal.workspaceId === selectedWorkspaceContext.workspaceId,
-    );
-    return (
-      findTerminal(allTerminalsForWorkspace, selectedTerminalId) ??
-      findTerminal(terminalsForWorkspace, selectedTerminalId) ??
-      findTerminal(recentTerminalsForWorkspace, selectedTerminalId)
-    );
-  }, [
-    displayedRecentTerminals,
-    displayedTerminalsByWorkspaceId,
-    selectedTerminalId,
-    selectedWorkspaceContext,
-    shell.terminalsByWorkspaceId,
-  ]);
-
   const selectedProjectName = useMemo(
     () => findProjectName(currentProjects, shell.selection.kind === "home" ? "" : shell.selection.projectId),
     [currentProjects, shell.selection],
@@ -123,10 +97,10 @@ export function useShellScreenContext({
   const selectedWorkspace = useMemo(
     () =>
       resolveSelectedWorkspace({
-        selectedWorkspaceContext,
+        selectedWorkspaceContext: shell.selectedWorkspaceContext,
         workspacesByProjectId,
       }),
-    [selectedWorkspaceContext, workspacesByProjectId],
+    [shell.selectedWorkspaceContext, workspacesByProjectId],
   );
 
   const selectedWorkspaceLabel = useMemo(() => {
@@ -134,22 +108,22 @@ export function useShellScreenContext({
       return workspaceSidebarLabel(selectedWorkspace, t);
     }
 
-    return selectedTerminal?.subtitle ?? null;
-  }, [selectedTerminal?.subtitle, selectedWorkspace, t]);
+    return shell.selectedWorkspaceLabel;
+  }, [selectedWorkspace, shell.selectedWorkspaceLabel, t]);
 
   const selectedNode = useMemo(() => {
-    const nodeId = selectedTerminal?.nodeId ?? selectedWorkspace?.nodeId;
+    const nodeId = shell.selectedTerminal?.nodeId ?? selectedWorkspace?.nodeId;
     if (!nodeId) return null;
 
     return currentNodes.find((node) => node.id === nodeId) ?? null;
-  }, [currentNodes, selectedTerminal?.nodeId, selectedWorkspace?.nodeId]);
+  }, [currentNodes, shell.selectedTerminal?.nodeId, selectedWorkspace?.nodeId]);
 
   const workspaceFilesQuery = useWorkspaceFilesQuery(
-    selectedWorkspaceContext?.organizationId ?? "",
-    selectedWorkspaceContext?.projectId ?? "",
-    selectedWorkspaceContext?.workspaceId ?? "",
+    shell.selectedWorkspaceContext?.organizationId ?? "",
+    shell.selectedWorkspaceContext?.projectId ?? "",
+    shell.selectedWorkspaceContext?.workspaceId ?? "",
     {
-      enabled: !!selectedWorkspaceContext,
+      enabled: !!shell.selectedWorkspaceContext,
       recursive: false,
     },
   );
@@ -161,6 +135,7 @@ export function useShellScreenContext({
 
   const isShellLoading = organizationsQuery.isLoading || meQuery.isLoading;
   const isShellError = organizationsQuery.isError || meQuery.isError;
+  const selectedTerminal = shell.selectedTerminal;
 
   return {
     currentDraft: terminalMessages.getDraft(selectedTerminal),
@@ -186,9 +161,9 @@ export function useShellScreenContext({
     selectedNode,
     selectedProjectName,
     selectedSelection: shell.selection.kind === "workspace" ? shell.selection : null,
-    selectedTerminal,
+    selectedTerminal: shell.selectedTerminal,
     selectedWorkspace,
-    selectedWorkspaceContext,
+    selectedWorkspaceContext: shell.selectedWorkspaceContext,
     selectedWorkspaceLabel,
     terminalLocationLabel: (terminal: (typeof displayedRecentTerminals)[number], projectName?: string | null) => {
       const name = projectName ?? findProjectName(currentProjects, terminal.projectId);

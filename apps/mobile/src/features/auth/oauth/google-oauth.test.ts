@@ -26,12 +26,14 @@ vi.mock("react-native", () => ({
 }));
 
 let GOOGLE_OAUTH_CALLBACK_PATH: string;
+let getGoogleOAuthClientId: typeof import("./google-oauth").getGoogleOAuthClientId;
 let isGoogleOAuthCallbackPath: typeof import("./google-oauth").isGoogleOAuthCallbackPath;
 let isGoogleOAuthRedirectUrl: typeof import("./google-oauth").isGoogleOAuthRedirectUrl;
 
 beforeAll(async () => {
   const module = await import("./google-oauth");
   GOOGLE_OAUTH_CALLBACK_PATH = module.GOOGLE_OAUTH_CALLBACK_PATH;
+  getGoogleOAuthClientId = module.getGoogleOAuthClientId;
   isGoogleOAuthCallbackPath = module.isGoogleOAuthCallbackPath;
   isGoogleOAuthRedirectUrl = module.isGoogleOAuthRedirectUrl;
 });
@@ -46,5 +48,20 @@ describe("google-oauth", () => {
   it("accepts the canonical redirect url and rejects the legacy callback url", () => {
     expect(isGoogleOAuthRedirectUrl("yishan:/oauth/google/callback?code=code&state=state")).toBe(true);
     expect(isGoogleOAuthRedirectUrl("yishan://auth/callback?code=code&state=state")).toBe(false);
+  });
+
+  it("prefers the new iOS client id env key", () => {
+    process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS = "new-ios-client";
+
+    expect(getGoogleOAuthClientId()).toBe("new-ios-client");
+  });
+
+  it("throws when the iOS client id env key is missing", () => {
+    process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS = undefined;
+    process.env.EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_IOS = undefined;
+
+    expect(() => getGoogleOAuthClientId()).toThrow(
+      "Missing required environment variable: EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS",
+    );
   });
 });

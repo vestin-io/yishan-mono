@@ -1,25 +1,8 @@
 import type { Node } from "@/features/nodes/nodes.types";
 import type { Workspace } from "@/features/workspaces/workspaces.types";
 import { ALL_NODES_SELECTION } from "../state/shell-state-helpers";
-import type { ShellSelection, TerminalItem } from "../state/shell.types";
-
-export type SelectedWorkspaceContext = {
-  organizationId: string;
-  projectId: string;
-  workspaceId: string;
-};
-
-export function readSelectedWorkspaceContext(selection: ShellSelection): SelectedWorkspaceContext | null {
-  if (selection.kind !== "workspace") {
-    return null;
-  }
-
-  return {
-    organizationId: selection.orgId,
-    projectId: selection.projectId,
-    workspaceId: selection.workspaceId,
-  };
-}
+import type { TerminalItem } from "../state/shell.types";
+import type { ShellSelectedWorkspaceContext } from "../state/shellRuntimeAuthority";
 
 export function resolveCurrentNodeId(input: {
   currentNodes: Node[];
@@ -75,7 +58,7 @@ export function filterTerminalsByWorkspaceIdForNode(input: {
 }
 
 export function resolveSelectedWorkspace(input: {
-  selectedWorkspaceContext: SelectedWorkspaceContext | null;
+  selectedWorkspaceContext: ShellSelectedWorkspaceContext | null;
   workspacesByProjectId: Record<string, Workspace[]>;
 }): Workspace | null {
   const { selectedWorkspaceContext } = input;
@@ -88,11 +71,4 @@ export function resolveSelectedWorkspace(input: {
       (workspace) => workspace.id === selectedWorkspaceContext.workspaceId,
     ) ?? null
   );
-}
-
-export function readWorkspaceLabelFromPrimaryTerminal(
-  terminalsByWorkspaceId: Record<string, TerminalItem[]>,
-  workspaceId: string,
-): string | null {
-  return (terminalsByWorkspaceId[workspaceId] ?? [])[0]?.subtitle ?? null;
 }

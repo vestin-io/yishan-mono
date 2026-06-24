@@ -6,6 +6,8 @@ import { useShellNavigationState } from "../hooks/useShellNavigationState";
 import { useShellStoredState } from "../hooks/useShellStoredState";
 import { type ShellParams, toWorkspaceContext } from "./shell-route-state";
 import type { ShellPaneTab, ShellSelection, TerminalItem } from "./shell.types";
+import type { ShellSelectedTerminalWorkspace, ShellSelectedWorkspaceContext } from "./shellRuntimeAuthority";
+import { resolveShellRuntimeAuthority } from "./shellRuntimeAuthority";
 import { useShellPaneState } from "./useShellPaneState";
 import { useShellRouteSelectionState } from "./useShellRouteSelectionState";
 import { useShellStateMaintenance } from "./useShellStateMaintenance";
@@ -35,6 +37,10 @@ export type ShellState = {
   selectOrganization: ReturnType<typeof useShellSelectionActions>["selectOrganization"];
   selection: ShellSelection;
   selectPaneTab: (tabId: string) => void;
+  selectedTerminal: TerminalItem | null;
+  selectedTerminalWorkspace: ShellSelectedTerminalWorkspace | null;
+  selectedWorkspaceContext: ShellSelectedWorkspaceContext | null;
+  selectedWorkspaceLabel: string | null;
   selectWorkspace: ReturnType<typeof useShellSelectionActions>["selectWorkspace"];
   selectedNodeIdByOrganization: Record<string, string>;
   setNavOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -104,6 +110,15 @@ export function useShellState({ isScreenFocused = true }: { isScreenFocused?: bo
       setPendingSelection,
       storedState,
     });
+  const runtimeAuthority = useMemo(
+    () =>
+      resolveShellRuntimeAuthority({
+        activeTerminalId,
+        selection,
+        terminalsByWorkspaceId: storedState.terminalsByWorkspaceId,
+      }),
+    [activeTerminalId, selection, storedState.terminalsByWorkspaceId],
+  );
 
   return {
     activeTerminalId,
@@ -130,6 +145,10 @@ export function useShellState({ isScreenFocused = true }: { isScreenFocused?: bo
     selectOrganization,
     selection,
     selectPaneTab,
+    selectedTerminal: runtimeAuthority.selectedTerminal,
+    selectedTerminalWorkspace: runtimeAuthority.selectedTerminalWorkspace,
+    selectedWorkspaceContext: runtimeAuthority.selectedWorkspaceContext,
+    selectedWorkspaceLabel: runtimeAuthority.selectedWorkspaceLabel,
     selectWorkspace,
     selectedNodeIdByOrganization: storedState.selectedNodeIdByOrganization,
     syncWorkspaceTerminalTabs,
