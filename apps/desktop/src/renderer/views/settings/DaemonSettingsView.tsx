@@ -143,17 +143,16 @@ export function DaemonSettingsView() {
     try {
       const terminalTabs = tabStore.getState().tabs.filter((tab) => tab.kind === "terminal");
       if (terminalTabs.length > 0) {
-        const terminalSessions = new Set<string>();
-        for (const tab of terminalTabs) {
-          const sessionId = tab.data.sessionId?.trim();
-          if (!sessionId) {
-            continue;
-          }
-          terminalSessions.add(sessionId);
-        }
+        const sessionIds = [
+          ...new Set(
+            terminalTabs
+              .map((tab) => (tab.kind === "terminal" ? tab.data.sessionId?.trim() : undefined))
+              .filter((id): id is string => Boolean(id)),
+          ),
+        ];
 
         const closeErrors: string[] = [];
-        for (const sessionId of terminalSessions.values()) {
+        for (const sessionId of sessionIds) {
           try {
             await closeTerminalSession({ sessionId });
           } catch (error) {

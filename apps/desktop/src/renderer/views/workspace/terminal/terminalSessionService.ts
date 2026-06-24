@@ -95,7 +95,7 @@ export function initTerminalSessionLifecycle(tabId: string): void {
 
   // Set up keyboard shortcuts, input forwarding, and title tracking.
   setupKeyboardShortcuts(entry);
-  setupInputForwarding(entry, tabId);
+  setupInputForwarding(entry);
   setupTitleTracking(entry, tabId);
 
   // Kick off session resolution asynchronously.
@@ -236,7 +236,7 @@ function setupKeyboardShortcuts(entry: TerminalRuntimeEntry): void {
   });
 }
 
-function setupInputForwarding(entry: TerminalRuntimeEntry, tabId: string): void {
+function setupInputForwarding(entry: TerminalRuntimeEntry): void {
   entry.terminal.onData((data) => {
     const sessionId = entry.sessionId;
     if (!sessionId) {
