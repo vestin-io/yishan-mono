@@ -437,6 +437,10 @@
             "readable": "Readable column",
             "full": "Full width"
           }
+        },
+        "outlineVisible": {
+          "label": "Show markdown outline",
+          "description": "Display the document outline beside markdown files."
         }
       }
     },

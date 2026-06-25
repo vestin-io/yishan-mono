@@ -415,6 +415,10 @@
             "readable": "易读列宽",
             "full": "全宽"
           }
+        },
+        "outlineVisible": {
+          "label": "显示 Markdown 大纲",
+          "description": "在 Markdown 文件旁显示文档大纲。"
         }
       }
     },
