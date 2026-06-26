@@ -54,6 +54,7 @@ export default function ShellTerminalDomEmulator({
   const onInputRef = useRef(onInput);
   const onResizeRef = useRef(onResize);
   const outputRef = useRef(output);
+  const renderedOutputRef = useRef(output);
   const reportSizeRef = useRef<(() => void) | null>(null);
   const themeRef = useRef(terminalTheme);
   const resizeFrameRef = useRef<number | null>(null);
@@ -79,6 +80,7 @@ export default function ShellTerminalDomEmulator({
     onResizeRef,
     output,
     outputRef,
+    renderedOutputRef,
     reportSizeRef,
     resizeFrameRef,
     resizeRequestToken,

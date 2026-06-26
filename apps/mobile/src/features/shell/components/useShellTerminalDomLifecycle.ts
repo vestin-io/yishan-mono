@@ -2,14 +2,15 @@ import { FitAddon } from "@xterm/addon-fit";
 import { type ITheme, Terminal } from "@xterm/xterm";
 import { type RefObject, useEffect } from "react";
 
+import { mountTerminalOutputRuntime, unmountTerminalOutputRuntime } from "../terminal/terminalOutputRuntimeRegistry";
 import { buildShellTerminalOptions } from "./shell-terminal-dom-emulator-domain";
 import {
+  activateTerminalInputSession,
   attachTerminalTouchScrollFallback,
   blurTerminal,
-  focusTerminal,
   stabilizeTerminalViewport,
+  syncTerminalFromCache,
 } from "./shell-terminal-dom-emulator-runtime";
-import { mountTerminalOutputRuntime, unmountTerminalOutputRuntime } from "../terminal/terminalOutputRuntimeRegistry";
 
 type UseShellTerminalDomLifecycleInput = {
   blurRequestToken: number;
@@ -20,6 +21,7 @@ type UseShellTerminalDomLifecycleInput = {
   onResizeRef: RefObject<(size: { cols: number; rows: number }) => Promise<void> | void>;
   output: string;
   outputRef: RefObject<string>;
+  renderedOutputRef: RefObject<string>;
   reportSizeRef: RefObject<(() => void) | null>;
   resizeFrameRef: RefObject<number | null>;
   resizeRequestToken: number;
@@ -42,6 +44,7 @@ export function useShellTerminalDomLifecycle({
   onResizeRef,
   output,
   outputRef,
+  renderedOutputRef,
   reportSizeRef,
   resizeFrameRef,
   resizeRequestToken,
@@ -107,10 +110,11 @@ export function useShellTerminalDomLifecycle({
       terminal,
       terminalId,
     });
+    renderedOutputRef.current = outputRef.current;
     reportSize();
     focusFrameRef.current = requestAnimationFrame(() => {
       focusFrameRef.current = null;
-      focusTerminal(terminal);
+      activateTerminalInputSession(host, terminal);
     });
 
     return () => {
@@ -142,6 +146,7 @@ export function useShellTerminalDomLifecycle({
     onInputRef,
     onResizeRef,
     outputRef,
+    renderedOutputRef,
     reportSizeRef,
     resizeFrameRef,
     streamKey,
@@ -161,6 +166,17 @@ export function useShellTerminalDomLifecycle({
   }, [terminalRef, terminalTheme]);
 
   useEffect(() => {
+    const terminal = terminalRef.current;
+    if (!terminal) {
+      return;
+    }
+
+    const previousOutput = renderedOutputRef.current;
+    const nextRenderedOutput = syncTerminalFromCache(terminal, previousOutput, output);
+    renderedOutputRef.current = nextRenderedOutput;
+  }, [output, renderedOutputRef, terminalId, terminalRef]);
+
+  useEffect(() => {
     if (blurRequestToken <= 0) {
       return;
     }
@@ -173,6 +189,7 @@ export function useShellTerminalDomLifecycle({
       return;
     }
 
+    const host = hostRef.current;
     reportSizeRef.current?.();
     if (focusFrameRef.current !== null) {
       cancelAnimationFrame(focusFrameRef.current);
@@ -180,9 +197,9 @@ export function useShellTerminalDomLifecycle({
 
     focusFrameRef.current = requestAnimationFrame(() => {
       focusFrameRef.current = null;
-      focusTerminal(terminalRef.current);
+      activateTerminalInputSession(host, terminalRef.current);
     });
-  }, [focusFrameRef, focusRequestToken, reportSizeRef, terminalRef]);
+  }, [focusFrameRef, focusRequestToken, hostRef, reportSizeRef, terminalRef]);
 
   useEffect(() => {
     if (resizeRequestToken <= 0) {

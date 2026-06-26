@@ -74,6 +74,13 @@ export function bindTerminalSessionStartLease(terminalId: string, sessionId: str
 }
 
 /**
+ * Reports whether one terminal id is already bound to the same backend session.
+ */
+export function hasBoundTerminalSessionStartLease(terminalId: string, sessionId: string) {
+  return terminalSessionStartLeaseByTerminalId.get(terminalId) === sessionId;
+}
+
+/**
  * Releases a temporary in-flight start lease when startup fails or aborts
  * before a session is bound.
  */

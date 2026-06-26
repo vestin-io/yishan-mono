@@ -45,12 +45,16 @@ export function useTerminalRuntimeLifecycle({
   terminals: TerminalItem[];
   terminalsById: Record<string, TerminalItem>;
 }) {
+  const clearMeasuredSizeRef = useRef(clearMeasuredSize);
   const clearPendingStartTimeoutRef = useRef(clearPendingStartTimeout);
+  const deleteRuntimeSnapshotRef = useRef(deleteRuntimeSnapshot);
   const detachTransportRef = useRef(detachTransport);
   const getRuntimeTerminalIdsRef = useRef(getRuntimeTerminalIds);
   const getTransportTerminalIdsRef = useRef(getTransportTerminalIds);
 
+  clearMeasuredSizeRef.current = clearMeasuredSize;
   clearPendingStartTimeoutRef.current = clearPendingStartTimeout;
+  deleteRuntimeSnapshotRef.current = deleteRuntimeSnapshot;
   detachTransportRef.current = detachTransport;
   getRuntimeTerminalIdsRef.current = getRuntimeTerminalIds;
   getTransportTerminalIdsRef.current = getTransportTerminalIds;
@@ -105,11 +109,20 @@ export function useTerminalRuntimeLifecycle({
 
   useEffect(
     () => () => {
-      for (const terminalId of getRuntimeTerminalIdsRef.current()) {
+      const runtimeTerminalIds = getRuntimeTerminalIdsRef.current();
+      const transportTerminalIds = getTransportTerminalIdsRef.current();
+
+      for (const terminalId of runtimeTerminalIds) {
         clearPendingStartTimeoutRef.current(terminalId);
       }
-      for (const terminalId of getTransportTerminalIdsRef.current()) {
+
+      for (const terminalId of transportTerminalIds) {
         detachTransportRef.current(terminalId);
+      }
+
+      for (const terminalId of runtimeTerminalIds) {
+        clearMeasuredSizeRef.current(terminalId);
+        deleteRuntimeSnapshotRef.current(terminalId);
       }
     },
     [],

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  activateTerminalInputSession,
   appendTerminalChunk,
   attachTerminalTouchScrollFallback,
   blurTerminal,
@@ -41,6 +42,24 @@ function createEventTarget() {
     },
     tagName: "DIV",
   };
+}
+
+function createHostWithViewportAndTextarea() {
+  const viewport = { ...createEventTarget(), scrollTop: 0 };
+  const helperTextarea = { focus: vi.fn() };
+  const host = {
+    ...createEventTarget(),
+    clientHeight: 320,
+    querySelector(selector?: string) {
+      if (selector === ".xterm-helper-textarea") {
+        return helperTextarea;
+      }
+
+      return viewport;
+    },
+  } as unknown as HTMLElement;
+
+  return { helperTextarea, host, viewport };
 }
 
 describe("shell-terminal-dom-emulator-runtime", () => {
@@ -102,6 +121,16 @@ describe("shell-terminal-dom-emulator-runtime", () => {
     expect(terminal.focus).toHaveBeenCalledTimes(1);
   });
 
+  it("reactivates the xterm helper textarea when restoring the input session", () => {
+    const terminal = createTerminalRuntime();
+    const { helperTextarea, host } = createHostWithViewportAndTextarea();
+
+    activateTerminalInputSession(host, terminal);
+
+    expect(terminal.focus).toHaveBeenCalledTimes(1);
+    expect(helperTextarea.focus).toHaveBeenCalledTimes(1);
+  });
+
   it("blurs the terminal when available", () => {
     const terminal = createTerminalRuntime();
 
@@ -145,14 +174,7 @@ describe("shell-terminal-dom-emulator-runtime", () => {
 
   it("scrolls terminal lines for touch drags when xterm viewport gestures are intercepted", () => {
     const terminal = createTerminalRuntime();
-    const viewport = { ...createEventTarget(), scrollTop: 0 };
-    const host = {
-      ...createEventTarget(),
-      clientHeight: 320,
-      querySelector() {
-        return viewport;
-      },
-    } as unknown as HTMLElement;
+    const { helperTextarea, host, viewport } = createHostWithViewportAndTextarea();
 
     const cleanup = attachTerminalTouchScrollFallback(host, terminal);
 
@@ -172,20 +194,14 @@ describe("shell-terminal-dom-emulator-runtime", () => {
 
     expect(viewport.scrollTop).toBe(0);
     expect(terminal.scrollLines).toHaveBeenCalledWith(2);
+    expect(helperTextarea.focus).toHaveBeenCalledTimes(1);
 
     cleanup();
   });
 
   it("scrolls terminal lines for pointer drags when the webview forwards touch pointers", () => {
     const terminal = createTerminalRuntime();
-    const viewport = { ...createEventTarget(), scrollTop: 0 };
-    const host = {
-      ...createEventTarget(),
-      clientHeight: 320,
-      querySelector() {
-        return viewport;
-      },
-    } as unknown as HTMLElement;
+    const { helperTextarea, host, viewport } = createHostWithViewportAndTextarea();
 
     const cleanup = attachTerminalTouchScrollFallback(host, terminal);
 
@@ -207,6 +223,21 @@ describe("shell-terminal-dom-emulator-runtime", () => {
 
     expect(viewport.scrollTop).toBe(0);
     expect(terminal.scrollLines).toHaveBeenCalledWith(2);
+    expect(helperTextarea.focus).toHaveBeenCalledTimes(1);
+
+    cleanup();
+  });
+
+  it("reactivates the input session for mouse presses in simulator-driven taps", () => {
+    const terminal = createTerminalRuntime();
+    const { helperTextarea, host, viewport } = createHostWithViewportAndTextarea();
+
+    const cleanup = attachTerminalTouchScrollFallback(host, terminal);
+
+    viewport.dispatchEvent(new Event("mousedown", { bubbles: true, cancelable: true }));
+
+    expect(terminal.focus).toHaveBeenCalledTimes(1);
+    expect(helperTextarea.focus).toHaveBeenCalledTimes(1);
 
     cleanup();
   });

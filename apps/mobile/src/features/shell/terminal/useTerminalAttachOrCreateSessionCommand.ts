@@ -13,6 +13,7 @@ import {
   bindTerminalSessionStartLease,
   buildStartWorkspaceTerminalInput,
   buildTerminalLaunchInput,
+  hasBoundTerminalSessionStartLease,
   releaseTerminalSessionStartLease,
   resetTerminalSessionStartLease,
   tryClaimTerminalSessionStartLease,
@@ -92,6 +93,10 @@ export function useTerminalAttachOrCreateSessionCommand({
       let createdSessionId: string | null = null;
 
       try {
+        if (existingSessionId && hasBoundTerminalSessionStartLease(terminal.id, existingSessionId)) {
+          return;
+        }
+
         logMobileDebug("terminal.restore", "attach or create start", {
           existingSessionId,
           hasInitialSize: Boolean(initialSize),

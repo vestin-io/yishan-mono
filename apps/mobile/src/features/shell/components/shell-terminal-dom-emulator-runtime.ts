@@ -11,9 +11,11 @@ export type TerminalWriteRuntime = {
 type FrameScheduler = (callback: FrameRequestCallback) => number;
 type FrameCanceller = (handle: number) => void;
 
-type TerminalTouchScrollRuntime = Pick<TerminalWriteRuntime, "scrollLines"> & {
+type TerminalTouchScrollRuntime = Pick<TerminalWriteRuntime, "focus" | "scrollLines"> & {
   readonly rows?: number;
 };
+
+type TerminalFocusRuntime = Pick<TerminalWriteRuntime, "focus">;
 
 const TERMINAL_TOUCH_SCROLL_TARGET_SELECTORS = [".xterm-viewport", ".xterm-screen", ".xterm-screen canvas"] as const;
 const MIN_TERMINAL_TOUCH_SCROLL_PIXELS = 2;
@@ -97,6 +99,24 @@ export function syncTerminalFromCache(
  */
 export function focusTerminal(terminal: Pick<TerminalWriteRuntime, "focus"> | null) {
   terminal?.focus();
+}
+
+function focusTerminalInputElement(host: ParentNode | null) {
+  const focusTarget = host?.querySelector?.(".xterm-helper-textarea");
+  if (!focusTarget || !("focus" in focusTarget) || typeof focusTarget.focus !== "function") {
+    return;
+  }
+
+  focusTarget.focus();
+}
+
+/**
+ * Reasserts focus on xterm's helper textarea so iOS keeps an active text-input
+ * session for the software keyboard.
+ */
+export function activateTerminalInputSession(host: ParentNode | null, terminal: TerminalFocusRuntime | null) {
+  focusTerminal(terminal);
+  focusTerminalInputElement(host);
 }
 
 /**
@@ -229,6 +249,7 @@ export function attachTerminalTouchScrollFallback(
     }
 
     viewport ??= host.querySelector<HTMLElement>(".xterm-viewport");
+    activateTerminalInputSession(host, terminal);
     lastY = nextY;
     pixelCarry = 0;
     emitDebugOnce("touchstart", "touchstart received", {
@@ -287,6 +308,7 @@ export function attachTerminalTouchScrollFallback(
     }
 
     viewport ??= host.querySelector<HTMLElement>(".xterm-viewport");
+    activateTerminalInputSession(host, terminal);
     activePointerId = event.pointerId;
     lastY = event.clientY;
     pixelCarry = 0;
@@ -294,6 +316,10 @@ export function attachTerminalTouchScrollFallback(
       hasViewport: Boolean(viewport),
       targetTagName: getEventTargetTagName(event.target),
     });
+  };
+
+  const handleMouseDown = () => {
+    activateTerminalInputSession(host, terminal);
   };
 
   const handlePointerMove = (event: PointerEvent) => {
@@ -352,6 +378,7 @@ export function attachTerminalTouchScrollFallback(
     target.addEventListener("pointermove", handlePointerMove, { capture: true, passive: false });
     target.addEventListener("pointerup", resetGesture, true);
     target.addEventListener("pointercancel", resetGesture, true);
+    target.addEventListener("mousedown", handleMouseDown, true);
     attachedTargets.add(target);
   };
 
@@ -368,6 +395,7 @@ export function attachTerminalTouchScrollFallback(
     target.removeEventListener("pointermove", handlePointerMove, true);
     target.removeEventListener("pointerup", resetGesture, true);
     target.removeEventListener("pointercancel", resetGesture, true);
+    target.removeEventListener("mousedown", handleMouseDown, true);
     attachedTargets.delete(target);
   };
 
