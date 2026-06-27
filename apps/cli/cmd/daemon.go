@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -74,6 +75,14 @@ var daemonStatusCmd = &cobra.Command{
 	RunE: statusDaemon,
 }
 
+func daemonReadyTimeout() time.Duration {
+	if strings.TrimSpace(viper.GetString("profile")) == "dev" {
+		return 15 * time.Second
+	}
+
+	return 5 * time.Second
+}
+
 func runDaemon(_ *cobra.Command, _ []string) error {
 	statePath, err := daemon.ResolveStateFilePath(appConfig.ConfigPath)
 	if err != nil {
@@ -133,7 +142,7 @@ func startDaemon(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	state, err = daemon.WaitForReady(statePath, 5*time.Second)
+	state, err = daemon.WaitForReady(statePath, daemonReadyTimeout())
 	if err != nil {
 		return err
 	}
@@ -181,7 +190,7 @@ func restartDaemon(_ *cobra.Command, _ []string) error {
 		},
 		statePath,
 		10*time.Second,
-		5*time.Second,
+		daemonReadyTimeout(),
 	)
 	if err != nil {
 		return err

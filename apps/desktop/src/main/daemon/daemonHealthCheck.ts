@@ -10,8 +10,8 @@ export const DAEMON_HEALTH_RETRY_COUNT = 24;
 export const DAEMON_HEALTH_RETRY_DELAY_MS = 50;
 export const DAEMON_PRECHECK_HEALTH_RETRY_COUNT = 1;
 export const DAEMON_PRECHECK_HEALTH_RETRY_DELAY_MS = 20;
-/** Dev mode uses go run . which compiles from source — need longer timeout for cold build cache. */
-export const DEV_DAEMON_HEALTH_RETRY_COUNT = 200;
+/** Dev mode uses go run . which compiles from source — allow extra time for cold build cache and workspace restore. */
+export const DEV_DAEMON_HEALTH_RETRY_COUNT = 400;
 
 type DaemonState = {
   host: string;
