@@ -2,10 +2,10 @@ import { useCallback } from "react";
 
 import type { AuthStatus } from "@/features/auth";
 import {
-  listWorkspaceTerminalSessions,
-  startWorkspaceTerminal,
-  stopWorkspaceTerminal,
-} from "@/features/workspaces/workspaces.api";
+  listRelayTerminalSessions,
+  startRelayTerminalSession,
+  stopRelayTerminalSession,
+} from "@/features/shell/terminal/relay-terminal-sessions";
 import { getErrorMessage } from "@/helpers/errorHelpers";
 import { logMobileDebug, summarizeDebugError } from "@/lib/debug/mobileDebug";
 import type { TerminalItem, TerminalMessage } from "../state/shell.types";
@@ -85,7 +85,11 @@ export function useTerminalAttachOrCreateSessionCommand({
 
       const stopOrphanedSession = async (sessionId: string) => {
         try {
-          await stopWorkspaceTerminal(accessToken, terminal.orgId, terminal.projectId, terminal.workspaceId, sessionId);
+          await stopRelayTerminalSession({
+            accessToken,
+            nodeId: terminal.nodeId,
+            sessionId,
+          });
         } catch {
           // Ignore cleanup failure once the local lifecycle has already moved on.
         }
@@ -106,15 +110,21 @@ export function useTerminalAttachOrCreateSessionCommand({
 
         const orchestrator = new TerminalSessionOrchestrator({
           listTerminalSessions: (options) =>
-            listWorkspaceTerminalSessions(
+            listRelayTerminalSessions({
               accessToken,
-              terminal.orgId,
-              terminal.projectId,
-              terminal.workspaceId,
-              options,
-            ),
+              includeExited: options?.includeExited,
+              nodeId: terminal.nodeId,
+              workspaceId: terminal.workspaceId,
+            }),
           startTerminalSession: (input) =>
-            startWorkspaceTerminal(accessToken, terminal.orgId, terminal.projectId, terminal.workspaceId, input),
+            startRelayTerminalSession({
+              accessToken,
+              nodeId: terminal.nodeId,
+              request: {
+                ...input,
+                workspaceId: terminal.workspaceId,
+              },
+            }),
         });
 
         const resolvedSession = await orchestrator.attachOrCreateSession({

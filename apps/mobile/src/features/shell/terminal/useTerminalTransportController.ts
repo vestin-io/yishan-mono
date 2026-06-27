@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
 import type { AuthStatus } from "@/features/auth";
-import { buildWorkspaceTerminalWebSocketUrl } from "@/features/workspaces/workspaces.api";
+import { getRelayBaseUrl } from "@/lib/config/env";
 import { logMobileDebug, summarizeDebugError } from "@/lib/debug/mobileDebug";
 import type { TerminalItem, TerminalMessage } from "../state/shell.types";
-import { type TerminalTransport, createWebSocketTerminalTransport } from "./terminal-transport";
+import { createRelayTerminalTransport } from "./relay-terminal-transport";
+import type { TerminalTransport } from "./terminal-transport";
 import {
   type RuntimeSnapshot,
   type TerminalMeasuredSize,
@@ -138,7 +139,13 @@ export function useTerminalTransportController({
       }
 
       detachTransport(terminal.id);
-      const transport = createWebSocketTerminalTransport({
+      const nodeId = terminal.nodeId?.trim();
+      if (!nodeId) {
+        return null;
+      }
+
+      const transport = createRelayTerminalTransport({
+        accessToken: transportAccessToken,
         handlers: {
           onError: (error) => {
             const currentSnapshot = getRuntimeSnapshot(terminal.id);
@@ -162,13 +169,9 @@ export function useTerminalTransportController({
             applyTerminalOutput(terminal, sessionId, snapshotOutput);
           },
         },
-        url: buildWorkspaceTerminalWebSocketUrl(
-          terminal.orgId,
-          terminal.projectId,
-          terminal.workspaceId,
-          sessionId,
-          transportAccessToken,
-        ),
+        nodeId,
+        relayUrl: getRelayBaseUrl(),
+        sessionId,
       });
 
       transportByTerminalIdRef.current[terminal.id] = transport;

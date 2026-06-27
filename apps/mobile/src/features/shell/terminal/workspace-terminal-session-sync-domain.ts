@@ -35,6 +35,50 @@ type ResolveWorkspaceTerminalSessionSyncResetInput = {
 
 const IMPORTED_TERMINAL_ID_PREFIX = "terminal-session-";
 
+function areTerminalSessionsEquivalent(left: TerminalItem["session"], right: TerminalItem["session"]) {
+  if (left === right) {
+    return true;
+  }
+
+  if (!left || !right) {
+    return left === right;
+  }
+
+  return (
+    left.exitedAt === right.exitedAt &&
+    left.paneId === right.paneId &&
+    left.pid === right.pid &&
+    left.sessionId === right.sessionId &&
+    left.startedAt === right.startedAt &&
+    left.status === right.status &&
+    left.tabId === right.tabId &&
+    left.workspaceId === right.workspaceId
+  );
+}
+
+function areTerminalItemsEquivalent(left: TerminalItem, right: TerminalItem) {
+  return (
+    left.agentKind === right.agentKind &&
+    left.cachedOutput === right.cachedOutput &&
+    left.createdAt === right.createdAt &&
+    left.id === right.id &&
+    left.importedFromBackend === right.importedFromBackend &&
+    left.label === right.label &&
+    left.lastMessagePreview === right.lastMessagePreview &&
+    left.launchCommand === right.launchCommand &&
+    left.modelId === right.modelId &&
+    left.nodeId === right.nodeId &&
+    left.orgId === right.orgId &&
+    left.projectId === right.projectId &&
+    areTerminalSessionsEquivalent(left.session, right.session) &&
+    left.status === right.status &&
+    left.subtitle === right.subtitle &&
+    left.updatedAt === right.updatedAt &&
+    left.userRenamed === right.userRenamed &&
+    left.workspaceId === right.workspaceId
+  );
+}
+
 /**
  * Builds the visible label for a backend-imported terminal session.
  */
@@ -153,11 +197,28 @@ export function findMatchingTerminalForWorkspaceSession(
   localTerminals: TerminalItem[],
   session: Pick<WorkspaceTerminalSession, "sessionId" | "tabId">,
 ) {
+  const existingSessionOwner = localTerminals.find((terminal) => terminal.session?.sessionId === session.sessionId);
+  if (existingSessionOwner) {
+    return existingSessionOwner;
+  }
+
+  if (!session.tabId) {
+    return null;
+  }
+
   return (
-    localTerminals.find(
-      (terminal) =>
-        terminal.session?.sessionId === session.sessionId || (!!session.tabId && terminal.id === session.tabId),
-    ) ?? null
+    localTerminals.find((terminal) => {
+      if (terminal.id !== session.tabId) {
+        return false;
+      }
+
+      const boundSessionId = terminal.session?.sessionId?.trim();
+      if (!boundSessionId || boundSessionId === session.sessionId) {
+        return true;
+      }
+
+      return terminal.session?.status !== "running";
+    }) ?? null
   );
 }
 
@@ -190,7 +251,7 @@ export function createSyncedTerminalItem({
 
   const preserveExistingLabel = existingTerminal.userRenamed === true || !isImportedBackendTerminal(existingTerminal);
 
-  return {
+  const mergedTerminal: TerminalItem = {
     ...existingTerminal,
     ...importedTerminal,
     createdAt: existingTerminal.createdAt ?? importedTerminal.createdAt,
@@ -199,6 +260,8 @@ export function createSyncedTerminalItem({
     label: preserveExistingLabel ? existingTerminal.label : importedTerminal.label,
     userRenamed: existingTerminal.userRenamed,
   };
+
+  return areTerminalItemsEquivalent(existingTerminal, mergedTerminal) ? existingTerminal : mergedTerminal;
 }
 
 /**

@@ -1,6 +1,65 @@
 import type { ShellWorkspaceTabState, TerminalItem } from "@/features/shell/state/shell.types";
 import { trimTerminalOutputForCache } from "@/features/shell/state/terminal-output";
 
+function areTerminalSessionsEqual(left: TerminalItem["session"], right: TerminalItem["session"]) {
+  if (left === right) {
+    return true;
+  }
+
+  if (!left || !right) {
+    return left === right;
+  }
+
+  return (
+    left.exitedAt === right.exitedAt &&
+    left.paneId === right.paneId &&
+    left.pid === right.pid &&
+    left.sessionId === right.sessionId &&
+    left.startedAt === right.startedAt &&
+    left.status === right.status &&
+    left.tabId === right.tabId &&
+    left.workspaceId === right.workspaceId
+  );
+}
+
+function areTerminalItemsEqual(left: TerminalItem, right: TerminalItem) {
+  return (
+    left.agentKind === right.agentKind &&
+    left.cachedOutput === right.cachedOutput &&
+    left.createdAt === right.createdAt &&
+    left.id === right.id &&
+    left.importedFromBackend === right.importedFromBackend &&
+    left.label === right.label &&
+    left.lastMessagePreview === right.lastMessagePreview &&
+    left.launchCommand === right.launchCommand &&
+    left.modelId === right.modelId &&
+    left.nodeId === right.nodeId &&
+    left.orgId === right.orgId &&
+    left.projectId === right.projectId &&
+    areTerminalSessionsEqual(left.session, right.session) &&
+    left.status === right.status &&
+    left.subtitle === right.subtitle &&
+    left.updatedAt === right.updatedAt &&
+    left.userRenamed === right.userRenamed &&
+    left.workspaceId === right.workspaceId
+  );
+}
+
+function areTerminalListsEqual(left: TerminalItem[], right: TerminalItem[]) {
+  if (left === right) {
+    return true;
+  }
+
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((terminal, index) => {
+    const nextTerminal = right[index];
+    return !!nextTerminal && areTerminalItemsEqual(terminal, nextTerminal);
+  });
+}
+
 export function mergeStoredTerminalRuntime(
   terminalsByWorkspaceId: Record<string, TerminalItem[]>,
   runtimeByWorkspaceId: Record<
@@ -159,6 +218,11 @@ export function upsertTerminalMap(
 
   const nextTerminals = [...terminals];
   nextTerminals[existingIndex] = merged;
+
+  if (areTerminalItemsEqual(existing, merged)) {
+    return current;
+  }
+
   return {
     ...current,
     [workspaceId]: nextTerminals,
@@ -246,6 +310,10 @@ export function syncTerminalMapForWorkspaceTabs(
     const next = { ...current };
     delete next[input.workspaceId];
     return next;
+  }
+
+  if (areTerminalListsEqual(currentTerminals, nextTerminals)) {
+    return current;
   }
 
   return {

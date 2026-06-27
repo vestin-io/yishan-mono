@@ -183,4 +183,40 @@ describe("workspace-terminal-session-lifecycle-domain", () => {
 
     expect(result.nextTerminalIds).toEqual(["terminal-session-session-1"]);
   });
+
+  it("ignores a stale created event when the tab is already bound to another running session", () => {
+    const result = reconcileWorkspaceTerminalSessionLifecycleEvent({
+      event: {
+        action: "created",
+        pid: 123,
+        sessionId: "session-old",
+        status: "running",
+        tabId: "terminal-local-1",
+        workspaceId: "workspace-1",
+      },
+      localTerminals: [
+        createTerminal({
+          id: "terminal-local-1",
+          label: "New terminal",
+          orgId: "org-1",
+          projectId: "project-1",
+          session: {
+            sessionId: "session-current",
+            status: "running",
+            tabId: "terminal-local-1",
+            workspaceId: "workspace-1",
+          },
+          updatedAt: "2026-06-16T09:00:00.000Z",
+          workspaceId: "workspace-1",
+        }),
+      ],
+      t,
+      workspace,
+      workspaceLabel: "local",
+    });
+
+    expect(result.changed).toBe(false);
+    expect(result.terminalIdsToRemove).toEqual([]);
+    expect(result.terminalsToUpsert).toEqual([]);
+  });
 });

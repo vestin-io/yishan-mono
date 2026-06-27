@@ -1,8 +1,8 @@
 import { useCallback } from "react";
 
-import { stopWorkspaceTerminal } from "@/features/workspaces/workspaces.api";
 import { markClosedBackendSession } from "../state/shell-closed-backend-session-guard";
 import type { TerminalItem } from "../state/shell.types";
+import { stopRelayTerminalSession } from "./relay-terminal-sessions";
 import { resetTerminalRuntimeSnapshot, resetTerminalSessionStartLease } from "./terminal-runtime-session-helpers";
 import type { RuntimeSnapshot } from "./terminal-transport-controller-domain";
 
@@ -54,7 +54,11 @@ export function useTerminalCloseSessionCommand({
       }
 
       try {
-        await stopWorkspaceTerminal(accessToken, terminal.orgId, terminal.projectId, terminal.workspaceId, sessionId);
+        await stopRelayTerminalSession({
+          accessToken,
+          nodeId: terminal.nodeId,
+          sessionId,
+        });
       } catch {
         // Ignore stop failures after the terminal has already been removed locally.
       }

@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { AuthStatus } from "@/features/auth";
-import { listWorkspaceTerminalSessions } from "@/features/workspaces/workspaces.api";
 import type { Workspace } from "@/features/workspaces/workspaces.types";
 import { logMobileDebug } from "@/lib/debug/mobileDebug";
 import { isClosedBackendSessionSuppressed } from "../state/shell-closed-backend-session-guard";
 import type { TerminalItem } from "../state/shell.types";
+import { listRelayTerminalSessions } from "./relay-terminal-sessions";
 import {
   reconcileWorkspaceTerminalSessionSync,
   resolveWorkspaceTerminalSessionSyncReset,
@@ -92,12 +92,11 @@ export function useWorkspaceTerminalSessionSync({
       });
 
       try {
-        const sessions = await listWorkspaceTerminalSessions(
+        const sessions = await listRelayTerminalSessions({
           accessToken,
-          workspace.organizationId,
-          workspace.projectId,
-          workspace.id,
-        );
+          nodeId: workspace.nodeId,
+          workspaceId: workspace.id,
+        });
         logMobileDebug("terminal.sync", "success", {
           sessions: sessions.map((session) => ({
             paneId: session.paneId ?? null,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { syncTerminalMapForWorkspaceTabs } from "./shell-stored-state-helpers";
+import { syncTerminalMapForWorkspaceTabs, upsertTerminalMap } from "./shell-stored-state-helpers";
 import type { ShellWorkspaceTabState, TerminalItem } from "./shell.types";
 
 const WORKSPACE_ID = "workspace-1";
@@ -92,5 +92,68 @@ describe("shell-stored-state-helpers", () => {
     });
 
     expect(next[WORKSPACE_ID]).toBeUndefined();
+  });
+
+  it("keeps the same terminal map reference when an upsert does not change terminal state", () => {
+    const current: Record<string, TerminalItem[]> = {
+      [WORKSPACE_ID]: [
+        {
+          id: "terminal-1",
+          label: "Terminal",
+          orgId: "org-1",
+          projectId: "project-1",
+          session: {
+            sessionId: "session-1",
+            status: "running",
+            tabId: "terminal:terminal-1",
+            workspaceId: WORKSPACE_ID,
+          },
+          updatedAt: "2026-06-20T00:00:00.000Z",
+          workspaceId: WORKSPACE_ID,
+        },
+      ],
+    };
+
+    const next = upsertTerminalMap(current, WORKSPACE_ID, {
+      id: "terminal-1",
+      label: "Terminal",
+      orgId: "org-1",
+      projectId: "project-1",
+      session: {
+        sessionId: "session-1",
+        status: "running",
+        tabId: "terminal:terminal-1",
+        workspaceId: WORKSPACE_ID,
+      },
+      updatedAt: "2026-06-20T00:00:00.000Z",
+      workspaceId: WORKSPACE_ID,
+    });
+
+    expect(next).toBe(current);
+  });
+
+  it("keeps the same tab-synced terminal map reference when projected tabs did not change", () => {
+    const current = syncTerminalMapForWorkspaceTabs(
+      {},
+      {
+        nodeId: "node-1",
+        orgId: "org-1",
+        projectId: "project-1",
+        tabState: createTerminalTabState(),
+        workspaceId: WORKSPACE_ID,
+        workspaceLabel: "base",
+      },
+    );
+
+    const next = syncTerminalMapForWorkspaceTabs(current, {
+      nodeId: "node-1",
+      orgId: "org-1",
+      projectId: "project-1",
+      tabState: createTerminalTabState(),
+      workspaceId: WORKSPACE_ID,
+      workspaceLabel: "base",
+    });
+
+    expect(next).toBe(current);
   });
 });

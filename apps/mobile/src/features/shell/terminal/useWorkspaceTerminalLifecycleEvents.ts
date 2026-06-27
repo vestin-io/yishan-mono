@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { useWorkspaceFrontendEventsStream } from "@/features/workspaces/useWorkspaceFrontendEventsStream";
 import type { WorkspaceFrontendEventsMessage } from "@/features/workspaces/workspace-frontend-events";
@@ -42,6 +42,28 @@ export function useWorkspaceTerminalLifecycleEvents({
   workspace: (Pick<Workspace, "id" | "organizationId" | "projectId"> & { nodeId?: string | null }) | null;
   workspaceLabel: string | null;
 }) {
+  const latestStateRef = useRef({
+    removeTerminal,
+    syncWorkspaceTerminalTabs,
+    t,
+    terminalsByWorkspaceId,
+    upsertTerminal,
+    workspace,
+    workspaceLabel,
+  });
+
+  useEffect(() => {
+    latestStateRef.current = {
+      removeTerminal,
+      syncWorkspaceTerminalTabs,
+      t,
+      terminalsByWorkspaceId,
+      upsertTerminal,
+      workspace,
+      workspaceLabel,
+    };
+  }, [removeTerminal, syncWorkspaceTerminalTabs, t, terminalsByWorkspaceId, upsertTerminal, workspace, workspaceLabel]);
+
   const nodes = useMemo(() => {
     if (!workspace?.nodeId) {
       return [];
@@ -55,65 +77,72 @@ export function useWorkspaceTerminalLifecycleEvents({
         workspaceId: workspace.id,
       },
     ];
-  }, [workspace]);
+  }, [workspace?.id, workspace?.nodeId, workspace?.organizationId, workspace?.projectId]);
 
-  const handleMessage = useCallback(
-    ({ message }: { message: WorkspaceFrontendEventsMessage }) => {
-      if (!workspace) {
-        return;
-      }
+  const handleMessage = useCallback(({ message }: { message: WorkspaceFrontendEventsMessage }) => {
+    const {
+      removeTerminal: currentRemoveTerminal,
+      syncWorkspaceTerminalTabs: currentSyncWorkspaceTerminalTabs,
+      t: currentTranslate,
+      terminalsByWorkspaceId: currentTerminalsByWorkspaceId,
+      upsertTerminal: currentUpsertTerminal,
+      workspace: currentWorkspace,
+      workspaceLabel: currentWorkspaceLabel,
+    } = latestStateRef.current;
 
-      const event = readWorkspaceTerminalSessionLifecycleEvent(message);
-      if (!event || event.workspaceId !== workspace.id) {
-        return;
-      }
-      logMobileDebug("terminal.lifecycle", "event", {
-        action: event.action,
-        paneId: event.paneId ?? null,
-        sessionId: event.sessionId,
-        status: event.status,
-        tabId: event.tabId ?? null,
-        workspaceId: event.workspaceId,
-      });
+    if (!currentWorkspace) {
+      return;
+    }
 
-      const result = reconcileWorkspaceTerminalSessionLifecycleEvent({
-        event,
-        localTerminals: terminalsByWorkspaceId[workspace.id] ?? [],
-        t,
-        workspace,
-        workspaceLabel,
-      });
-      if (!result.changed) {
-        return;
-      }
-      logMobileDebug("terminal.lifecycle", "plan", {
-        nextTerminalIds: result.nextTerminalIds,
-        terminalIdsToRemove: result.terminalIdsToRemove,
-        terminalsToUpsert: result.terminalsToUpsert.map((terminal) => ({
-          id: terminal.id,
-          importedFromBackend: terminal.importedFromBackend === true,
-          label: terminal.label,
-          sessionId: terminal.session?.sessionId ?? null,
-          status: terminal.status ?? null,
-        })),
-        workspaceId: workspace.id,
-      });
+    const event = readWorkspaceTerminalSessionLifecycleEvent(message);
+    if (!event || event.workspaceId !== currentWorkspace.id) {
+      return;
+    }
+    logMobileDebug("terminal.lifecycle", "event", {
+      action: event.action,
+      paneId: event.paneId ?? null,
+      sessionId: event.sessionId,
+      status: event.status,
+      tabId: event.tabId ?? null,
+      workspaceId: event.workspaceId,
+    });
 
-      for (const terminal of result.terminalsToUpsert) {
-        upsertTerminal(workspace.id, terminal);
-      }
-      syncWorkspaceTerminalTabs({
-        terminalIdsToRemove: result.terminalIdsToRemove,
-        terminals: result.terminalsToUpsert,
-        workspace,
-        workspaceLabel,
-      });
-      for (const terminalId of result.terminalIdsToRemove) {
-        removeTerminal(workspace.id, terminalId);
-      }
-    },
-    [removeTerminal, syncWorkspaceTerminalTabs, t, terminalsByWorkspaceId, upsertTerminal, workspace, workspaceLabel],
-  );
+    const result = reconcileWorkspaceTerminalSessionLifecycleEvent({
+      event,
+      localTerminals: currentTerminalsByWorkspaceId[currentWorkspace.id] ?? [],
+      t: currentTranslate,
+      workspace: currentWorkspace,
+      workspaceLabel: currentWorkspaceLabel,
+    });
+    if (!result.changed) {
+      return;
+    }
+    logMobileDebug("terminal.lifecycle", "plan", {
+      nextTerminalIds: result.nextTerminalIds,
+      terminalIdsToRemove: result.terminalIdsToRemove,
+      terminalsToUpsert: result.terminalsToUpsert.map((terminal) => ({
+        id: terminal.id,
+        importedFromBackend: terminal.importedFromBackend === true,
+        label: terminal.label,
+        sessionId: terminal.session?.sessionId ?? null,
+        status: terminal.status ?? null,
+      })),
+      workspaceId: currentWorkspace.id,
+    });
+
+    for (const terminal of result.terminalsToUpsert) {
+      currentUpsertTerminal(currentWorkspace.id, terminal);
+    }
+    currentSyncWorkspaceTerminalTabs({
+      terminalIdsToRemove: result.terminalIdsToRemove,
+      terminals: result.terminalsToUpsert,
+      workspace: currentWorkspace,
+      workspaceLabel: currentWorkspaceLabel,
+    });
+    for (const terminalId of result.terminalIdsToRemove) {
+      currentRemoveTerminal(currentWorkspace.id, terminalId);
+    }
+  }, []);
 
   useWorkspaceFrontendEventsStream({
     accessToken,

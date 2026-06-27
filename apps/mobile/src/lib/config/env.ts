@@ -13,3 +13,7 @@ function required(name: string, value: string | undefined): string {
 export function getApiBaseUrl(): string {
   return required("EXPO_PUBLIC_API_BASE_URL", process.env.EXPO_PUBLIC_API_BASE_URL);
 }
+
+export function getRelayBaseUrl(): string {
+  return required("EXPO_PUBLIC_RELAY_URL", process.env.EXPO_PUBLIC_RELAY_URL);
+}

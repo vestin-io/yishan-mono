@@ -406,12 +406,17 @@ func (m *SessionManager) SendNotificationWithError(nodeID, method string, params
 	return nil
 }
 
-// SendOrgNotification sends a JSON-RPC notification to every connected node in one organization.
-func (m *SessionManager) SendOrgNotification(organizationID string, method string, params any) int {
+func (m *SessionManager) collectConnectedOrganizationSessions(
+	organizationID string,
+	excludedNodeID string,
+) []*NodeSession {
 	m.mu.RLock()
 	sessions := make([]*NodeSession, 0, len(m.sessions))
 	for _, session := range m.sessions {
 		if !session.isConnected() {
+			continue
+		}
+		if excludedNodeID != "" && session.Identity.NodeID == excludedNodeID {
 			continue
 		}
 		for _, sessionOrganizationID := range session.Identity.OrganizationIDs {
@@ -423,6 +428,15 @@ func (m *SessionManager) SendOrgNotification(organizationID string, method strin
 	}
 	m.mu.RUnlock()
 
+	return sessions
+}
+
+func sendOrgNotificationToSessions(
+	sessions []*NodeSession,
+	organizationID string,
+	method string,
+	params any,
+) int {
 	notified := 0
 	for _, session := range sessions {
 		if err := session.SendNotification(method, params); err == nil {
@@ -435,5 +449,32 @@ func (m *SessionManager) SendOrgNotification(organizationID string, method strin
 				Msg("send org notification failed")
 		}
 	}
+
 	return notified
+}
+
+// SendOrgNotification sends a JSON-RPC notification to every connected node in one organization.
+func (m *SessionManager) SendOrgNotification(organizationID string, method string, params any) int {
+	return sendOrgNotificationToSessions(
+		m.collectConnectedOrganizationSessions(organizationID, ""),
+		organizationID,
+		method,
+		params,
+	)
+}
+
+// SendOrgNotificationExceptNode sends a JSON-RPC notification to every connected
+// node in one organization except the explicitly excluded node.
+func (m *SessionManager) SendOrgNotificationExceptNode(
+	organizationID string,
+	excludedNodeID string,
+	method string,
+	params any,
+) int {
+	return sendOrgNotificationToSessions(
+		m.collectConnectedOrganizationSessions(organizationID, excludedNodeID),
+		organizationID,
+		method,
+		params,
+	)
 }

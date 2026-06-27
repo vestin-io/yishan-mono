@@ -95,6 +95,25 @@ export function reconcileWorkspaceTerminalSessionLifecycleEvent(input: {
   workspace: SyncWorkspaceRef;
   workspaceLabel: string | null;
 }): ReconcileWorkspaceTerminalSessionLifecycleEventResult {
+  const staleRunningTabOwner =
+    input.event.action === "created" && input.event.tabId
+      ? (input.localTerminals.find(
+          (terminal) =>
+            terminal.id === input.event.tabId &&
+            terminal.session?.sessionId &&
+            terminal.session.sessionId !== input.event.sessionId &&
+            terminal.session.status === "running",
+        ) ?? null)
+      : null;
+  if (staleRunningTabOwner) {
+    return {
+      changed: false,
+      nextTerminalIds: input.localTerminals.map((terminal) => terminal.id),
+      terminalIdsToRemove: [],
+      terminalsToUpsert: [],
+    };
+  }
+
   if (input.event.action === "destroyed") {
     const terminalToRemove =
       input.localTerminals.find((terminal) => terminal.session?.sessionId === input.event.sessionId) ?? null;
@@ -128,6 +147,15 @@ export function reconcileWorkspaceTerminalSessionLifecycleEvent(input: {
   });
 
   if (existingTerminal) {
+    if (syncedTerminal === existingTerminal) {
+      return {
+        changed: false,
+        nextTerminalIds: input.localTerminals.map((terminal) => terminal.id),
+        terminalIdsToRemove: [],
+        terminalsToUpsert: [],
+      };
+    }
+
     return {
       changed: true,
       nextTerminalIds: input.localTerminals.map((terminal) => terminal.id),
