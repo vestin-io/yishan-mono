@@ -215,7 +215,7 @@ export function attachTerminalTouchScrollFallback(
   host: HTMLElement,
   terminal: TerminalTouchScrollRuntime | null,
   defaultLineHeight = 16,
-  onTapDismissInputSession?: (() => void) | null,
+  onTapInputSession?: ((inputSessionActive: boolean) => void) | null,
 ) {
   if (!terminal) {
     return () => {};
@@ -359,11 +359,19 @@ export function attachTerminalTouchScrollFallback(
   };
 
   const finishGesture = () => {
-    const shouldBlurFromTap = gestureScrollMode !== "fallback_active" && gestureTravelPixels <= TAP_MAX_MOVEMENT_PX;
+    if (lastY === null && activePointerId === null) {
+      return;
+    }
+
+    const shouldHandleTap = gestureScrollMode !== "fallback_active" && gestureTravelPixels <= TAP_MAX_MOVEMENT_PX;
     const shouldStartInertia = gestureScrollMode === "fallback_active";
-    if (shouldBlurFromTap && hasActiveTerminalInputSession(host)) {
-      onTapDismissInputSession?.();
-      blurTerminal(terminal);
+    if (shouldHandleTap) {
+      const inputSessionActive = hasActiveTerminalInputSession(host);
+      if (onTapInputSession) {
+        onTapInputSession(inputSessionActive);
+      } else if (inputSessionActive) {
+        blurTerminal(terminal);
+      }
     }
     resetGesture();
     if (shouldStartInertia) {

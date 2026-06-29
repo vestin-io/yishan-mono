@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   activateTerminalInputSession,
@@ -10,6 +10,8 @@ import {
   stabilizeTerminalViewport,
   syncTerminalFromCache,
 } from "./shell-terminal-dom-emulator-runtime";
+
+const originalDocument = globalThis.document;
 
 function createTerminalRuntime() {
   return {
@@ -118,6 +120,14 @@ function createHostWithoutViewport() {
 }
 
 describe("shell-terminal-dom-emulator-runtime", () => {
+  afterEach(() => {
+    Object.defineProperty(globalThis, "document", {
+      configurable: true,
+      value: originalDocument,
+      writable: true,
+    });
+  });
+
   it("appends terminal chunks when text is present", () => {
     const terminal = createTerminalRuntime();
 
@@ -328,6 +338,96 @@ describe("shell-terminal-dom-emulator-runtime", () => {
     expect(viewport.scrollTop).toBe(0);
     expect(terminal.scrollLines).not.toHaveBeenCalled();
     expect(secondTouchMoveEvent.defaultPrevented).toBe(true);
+
+    cleanup();
+  });
+
+  it("reports a tap without an active input session so the pane can show the keyboard", () => {
+    const terminal = createTerminalRuntime();
+    const { host } = createHostWithViewportAndTextarea();
+    const onTapInputSession = vi.fn();
+
+    const cleanup = attachTerminalTouchScrollFallback(host, terminal, undefined, onTapInputSession);
+
+    const touchStartEvent = new Event("touchstart", { bubbles: true, cancelable: true });
+    Object.defineProperty(touchStartEvent, "touches", {
+      configurable: true,
+      value: [{ clientY: 140 }],
+    });
+    const touchEndEvent = new Event("touchend", { bubbles: true, cancelable: true });
+
+    host.dispatchEvent(touchStartEvent);
+    host.dispatchEvent(touchEndEvent);
+
+    expect(onTapInputSession).toHaveBeenCalledWith(false);
+    expect(terminal.blur).not.toHaveBeenCalled();
+
+    cleanup();
+  });
+
+  it("reports a tap with an active input session so the pane can dismiss the keyboard", () => {
+    const terminal = createTerminalRuntime();
+    const { helperTextarea, host } = createHostWithViewportAndTextarea();
+    const onTapInputSession = vi.fn();
+
+    Object.defineProperty(globalThis, "document", {
+      configurable: true,
+      value: {
+        activeElement: helperTextarea,
+      },
+      writable: true,
+    });
+
+    const cleanup = attachTerminalTouchScrollFallback(host, terminal, undefined, onTapInputSession);
+
+    const touchStartEvent = new Event("touchstart", { bubbles: true, cancelable: true });
+    Object.defineProperty(touchStartEvent, "touches", {
+      configurable: true,
+      value: [{ clientY: 140 }],
+    });
+    const touchEndEvent = new Event("touchend", { bubbles: true, cancelable: true });
+
+    host.dispatchEvent(touchStartEvent);
+    host.dispatchEvent(touchEndEvent);
+
+    expect(onTapInputSession).toHaveBeenCalledWith(true);
+    expect(terminal.blur).not.toHaveBeenCalled();
+
+    cleanup();
+  });
+
+  it("does not treat a drag gesture as a tap that would reopen the keyboard", () => {
+    const terminal = createTerminalRuntime();
+    const { host } = createHostWithViewportAndTextarea();
+    const onTapInputSession = vi.fn();
+
+    const cleanup = attachTerminalTouchScrollFallback(host, terminal, undefined, onTapInputSession);
+
+    const touchStartEvent = new Event("touchstart", { bubbles: true, cancelable: true });
+    Object.defineProperty(touchStartEvent, "touches", {
+      configurable: true,
+      value: [{ clientY: 200 }],
+    });
+    const touchMoveEvent = new Event("touchmove", { bubbles: true, cancelable: true });
+    Object.defineProperty(touchMoveEvent, "touches", {
+      configurable: true,
+      value: [{ clientY: 160 }],
+    });
+    const secondTouchMoveEvent = new Event("touchmove", { bubbles: true, cancelable: true });
+    Object.defineProperty(secondTouchMoveEvent, "touches", {
+      configurable: true,
+      value: [{ clientY: 120 }],
+    });
+    const touchEndEvent = new Event("touchend", { bubbles: true, cancelable: true });
+    const duplicateTouchEndEvent = new Event("touchend", { bubbles: true, cancelable: true });
+
+    host.dispatchEvent(touchStartEvent);
+    host.dispatchEvent(touchMoveEvent);
+    host.dispatchEvent(secondTouchMoveEvent);
+    host.dispatchEvent(touchEndEvent);
+    host.dispatchEvent(duplicateTouchEndEvent);
+
+    expect(onTapInputSession).not.toHaveBeenCalled();
 
     cleanup();
   });

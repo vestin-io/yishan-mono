@@ -77,6 +77,17 @@ export function ShellTerminalXtermPane({
     onDismissKeyboard();
   };
 
+  const handleTerminalTapInputSession = (inputSessionActive: boolean) => {
+    if (inputSessionActive || keyboardVisible) {
+      dismissTerminalKeyboard();
+      return;
+    }
+
+    if (!isComposerDisabled) {
+      focusNativeKeyboardInput();
+    }
+  };
+
   const resetNativeKeyboardInput = () => {
     nativeKeyboardInputValueRef.current = "";
     setNativeKeyboardInputValue("");
@@ -98,7 +109,7 @@ export function ShellTerminalXtermPane({
           dom={terminalDomProps}
           ref={terminalDomRef}
           onInput={async (data) => onTerminalInput(data)}
-          onTapDismissKeyboard={dismissTerminalKeyboard}
+          onTapInputSession={handleTerminalTapInputSession}
           onResize={async (size) => onTerminalResize(size)}
           output={terminalOutput}
           resizeRequestToken={resizeRequestToken}

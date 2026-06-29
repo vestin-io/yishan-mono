@@ -17,7 +17,7 @@ type ShellTerminalDomEmulatorProps = {
   blurRequestToken?: number;
   dom?: DOMProps;
   onInput: (data: string) => Promise<void> | void;
-  onTapDismissKeyboard?: (() => void) | null;
+  onTapInputSession?: ((inputSessionActive: boolean) => void) | null;
   onResize: (size: { cols: number; rows: number }) => Promise<void> | void;
   output?: string;
   resizeRequestToken?: number;
@@ -43,7 +43,7 @@ const ShellTerminalDomEmulator = forwardRef<ShellTerminalDomEmulatorHandle, Shel
     {
       blurRequestToken = 0,
       onInput,
-      onTapDismissKeyboard,
+      onTapInputSession,
       onResize,
       output = "",
       resizeRequestToken = 0,
@@ -57,7 +57,7 @@ const ShellTerminalDomEmulator = forwardRef<ShellTerminalDomEmulatorHandle, Shel
     const hostRef = useRef<HTMLDivElement | null>(null);
     const terminalRef = useRef<Terminal | null>(null);
     const onInputRef = useRef(onInput);
-    const onTapDismissKeyboardRef = useRef(onTapDismissKeyboard);
+    const onTapInputSessionRef = useRef(onTapInputSession);
     const onResizeRef = useRef(onResize);
     const outputRef = useRef(output);
     const renderedOutputRef = useRef(output);
@@ -66,7 +66,7 @@ const ShellTerminalDomEmulator = forwardRef<ShellTerminalDomEmulatorHandle, Shel
     const resizeFrameRef = useRef<number | null>(null);
 
     onInputRef.current = onInput;
-    onTapDismissKeyboardRef.current = onTapDismissKeyboard;
+    onTapInputSessionRef.current = onTapInputSession;
     onResizeRef.current = onResize;
     outputRef.current = output;
     themeRef.current = terminalTheme;
@@ -85,7 +85,7 @@ const ShellTerminalDomEmulator = forwardRef<ShellTerminalDomEmulatorHandle, Shel
       blurRequestToken,
       hostRef,
       onInputRef,
-      onTapDismissKeyboardRef,
+      onTapInputSessionRef,
       onResizeRef,
       output,
       outputRef,

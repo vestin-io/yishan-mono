@@ -15,7 +15,7 @@ type UseShellTerminalDomLifecycleInput = {
   blurRequestToken: number;
   hostRef: RefObject<HTMLDivElement | null>;
   onInputRef: RefObject<(data: string) => Promise<void> | void>;
-  onTapDismissKeyboardRef: RefObject<(() => void) | null | undefined>;
+  onTapInputSessionRef: RefObject<((inputSessionActive: boolean) => void) | null | undefined>;
   onResizeRef: RefObject<(size: { cols: number; rows: number }) => Promise<void> | void>;
   output: string;
   outputRef: RefObject<string>;
@@ -37,7 +37,7 @@ export function useShellTerminalDomLifecycle({
   blurRequestToken,
   hostRef,
   onInputRef,
-  onTapDismissKeyboardRef,
+  onTapInputSessionRef,
   onResizeRef,
   output,
   outputRef,
@@ -71,8 +71,8 @@ export function useShellTerminalDomLifecycle({
     terminal.loadAddon(fitAddon);
     terminal.open(host);
     terminalRef.current = terminal;
-    detachTouchScrollFallback = attachTerminalTouchScrollFallback(host, terminal, undefined, () => {
-      onTapDismissKeyboardRef.current?.();
+    detachTouchScrollFallback = attachTerminalTouchScrollFallback(host, terminal, undefined, (inputSessionActive) => {
+      onTapInputSessionRef.current?.(inputSessionActive);
     });
 
     const runLayoutPass = () => {
@@ -133,7 +133,7 @@ export function useShellTerminalDomLifecycle({
   }, [
     hostRef,
     onInputRef,
-    onTapDismissKeyboardRef,
+    onTapInputSessionRef,
     onResizeRef,
     outputRef,
     renderedOutputRef,
