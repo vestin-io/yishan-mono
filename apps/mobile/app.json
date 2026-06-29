@@ -8,7 +8,16 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "icon": "./src/assets/yishan-app-icon.png",
-    "plugins": ["expo-notifications"],
+    "plugins": [
+      "expo-notifications",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Allow Yishan to use the camera for terminal image uploads.",
+          "photosPermission": "Allow Yishan to access your photos for terminal image uploads."
+        }
+      ]
+    ],
     "experiments": {
       "typedRoutes": true
     },

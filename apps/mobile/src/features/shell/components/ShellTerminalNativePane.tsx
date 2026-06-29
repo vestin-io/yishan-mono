@@ -1,11 +1,16 @@
+import { useCallback, useEffect, useRef } from "react";
 import { Platform, ScrollView, View } from "react-native";
-import { Text, XStack, YStack, useTheme } from "tamagui";
+import { Text, XStack, YStack } from "tamagui";
 
 import { PaneBody } from "@/components/ui/PaneBody";
-import { MOBILE_UI_TOKENS } from "@/components/ui/ui-tokens";
 import type { TerminalItem, TerminalMessage } from "../state/shell.types";
 import { SessionStatusIndicator } from "./SessionStatusIndicator";
 import { ShellMessageTimeline } from "./ShellMessageTimeline";
+import {
+  buildNativeTerminalOutputSurfaceStyle,
+  buildNativeTerminalScrollContentStyle,
+  buildNativeTerminalTextStyle,
+} from "./shell-terminal-native-pane-domain";
 
 type ShellTerminalNativePaneProps = {
   displayOutput: string;
@@ -24,15 +29,19 @@ export function ShellTerminalNativePane({
   selectedTerminal,
 }: ShellTerminalNativePaneProps) {
   return (
-    <PaneBody gap={12} style={{ flex: 1, paddingBottom: 16, paddingTop: 16 }}>
+    <View style={{ flex: 1, minHeight: 0 }}>
       <ShellTerminalTextOutput
         emptyDescription={emptyDescription}
         emptyStatusLabel={emptyStatusLabel}
         output={displayOutput}
         selectedTerminal={selectedTerminal}
       />
-      {messages.length > 0 ? <ShellMessageTimeline messages={messages} /> : null}
-    </PaneBody>
+      {messages.length > 0 ? (
+        <PaneBody gap={12} style={{ flexGrow: 0, flexShrink: 0, paddingTop: 16 }}>
+          <ShellMessageTimeline messages={messages} />
+        </PaneBody>
+      ) : null}
+    </View>
   );
 }
 
@@ -49,33 +58,40 @@ function ShellTerminalTextOutput({
   output,
   selectedTerminal,
 }: ShellTerminalTextOutputProps) {
-  const theme = useTheme();
+  const scrollViewRef = useRef<ScrollView | null>(null);
+  const shouldAutoScrollRef = useRef(false);
+
+  const scrollToLatestOutput = useCallback(() => {
+    scrollViewRef.current?.scrollToEnd({ animated: false });
+  }, []);
+
+  useEffect(() => {
+    if (!output) {
+      return;
+    }
+
+    shouldAutoScrollRef.current = true;
+  }, [output]);
 
   return (
-    <View
-      style={{
-        borderColor: theme.gray5.val,
-        borderRadius: MOBILE_UI_TOKENS.radius.surface,
-        borderWidth: 1,
-        flex: 1,
-        overflow: "hidden",
-      }}
-    >
+    <View style={buildNativeTerminalOutputSurfaceStyle()}>
       <ScrollView
+        ref={scrollViewRef}
         keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 14, paddingVertical: 12 }}
+        onContentSizeChange={() => {
+          if (!shouldAutoScrollRef.current) {
+            return;
+          }
+
+          shouldAutoScrollRef.current = false;
+          scrollToLatestOutput();
+        }}
+        contentContainerStyle={buildNativeTerminalScrollContentStyle()}
         style={{ flex: 1 }}
       >
         {output ? (
-          <Text
-            color="$color12"
-            fontSize={15}
-            style={{
-              fontFamily: Platform.select({ android: "monospace", default: "Menlo", ios: "Menlo" }),
-              lineHeight: 20,
-            }}
-          >
+          <Text color="$color12" style={buildNativeTerminalTextStyle(Platform.OS)}>
             {output}
           </Text>
         ) : (

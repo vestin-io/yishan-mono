@@ -40,12 +40,17 @@ export function useAuthSessionRuntime() {
     [commitAuthenticatedSessionState],
   );
 
-  const clearSessionState = useCallback(async () => {
+  const clearSessionState = useCallback(async (options?: { resetShellState?: boolean }) => {
     sessionRef.current = null;
     setSession(null);
     setStatus("signed-out");
     queryClient.clear();
-    await Promise.all([clearStoredSession(), resetShellStoredStateRuntime()]);
+    const persistenceResetTasks = [clearStoredSession()];
+    if (options?.resetShellState === true) {
+      persistenceResetTasks.push(resetShellStoredStateRuntime());
+    }
+
+    await Promise.all(persistenceResetTasks);
   }, []);
 
   const bootstrap = useCallback(async () => {
@@ -70,7 +75,7 @@ export function useAuthSessionRuntime() {
         normalizeStoredSession(toStoredSession(await requestSessionRefresh(refreshToken))),
       commitSession: async (nextSession) => {
         if (!nextSession) {
-          await clearSessionState();
+          await clearSessionState({ resetShellState: false });
           return;
         }
 
@@ -86,7 +91,7 @@ export function useAuthSessionRuntime() {
   const signOut = useCallback(async () => {
     const current = sessionRef.current;
 
-    await clearSessionState();
+    await clearSessionState({ resetShellState: true });
 
     if (current?.refreshToken) {
       try {

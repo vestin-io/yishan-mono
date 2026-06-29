@@ -1,5 +1,14 @@
 import { ArrowUp, Plus } from "@tamagui/lucide-icons";
-import type { ReactNode } from "react";
+import {
+  type ElementRef,
+  type ReactNode,
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import { Pressable, View } from "react-native";
 import { TextArea, useTheme } from "tamagui";
 
@@ -12,71 +21,145 @@ import {
 } from "@/features/shell/state/shell.constants";
 import { getSessionComposerLayout } from "./session-composer-domain";
 
-type SessionComposerProps = {
-  draft: string;
-  onDraftChange: (value: string) => void;
-  onSend: () => void;
-  sendDisabled?: boolean;
+const COMPACT_COMPOSER_MIN_HEIGHT = 44;
+const COMPACT_COMPOSER_RADIUS = 16;
+const COMPACT_COMPOSER_HORIZONTAL_PADDING = 10;
+const COMPACT_COMPOSER_VERTICAL_PADDING = 6;
+const COMPACT_COMPOSER_GAP = 6;
+const COMPACT_COMPOSER_FONT_SIZE = 16;
+const COMPACT_COMPOSER_MAX_HEIGHT_OFFSET = 12;
+const COMPACT_COMPOSER_SEND_BUTTON_SIZE = 28;
+
+/**
+ * Exposes imperative focus controls for the native terminal composer input.
+ */
+export type SessionComposerHandle = {
+  blur: () => void;
+  focus: () => void;
 };
 
-export function SessionComposer({ draft, onDraftChange, onSend, sendDisabled = false }: SessionComposerProps) {
+type SessionComposerProps = {
+  compact?: boolean;
+  draft: string;
+  onDraftChange: (value: string) => void;
+  onSend: (draft: string) => void;
+  sendDisabled?: boolean;
+  showLeadingAction?: boolean;
+};
+
+export const SessionComposer = forwardRef<SessionComposerHandle, SessionComposerProps>(function SessionComposer(
+  { compact = false, draft, onDraftChange, onSend, sendDisabled = false, showLeadingAction = true },
+  ref,
+) {
   const { t } = useAppLanguage();
   const theme = useTheme();
-  const { composerLineCount, composerTextHeight, hasDraft, isSingleLineComposer } = getSessionComposerLayout(draft);
+  const [composerDraft, setComposerDraft] = useState(draft);
+  const composerInputRef = useRef<ElementRef<typeof TextArea> | null>(null);
+
+  useEffect(() => {
+    setComposerDraft(draft);
+  }, [draft]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      blur: () => {
+        composerInputRef.current?.blur();
+      },
+      focus: () => {
+        composerInputRef.current?.focus();
+      },
+    }),
+    [],
+  );
+
+  const handleComposerDraftChange = useCallback(
+    (value: string) => {
+      setComposerDraft(value);
+      onDraftChange(value);
+    },
+    [onDraftChange],
+  );
+
+  const handleSendPress = useCallback(() => {
+    if (!composerDraft.trim()) {
+      return;
+    }
+
+    setComposerDraft("");
+    onDraftChange("");
+    onSend(composerDraft);
+  }, [composerDraft, onDraftChange, onSend]);
+
+  const { composerLineCount, composerTextHeight, hasDraft, isSingleLineComposer } =
+    getSessionComposerLayout(composerDraft);
+  const composerMinHeight = compact ? COMPACT_COMPOSER_MIN_HEIGHT : COMPOSER_MIN_HEIGHT;
+  const composerRadius = compact ? COMPACT_COMPOSER_RADIUS : 20;
+  const composerGap = compact ? COMPACT_COMPOSER_GAP : 8;
+  const composerHorizontalPadding = compact ? COMPACT_COMPOSER_HORIZONTAL_PADDING : 12;
+  const composerVerticalPadding = compact ? COMPACT_COMPOSER_VERTICAL_PADDING : 8;
+  const composerFontSize = compact ? COMPACT_COMPOSER_FONT_SIZE : 18;
+  const composerTextMaxHeight = compact
+    ? COMPOSER_MAX_HEIGHT - COMPACT_COMPOSER_MAX_HEIGHT_OFFSET
+    : COMPOSER_MAX_HEIGHT - 16;
+  const sendButtonSize = compact ? COMPACT_COMPOSER_SEND_BUTTON_SIZE : 32;
 
   return (
     <View
       style={{
         alignItems: isSingleLineComposer ? "center" : "flex-end",
         borderColor: theme.gray5.val,
-        borderRadius: 20,
+        borderRadius: composerRadius,
         borderWidth: 1,
         flexDirection: "row",
-        gap: 8,
-        minHeight: COMPOSER_MIN_HEIGHT,
-        paddingHorizontal: 12,
-        paddingVertical: 8,
+        gap: composerGap,
+        minHeight: composerMinHeight,
+        paddingHorizontal: composerHorizontalPadding,
+        paddingVertical: composerVerticalPadding,
       }}
     >
-      <IconActionButton
-        accessibilityLabel={t("shell.attach")}
-        disabled={sendDisabled}
-        icon={<Plus color="$gray11" size={18} />}
-      />
+      {showLeadingAction ? (
+        <IconActionButton
+          accessibilityLabel={t("shell.attach")}
+          disabled={sendDisabled}
+          icon={<Plus color="$gray11" size={18} />}
+        />
+      ) : null}
       <TextArea
+        ref={composerInputRef}
         unstyled
         multiline
-        onChangeText={onDraftChange}
+        onChangeText={handleComposerDraftChange}
         placeholder={t("shell.terminalInputPlaceholder")}
         scrollEnabled={composerLineCount >= COMPOSER_MAX_LINES}
         style={{
           color: theme.color12.val,
           flex: 1,
-          fontSize: 18,
+          fontSize: composerFontSize,
           height: composerTextHeight,
           lineHeight: COMPOSER_LINE_HEIGHT,
-          maxHeight: COMPOSER_MAX_HEIGHT - 16,
+          maxHeight: composerTextMaxHeight,
           minHeight: COMPOSER_LINE_HEIGHT,
           paddingBottom: 0,
           paddingTop: 0,
           textAlignVertical: isSingleLineComposer ? "center" : "top",
         }}
-        value={draft}
+        value={composerDraft}
       />
       {hasDraft ? (
         sendDisabled ? (
           <View style={{ opacity: 0.4 }}>
-            <ComposerSendButton />
+            <ComposerSendButton size={sendButtonSize} />
           </View>
         ) : (
-          <ComposerSendButton onPress={onSend} />
+          <ComposerSendButton onPress={handleSendPress} size={sendButtonSize} />
         )
       ) : null}
     </View>
   );
-}
+});
 
-function ComposerSendButton({ onPress }: { onPress?: () => void }) {
+function ComposerSendButton({ onPress, size = 32 }: { onPress?: () => void; size?: number }) {
   const { t } = useAppLanguage();
   const theme = useTheme();
   const disabled = !onPress;
@@ -91,10 +174,10 @@ function ComposerSendButton({ onPress }: { onPress?: () => void }) {
         alignItems: "center",
         backgroundColor: theme.color12.val,
         borderRadius: 999,
-        height: 32,
+        height: size,
         justifyContent: "center",
         opacity: disabled ? 0.5 : pressed ? 0.85 : 1,
-        width: 32,
+        width: size,
       })}
     >
       <ArrowUp color="$color1" size={16} />

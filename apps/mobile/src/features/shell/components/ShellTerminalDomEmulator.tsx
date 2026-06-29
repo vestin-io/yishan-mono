@@ -11,6 +11,15 @@ import { useShellTerminalDomLifecycle } from "./useShellTerminalDomLifecycle";
 
 export type ShellTerminalDomEmulatorHandle = {
   blurInputSession: () => void;
+  copySelection: () => string;
+  hasSelection: () => boolean;
+  pickImageFile: () => Promise<{
+    base64Data: string;
+    fileName: string;
+    mimeType: string;
+  } | null>;
+  pasteText: (text: string) => void;
+  selectAll: () => void;
 };
 
 type ShellTerminalDomEmulatorProps = {
@@ -76,6 +85,80 @@ const ShellTerminalDomEmulator = forwardRef<ShellTerminalDomEmulatorHandle, Shel
       () => ({
         blurInputSession() {
           blurTerminal(terminalRef.current);
+        },
+        copySelection() {
+          return terminalRef.current?.getSelection() ?? "";
+        },
+        hasSelection() {
+          return terminalRef.current?.hasSelection() ?? false;
+        },
+        async pickImageFile() {
+          if (typeof document === "undefined") {
+            return null;
+          }
+
+          const pickerInput = document.createElement("input");
+          pickerInput.accept = "image/*";
+          pickerInput.style.display = "none";
+          pickerInput.type = "file";
+          document.body.appendChild(pickerInput);
+
+          try {
+            const file = await new Promise<File | null>((resolve) => {
+              pickerInput.addEventListener(
+                "change",
+                () => {
+                  resolve(pickerInput.files?.[0] ?? null);
+                },
+                { once: true },
+              );
+              pickerInput.click();
+            });
+
+            if (!file) {
+              return null;
+            }
+
+            const dataUrl = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onerror = () => {
+                reject(reader.error ?? new Error("Failed to read picked image."));
+              };
+              reader.onload = () => {
+                if (typeof reader.result !== "string") {
+                  reject(new Error("Picked image did not produce a data URL."));
+                  return;
+                }
+
+                resolve(reader.result);
+              };
+              reader.readAsDataURL(file);
+            });
+
+            const [, base64Data = ""] = dataUrl.split(",", 2);
+            if (!base64Data) {
+              return null;
+            }
+
+            return {
+              base64Data,
+              fileName: file.name,
+              mimeType: file.type || "image/png",
+            };
+          } finally {
+            pickerInput.remove();
+          }
+        },
+        pasteText(...args: unknown[]) {
+          const [text] = args;
+          if (typeof text !== "string" || !text) {
+            return;
+          }
+
+          terminalRef.current?.paste(text);
+        },
+        selectAll() {
+          terminalRef.current?.selectAll();
         },
       }),
       [],

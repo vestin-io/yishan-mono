@@ -15,14 +15,14 @@ const MAX_TERMINAL_MESSAGES = 64;
 
 export function useTerminalMessageState({
   patchTerminal,
-  usesTerminalEmulator,
+  shouldUseTerminalEmulator,
 }: {
   patchTerminal: (
     terminal: Pick<TerminalItem, "id" | "workspaceId">,
     patch: Partial<Omit<TerminalItem, "id" | "workspaceId">>,
     options?: { touchUpdatedAt?: boolean },
   ) => void;
-  usesTerminalEmulator: boolean;
+  shouldUseTerminalEmulator: (terminal: TerminalItem | null) => boolean;
 }) {
   const [terminalMessagesById, setTerminalMessagesById] = useState<TerminalMessagesState>({});
   const [terminalOutputById, setTerminalOutputById] = useState<TerminalOutputState>({});
@@ -136,7 +136,7 @@ export function useTerminalMessageState({
         return "";
       }
 
-      if (usesTerminalEmulator) {
+      if (shouldUseTerminalEmulator(selectedTerminal)) {
         return (
           terminalOutputById[selectedTerminal.id] ??
           readTerminalOutputRuntimeSnapshot(selectedTerminal.id, selectedTerminal.cachedOutput ?? "")
@@ -145,7 +145,7 @@ export function useTerminalMessageState({
 
       return terminalOutputById[selectedTerminal.id] ?? selectedTerminal.cachedOutput ?? "";
     },
-    [terminalOutputById, usesTerminalEmulator],
+    [shouldUseTerminalEmulator, terminalOutputById],
   );
 
   const handleDraftChange = useCallback((value: string, selectedTerminal: TerminalItem | null) => {

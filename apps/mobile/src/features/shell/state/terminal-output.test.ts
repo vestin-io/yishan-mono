@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { trimTerminalOutputForCache } from "./terminal-output";
+import { sanitizeTerminalDisplayOutput, trimTerminalOutputForCache } from "./terminal-output";
 
 describe("trimTerminalOutputForCache", () => {
   it("skips a broken OSC prefix when the trim boundary lands inside it", () => {
@@ -23,5 +23,17 @@ describe("trimTerminalOutputForCache", () => {
 
     expect(trimmed.startsWith("[38;2;255;255;255m")).toBe(false);
     expect(trimmed.endsWith("visible-output")).toBe(true);
+  });
+});
+
+describe("sanitizeTerminalDisplayOutput", () => {
+  it("treats carriage return as a line rewrite instead of a new line", () => {
+    expect(sanitizeTerminalDisplayOutput("Loading 10%\rLoading 100%\nDone")).toBe("Loading 100%\nDone");
+  });
+
+  it("keeps prompt lines intact instead of leaving standalone percent artifacts", () => {
+    const output = "\r%\rjiatwork@MacBookPro nile % Pwd\r\n/Users/jiatwork/Works/nile\r\n\r%";
+
+    expect(sanitizeTerminalDisplayOutput(output)).toBe("jiatwork@MacBookPro nile % Pwd\n/Users/jiatwork/Works/nile\n%");
   });
 });

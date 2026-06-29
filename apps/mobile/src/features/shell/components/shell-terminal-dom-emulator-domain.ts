@@ -86,11 +86,6 @@ export function getShellTerminalViewportCss() {
       width: 100%;
     }
 
-    .xterm-screen,
-    .xterm-screen canvas {
-      pointer-events: none;
-    }
-
     .xterm-viewport {
       background-color: var(--terminal-bg) !important;
       -webkit-overflow-scrolling: touch;

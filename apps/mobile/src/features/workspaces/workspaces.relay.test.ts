@@ -8,6 +8,7 @@ import {
   listRelayWorkspaceGitChanges,
   readRelayWorkspaceDiff,
   readRelayWorkspaceFile,
+  writeRelayWorkspaceFile,
 } from "./workspaces.relay";
 
 class MockWebSocket {
@@ -250,6 +251,37 @@ describe("workspaces.relay", () => {
       path: "src/App.tsx",
       truncated: true,
     });
+  });
+
+  it("writes workspace files over relay", async () => {
+    const writePromise = writeRelayWorkspaceFile({
+      accessToken: "access-token",
+      content: "aGVsbG8=",
+      encoding: "base64",
+      nodeId: "node-1",
+      path: ".my-context/uploads/image.png",
+      workspaceId: "workspace-1",
+    });
+
+    const { request, socket } = await waitForRequest();
+    expect(request.method).toBe("file.write");
+    expect(request.params).toEqual({
+      content: "aGVsbG8=",
+      encoding: "base64",
+      mode: 0,
+      path: ".my-context/uploads/image.png",
+      workspaceId: "workspace-1",
+    });
+
+    socket.emitMessage(
+      JSON.stringify({
+        id: request.id,
+        jsonrpc: "2.0",
+        result: 5,
+      }),
+    );
+
+    await expect(writePromise).resolves.toBe(5);
   });
 
   it("treats skipped relay diffs as unavailable instead of invalid payloads", async () => {

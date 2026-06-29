@@ -34,12 +34,13 @@ export function useTerminalRuntimeInteractionHandlers({
   setMeasuredSize: (terminalId: string, size: { cols: number; rows: number }) => void;
 }) {
   const handleSend = useCallback(
-    async (selectedTerminal: TerminalItem | null) => {
+    async (selectedTerminal: TerminalItem | null, draftOverride?: string) => {
       if (!selectedTerminal) {
         return;
       }
 
-      const draft = readDraftForTerminal(selectedTerminal.id).trim();
+      const draftSource = draftOverride ?? readDraftForTerminal(selectedTerminal.id);
+      const draft = draftSource.trim();
       if (!draft) {
         return;
       }

@@ -96,6 +96,29 @@ export async function readRelayWorkspaceDiff(input: {
   });
 }
 
+export async function writeRelayWorkspaceFile(input: {
+  accessToken: string;
+  content: string;
+  encoding?: "plain" | "base64";
+  mode?: number;
+  nodeId: string | null | undefined;
+  path: string;
+  workspaceId: string;
+}): Promise<number> {
+  return withRelayWorkspaceClient(input, async (client) => {
+    const normalizedPath = input.path.trim();
+    const result = await client.sendRequest("file.write", {
+      content: input.content,
+      encoding: input.encoding === "base64" ? "base64" : "plain",
+      mode: input.mode ?? 0,
+      path: normalizedPath,
+      workspaceId: input.workspaceId,
+    });
+
+    return typeof result === "number" ? result : 0;
+  });
+}
+
 export async function listRelayWorkspaceGitChanges(input: {
   accessToken: string;
   nodeId: string | null | undefined;

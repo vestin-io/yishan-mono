@@ -487,6 +487,16 @@ export function attachTerminalTouchScrollFallback(
   };
 
   const handleMouseDown = (event: MouseEvent) => {
+    const sourceCapabilities = "sourceCapabilities" in event ? event.sourceCapabilities : null;
+    const firesTouchEvents =
+      typeof sourceCapabilities === "object" && sourceCapabilities !== null && "firesTouchEvents" in sourceCapabilities
+        ? Boolean(sourceCapabilities.firesTouchEvents)
+        : false;
+
+    if (!firesTouchEvents && activeGestureSource !== "touch") {
+      return;
+    }
+
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation?.();

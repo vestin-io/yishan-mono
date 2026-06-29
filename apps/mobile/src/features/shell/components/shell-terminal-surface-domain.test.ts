@@ -26,9 +26,14 @@ function createTerminal(input: Partial<TerminalItem> = {}): TerminalItem {
 
 describe("shell-terminal-surface-domain", () => {
   it("falls back to the native renderer on web even when xterm is preferred", () => {
-    expect(resolveTerminalRendererKind("xterm", "web")).toBe("native");
-    expect(resolveTerminalRendererKind("native", "ios")).toBe("native");
-    expect(resolveTerminalRendererKind("xterm", "ios")).toBe("xterm");
+    expect(resolveTerminalRendererKind("web")).toBe("native");
+    expect(resolveTerminalRendererKind("ios")).toBe("xterm");
+    expect(resolveTerminalRendererKind("android")).toBe("xterm");
+  });
+
+  it("keeps codex terminals on xterm as part of the native default", () => {
+    expect(resolveTerminalRendererKind("ios", createTerminal({ agentKind: "codex" }))).toBe("xterm");
+    expect(resolveTerminalRendererKind("android", createTerminal({ agentKind: "codex" }))).toBe("xterm");
   });
 
   it("builds a native stream key from terminal and session ids", () => {
@@ -57,11 +62,13 @@ describe("shell-terminal-surface-domain", () => {
 
   it("computes keyboard-aware viewport inset only for emulator surfaces", () => {
     expect(getTerminalKeyboardLayout({ keyboardBottomInset: 216, usesTerminalEmulator: true })).toEqual({
+      composerBottomInset: 0,
       keyboardVisible: true,
       viewportBottomInset: 216,
     });
     expect(getTerminalKeyboardLayout({ keyboardBottomInset: 216, usesTerminalEmulator: false })).toEqual({
-      keyboardVisible: false,
+      composerBottomInset: 216,
+      keyboardVisible: true,
       viewportBottomInset: 0,
     });
   });

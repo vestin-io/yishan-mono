@@ -2,7 +2,6 @@ import type { ITheme } from "@xterm/xterm";
 import type { DOMProps } from "expo/dom";
 
 import { MOBILE_UI_TOKENS } from "@/components/ui/ui-tokens";
-import type { TerminalRendererPreference } from "@/lib/storage/terminal-renderer-preference-storage";
 import type { TerminalItem } from "../state/shell.types";
 
 type TerminalKeyboardLayoutInput = {
@@ -129,14 +128,14 @@ function getTerminalTheme(background: string, foreground: string): ITheme {
  * Resolves the renderer that the current platform can actually use for terminal output.
  */
 export function resolveTerminalRendererKind(
-  preference: TerminalRendererPreference,
   platformOs: string,
+  terminal?: Pick<TerminalItem, "agentKind"> | null,
 ): TerminalRendererKind {
   if (platformOs === "web") {
     return "native";
   }
 
-  return preference;
+  return "xterm";
 }
 
 /**
@@ -171,10 +170,13 @@ export function buildTerminalDomProps(usesTerminalEmulator: boolean): DOMProps |
  * Computes keyboard-aware layout values for the mobile terminal surface.
  */
 export function getTerminalKeyboardLayout({ keyboardBottomInset, usesTerminalEmulator }: TerminalKeyboardLayoutInput) {
-  const viewportBottomInset = usesTerminalEmulator ? Math.max(0, keyboardBottomInset) : 0;
+  const resolvedKeyboardBottomInset = Math.max(0, keyboardBottomInset);
+  const viewportBottomInset = usesTerminalEmulator ? resolvedKeyboardBottomInset : 0;
+  const composerBottomInset = usesTerminalEmulator ? 0 : resolvedKeyboardBottomInset;
 
   return {
-    keyboardVisible: viewportBottomInset > 0,
+    composerBottomInset,
+    keyboardVisible: resolvedKeyboardBottomInset > 0,
     viewportBottomInset,
   };
 }

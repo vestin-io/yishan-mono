@@ -34,9 +34,11 @@ PODS:
     - ExpoModulesCore
   - ExpoCrypto (55.0.15):
     - ExpoModulesCore
+  - ExpoDocumentPicker (55.0.14):
+    - ExpoModulesCore
   - ExpoDomWebView (55.0.6):
     - ExpoModulesCore
-  - ExpoFileSystem (55.0.22):
+  - ExpoFileSystem (55.0.23):
     - ExpoModulesCore
   - ExpoFont (55.0.8):
     - ExpoModulesCore
@@ -49,6 +51,8 @@ PODS:
     - SDWebImageAVIFCoder (~> 0.11.0)
     - SDWebImageSVGCoder (~> 1.7.0)
     - SDWebImageWebPCoder (~> 0.14.6)
+  - ExpoImagePicker (55.0.21):
+    - ExpoModulesCore
   - ExpoKeepAwake (55.0.8):
     - ExpoModulesCore
   - ExpoLinking (55.0.15):
@@ -2121,11 +2125,13 @@ DEPENDENCIES:
   - "ExpoAsset (from `../../../node_modules/.bun/expo-asset@55.0.17+e9397b57c4867d41/node_modules/expo-asset/ios`)"
   - "ExpoClipboard (from `../../../node_modules/.bun/expo-clipboard@55.0.13+1e1328c499b6a322/node_modules/expo-clipboard/ios`)"
   - "ExpoCrypto (from `../../../node_modules/.bun/expo-crypto@55.0.15+1e1328c499b6a322/node_modules/expo-crypto/ios`)"
+  - "ExpoDocumentPicker (from `../../../node_modules/.bun/expo-document-picker@55.0.14+1e1328c499b6a322/node_modules/expo-document-picker/ios`)"
   - "ExpoDomWebView (from `../../../node_modules/.bun/@expo+dom-webview@55.0.6+958503516dbc509f/node_modules/@expo/dom-webview/ios`)"
-  - "ExpoFileSystem (from `../../../node_modules/.bun/expo-file-system@55.0.22+958503516dbc509f/node_modules/expo-file-system/ios`)"
+  - "ExpoFileSystem (from `../../../node_modules/.bun/expo-file-system@55.0.23+1e1328c499b6a322/node_modules/expo-file-system/ios`)"
   - "ExpoFont (from `../../../node_modules/.bun/expo-font@55.0.8+1e1328c499b6a322/node_modules/expo-font/ios`)"
   - "ExpoGlassEffect (from `../../../node_modules/.bun/expo-glass-effect@55.0.11+4bd50f2206bb29b9/node_modules/expo-glass-effect/ios`)"
   - "ExpoImage (from `../../../node_modules/.bun/expo-image@55.0.11+928719f185143711/node_modules/expo-image/ios`)"
+  - "ExpoImagePicker (from `../../../node_modules/.bun/expo-image-picker@55.0.21+1e1328c499b6a322/node_modules/expo-image-picker/ios`)"
   - "ExpoKeepAwake (from `../../../node_modules/.bun/expo-keep-awake@55.0.8+d370f9d35d3d3c33/node_modules/expo-keep-awake/ios`)"
   - "ExpoLinking (from `../../../node_modules/.bun/expo-linking@55.0.15+1e1328c499b6a322/node_modules/expo-linking/ios`)"
   - "ExpoLogBox (from `../../../node_modules/.bun/@expo+log-box@55.0.12+e89b5a53ba960c03/node_modules/@expo/log-box`)"
@@ -2240,16 +2246,20 @@ EXTERNAL SOURCES:
     :path: "../../../node_modules/.bun/expo-clipboard@55.0.13+1e1328c499b6a322/node_modules/expo-clipboard/ios"
   ExpoCrypto:
     :path: "../../../node_modules/.bun/expo-crypto@55.0.15+1e1328c499b6a322/node_modules/expo-crypto/ios"
+  ExpoDocumentPicker:
+    :path: "../../../node_modules/.bun/expo-document-picker@55.0.14+1e1328c499b6a322/node_modules/expo-document-picker/ios"
   ExpoDomWebView:
     :path: "../../../node_modules/.bun/@expo+dom-webview@55.0.6+958503516dbc509f/node_modules/@expo/dom-webview/ios"
   ExpoFileSystem:
-    :path: "../../../node_modules/.bun/expo-file-system@55.0.22+958503516dbc509f/node_modules/expo-file-system/ios"
+    :path: "../../../node_modules/.bun/expo-file-system@55.0.23+1e1328c499b6a322/node_modules/expo-file-system/ios"
   ExpoFont:
     :path: "../../../node_modules/.bun/expo-font@55.0.8+1e1328c499b6a322/node_modules/expo-font/ios"
   ExpoGlassEffect:
     :path: "../../../node_modules/.bun/expo-glass-effect@55.0.11+4bd50f2206bb29b9/node_modules/expo-glass-effect/ios"
   ExpoImage:
     :path: "../../../node_modules/.bun/expo-image@55.0.11+928719f185143711/node_modules/expo-image/ios"
+  ExpoImagePicker:
+    :path: "../../../node_modules/.bun/expo-image-picker@55.0.21+1e1328c499b6a322/node_modules/expo-image-picker/ios"
   ExpoKeepAwake:
     :path: "../../../node_modules/.bun/expo-keep-awake@55.0.8+d370f9d35d3d3c33/node_modules/expo-keep-awake/ios"
   ExpoLinking:
@@ -2437,11 +2447,13 @@ SPEC CHECKSUMS:
   ExpoAsset: 7721c5c4ae2a7c3c8147a046727ac6c020b05648
   ExpoClipboard: 5d1b0cd2686406f21e616f2d9b3431259dee2e6a
   ExpoCrypto: e7f4a14eaa6d6a6a2196cd7391d171c84be0b1aa
+  ExpoDocumentPicker: f7bb7d99ad78f5d3c526930275b5cd34446276bc
   ExpoDomWebView: b2e9d601f9cb77d3c97da73234e175b64be91928
-  ExpoFileSystem: 61e663d0bbd1a973d324530d1d6ee559a5e5192c
+  ExpoFileSystem: 49ab894dee0818cb8b83d489fc51eafade73efb9
   ExpoFont: a7e34a75bdfb703fa07a0e87807f836236608c76
   ExpoGlassEffect: 2dedac2fe817f9b02d0dad29ce0aef7afebc5cd4
   ExpoImage: 5854bd51edd7c0a775755473598f9daeb3fde4e3
+  ExpoImagePicker: 34209e65a6422fb91f8696e1a76ca4e1fc886eae
   ExpoKeepAwake: d0eb7a0719500d2a43fbf29b6f79e84d70c75ebf
   ExpoLinking: 40f36cf134ea6930f37867858c0643877b865d53
   ExpoLogBox: a678d36477ab9544fe63e0b5328a0716539b6774

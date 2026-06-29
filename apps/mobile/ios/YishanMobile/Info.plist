@@ -39,8 +39,14 @@
 	<string>12.0</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Yishan needs access to your camera so you can capture images for terminal agents.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Yishan needs access to your local network to connect to the development server on this Mac.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Yishan needs access to your photos so you can send images to terminal agents.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Yishan needs access to your photos so you can send images to terminal agents.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>

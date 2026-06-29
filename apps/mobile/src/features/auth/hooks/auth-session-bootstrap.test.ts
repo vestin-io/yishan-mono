@@ -25,7 +25,7 @@ describe("bootstrapAuthSessionRuntime", () => {
       refreshSession: vi.fn(async () => storedSession),
     });
 
-    expect(clearSessionState).toHaveBeenCalledTimes(1);
+    expect(clearSessionState).toHaveBeenCalledWith({ resetShellState: true });
   });
 
   it("commits stored state without refresh when token is still fresh", async () => {
@@ -85,7 +85,7 @@ describe("bootstrapAuthSessionRuntime", () => {
       }),
     });
 
-    expect(clearSessionState).toHaveBeenCalledTimes(1);
+    expect(clearSessionState).toHaveBeenCalledWith({ resetShellState: false });
   });
 
   it("keeps the committed stored session on transient refresh failure", async () => {

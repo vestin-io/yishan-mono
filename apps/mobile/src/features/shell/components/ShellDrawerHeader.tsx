@@ -116,7 +116,11 @@ export function ShellTopBar({
         title={title}
         titleNumberOfLines={1}
       />
-      {showSessionSyncNotice ? <TransientNoticePill label={t("shell.sessionsSynced")} /> : null}
+      {showSessionSyncNotice ? (
+        <View style={{ paddingTop: MOBILE_UI_TOKENS.shellChrome.dividerTopGap }}>
+          <TransientNoticePill label={t("shell.sessionsSynced")} />
+        </View>
+      ) : null}
     </Fragment>
   );
 }

@@ -114,33 +114,61 @@ function stripTerminalEscapeSequences(data: string): string {
   return output;
 }
 
+function writeCharacterToTerminalLine(line: string, cursorColumn: number, character: string) {
+  if (cursorColumn >= line.length) {
+    return `${line}${" ".repeat(cursorColumn - line.length)}${character}`;
+  }
+
+  return `${line.slice(0, cursorColumn)}${character}${line.slice(cursorColumn + 1)}`;
+}
+
 export function sanitizeTerminalDisplayOutput(data: string): string {
-  let output = "";
+  const lines = [""];
+  let cursorColumn = 0;
 
   for (const character of stripTerminalEscapeSequences(data)) {
     const code = character.charCodeAt(0);
+    const currentLineIndex = lines.length - 1;
+    const currentLine = lines[currentLineIndex] ?? "";
 
     if (character === "\r") {
-      output += "\n";
+      cursorColumn = 0;
       continue;
     }
 
-    if (character === "\n" || character === "\t") {
-      output += character;
+    if (character === "\n") {
+      lines.push("");
+      cursorColumn = 0;
       continue;
     }
 
     if (character === "\b" || code === 0x7f) {
-      output = output.slice(0, -1);
+      if (cursorColumn <= 0) {
+        continue;
+      }
+
+      const deleteIndex = cursorColumn - 1;
+      lines[currentLineIndex] = `${currentLine.slice(0, deleteIndex)}${currentLine.slice(cursorColumn)}`;
+      cursorColumn = deleteIndex;
+      continue;
+    }
+
+    if (character === "\t") {
+      lines[currentLineIndex] = writeCharacterToTerminalLine(currentLine, cursorColumn, character);
+      cursorColumn += 1;
       continue;
     }
 
     if (code >= 0x20) {
-      output += character;
+      lines[currentLineIndex] = writeCharacterToTerminalLine(currentLine, cursorColumn, character);
+      cursorColumn += 1;
     }
   }
 
-  return output.replace(/\[\?(?:1|12|25|1004|2004)[hl]/g, "").replace(/\n{3,}/g, "\n\n");
+  return lines
+    .join("\n")
+    .replace(/\[\?(?:1|12|25|1004|2004)[hl]/g, "")
+    .replace(/\n{3,}/g, "\n\n");
 }
 
 export function trimTerminalOutputForCache(data: string, maxLength: number): string {

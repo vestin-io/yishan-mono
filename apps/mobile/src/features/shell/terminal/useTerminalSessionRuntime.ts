@@ -150,8 +150,8 @@ export function useTerminalSessionRuntime({
     closeTerminal: (terminal: TerminalItem | null) => {
       void closeTerminal(terminal);
     },
-    handleSend: (selectedTerminal: TerminalItem | null) => {
-      void handleSend(selectedTerminal);
+    handleSend: (selectedTerminal: TerminalItem | null, draftOverride?: string) => {
+      void handleSend(selectedTerminal, draftOverride);
     },
     handleTerminalInput: (data: string, selectedTerminal: TerminalItem | null) => {
       void handleTerminalInput(data, selectedTerminal);

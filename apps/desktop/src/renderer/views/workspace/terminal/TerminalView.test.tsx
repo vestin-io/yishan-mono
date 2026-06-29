@@ -356,6 +356,35 @@ function buildStoreState() {
 }
 
 describe("TerminalView", () => {
+  it("keeps xterm right overscan without adding extra bottom scroll range", async () => {
+    const state = buildStoreState();
+    mocked.stateRef.current = state;
+    mocked.createTerminalSession.mockResolvedValueOnce({
+      sessionId: "session-style",
+      cols: 120,
+      rows: 30,
+    });
+    mocked.readTerminalOutput.mockResolvedValueOnce({
+      nextIndex: 0,
+      chunks: [],
+      exited: false,
+      exitCode: null,
+      signalCode: null,
+    });
+    mocked.resizeTerminal.mockResolvedValue({ ok: true });
+
+    stubTerminalBrowserApis();
+
+    render(<TerminalView tabId="terminal-tab-1" />);
+    await waitFor(() => {
+      expect(mocked.createTerminalSession).toHaveBeenCalled();
+    });
+
+    const viewportStyle = document.getElementById("yishan-xterm-viewport-style");
+    expect(viewportStyle?.textContent).toContain("width: calc(100% + 16px) !important;");
+    expect(viewportStyle?.textContent).not.toContain("height: calc(");
+  });
+
   it("activates the tab when the xterm host is clicked", async () => {
     const state = buildStoreState();
     mocked.stateRef.current = state;

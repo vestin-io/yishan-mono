@@ -156,7 +156,7 @@ export function useShellScreenModel({
     onOpenFiles: openFilesHandler,
     onOpenPaneTabs: openPaneTabSheet,
     onOpenPullRequests: openPullRequestsHandler,
-    onSend: () => terminalMessages.handleSend(screenContext.selectedTerminal),
+    onSend: (draft) => terminalMessages.handleSend(screenContext.selectedTerminal, draft),
     onTerminalInput: (data) => terminalMessages.handleTerminalInput(data, screenContext.selectedTerminal),
     onTerminalResize: (size) => terminalMessages.handleTerminalResize(size, screenContext.selectedTerminal),
     selectedTerminal: screenContext.selectedTerminal,
@@ -164,6 +164,7 @@ export function useShellScreenModel({
       ? formatTerminalDisplayLabel(screenContext.selectedTerminal.label)
       : null,
     terminalOutput: screenContext.currentTerminalOutput,
+    workspaceLocalPath: screenContext.selectedWorkspace?.localPath ?? null,
   };
 
   const focusPanePreviewContext: ShellFocusPanePreviewContext = {

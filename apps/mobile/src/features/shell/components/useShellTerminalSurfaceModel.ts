@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Platform } from "react-native";
 import { useTheme } from "tamagui";
 
-import { useAppTerminalRenderer } from "@/features/shell/AppTerminalRendererProvider";
 import type { TerminalItem } from "../state/shell.types";
 import { sanitizeTerminalDisplayOutput } from "../state/terminal-output";
 import {
@@ -25,13 +24,16 @@ export function useShellTerminalSurfaceModel({
   terminalOutput,
 }: UseShellTerminalSurfaceModelInput) {
   const theme = useTheme();
-  const { preference: terminalRendererPreference } = useAppTerminalRenderer();
-  const usesTerminalEmulator = resolveTerminalRendererKind(terminalRendererPreference, Platform.OS) === "xterm";
+  const usesTerminalEmulator = resolveTerminalRendererKind(Platform.OS, selectedTerminal) === "xterm";
   const displayOutput = usesTerminalEmulator ? terminalOutput : sanitizeTerminalDisplayOutput(terminalOutput);
   const [blurRequestToken, setBlurRequestToken] = useState(0);
   const [resizeRequestToken, setResizeRequestToken] = useState(0);
   const nativeStreamKey = buildNativeTerminalStreamKey(selectedTerminal, usesTerminalEmulator);
-  const { keyboardVisible: systemKeyboardVisible, viewportBottomInset } = useMemo(
+  const {
+    composerBottomInset,
+    keyboardVisible: systemKeyboardVisible,
+    viewportBottomInset,
+  } = useMemo(
     () => getTerminalKeyboardLayout({ keyboardBottomInset, usesTerminalEmulator }),
     [keyboardBottomInset, usesTerminalEmulator],
   );
@@ -67,6 +69,7 @@ export function useShellTerminalSurfaceModel({
 
   return {
     blurRequestToken,
+    composerBottomInset,
     displayOutput,
     keyboardVisible: systemKeyboardVisible,
     nativeStreamKey,

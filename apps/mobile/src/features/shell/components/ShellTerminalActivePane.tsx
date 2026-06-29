@@ -26,6 +26,7 @@ type ShellTerminalActivePaneProps = {
   terminalOutput: string;
   terminalTheme: ITheme;
   usesTerminalEmulator: boolean;
+  workspaceLocalPath?: string | null;
 };
 
 export function ShellTerminalActivePane({
@@ -48,6 +49,7 @@ export function ShellTerminalActivePane({
   terminalOutput,
   terminalTheme,
   usesTerminalEmulator,
+  workspaceLocalPath,
 }: ShellTerminalActivePaneProps) {
   if (usesTerminalEmulator) {
     return (
@@ -67,6 +69,7 @@ export function ShellTerminalActivePane({
         terminalDomProps={terminalDomProps}
         terminalOutput={terminalOutput}
         terminalTheme={terminalTheme}
+        workspaceLocalPath={workspaceLocalPath}
       />
     );
   }

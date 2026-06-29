@@ -5,7 +5,6 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AppLanguageProvider } from "@/features/i18n/AppLanguageProvider";
 import { MeLanguagePreferenceSync } from "@/features/me/components/MeLanguagePreferenceSync";
-import { AppTerminalRendererProvider } from "@/features/shell/AppTerminalRendererProvider";
 import { AppThemeProvider } from "@/features/theme/AppThemeProvider";
 import { queryClient } from "@/lib/query/query-client";
 import { AuthProvider } from "@/providers/AuthProvider";
@@ -17,16 +16,14 @@ export function AppProviders({ children }: PropsWithChildren) {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AppLanguageProvider>
-          <AppTerminalRendererProvider>
-            <AppThemeProvider>
-              <QueryClientProvider client={queryClient}>
-                <AuthProvider>
-                  <MeLanguagePreferenceSync />
-                  <NotificationRuntimeProvider>{children}</NotificationRuntimeProvider>
-                </AuthProvider>
-              </QueryClientProvider>
-            </AppThemeProvider>
-          </AppTerminalRendererProvider>
+          <AppThemeProvider>
+            <QueryClientProvider client={queryClient}>
+              <AuthProvider>
+                <MeLanguagePreferenceSync />
+                <NotificationRuntimeProvider>{children}</NotificationRuntimeProvider>
+              </AuthProvider>
+            </QueryClientProvider>
+          </AppThemeProvider>
         </AppLanguageProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

@@ -8,7 +8,7 @@ import {
 
 type BootstrapAuthSessionRuntimeOptions = {
   applyAuthenticatedSession: (session: StoredSession) => Promise<void>;
-  clearSessionState: () => Promise<void>;
+  clearSessionState: (options?: { resetShellState?: boolean }) => Promise<void>;
   commitAuthenticatedSessionState: (session: StoredSession) => void;
   loadStoredSession: () => Promise<StoredSession | null>;
   refreshSession: (refreshToken: string) => Promise<StoredSession>;
@@ -23,7 +23,7 @@ export async function bootstrapAuthSessionRuntime({
 }: BootstrapAuthSessionRuntimeOptions): Promise<void> {
   const storedSession = await loadStoredSession();
   if (!storedSession) {
-    await clearSessionState();
+    await clearSessionState({ resetShellState: true });
     return;
   }
 
@@ -39,7 +39,7 @@ export async function bootstrapAuthSessionRuntime({
     await applyAuthenticatedSession(normalizeStoredSession(refreshedSession));
   } catch (error) {
     if (shouldClearStoredSessionAfterRefreshFailure(error)) {
-      await clearSessionState();
+      await clearSessionState({ resetShellState: false });
     }
   }
 }
