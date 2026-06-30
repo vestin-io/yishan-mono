@@ -268,6 +268,7 @@ const DEFAULT_BACKEND_EVENT_STORE_BINDINGS_DEPENDENCIES: BackendEventStoreBindin
         status: "provisioning",
       }),
     );
+    workspaceCreateProgressStore.getState().startWorkspaceCreateProgress(payload.workspaceId);
   },
   applyWorkspaceCreateProgressEvent: (payload) => {
     workspaceCreateProgressStore.getState().applyWorkspaceCreateProgressEvent(payload);
@@ -275,8 +276,7 @@ const DEFAULT_BACKEND_EVENT_STORE_BINDINGS_DEPENDENCIES: BackendEventStoreBindin
   applyWorkspaceCreateCompletedEvent: (payload) => {
     const store = workspaceStore.getState();
     const existing = store.workspaces.find((ws) => ws.id === payload.workspaceId);
-    const progressEntry = workspaceCreateProgressStore.getState().progressByWorkspaceId[payload.workspaceId];
-    if (existing && progressEntry) {
+    if (existing) {
       store.addWorkspace({
         workspaceId: existing.id,
         organizationId: existing.organizationId,
@@ -307,7 +307,7 @@ const DEFAULT_BACKEND_EVENT_STORE_BINDINGS_DEPENDENCIES: BackendEventStoreBindin
       });
     }
 
-    return Boolean(existing && progressEntry);
+    return Boolean(existing);
   },
   applyWorkspaceCreateFailedEvent: (payload) => {
     workspaceCreateProgressStore.getState().finishWorkspaceCreateProgress(payload.workspaceId);

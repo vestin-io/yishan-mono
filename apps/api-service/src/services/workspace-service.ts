@@ -6,7 +6,9 @@ import type { WorkspaceKind, WorkspacePullRequestState, WorkspaceStatus } from "
 import {
   PrimaryWorkspaceCloseNotAllowedError,
   ProjectNotFoundError,
+  WorkspaceAlreadyExistsError,
   WorkspaceBranchRequiredError,
+  WorkspaceCreateFailedError,
   WorkspaceNodeNotFoundError,
   WorkspaceNotFoundError,
 } from "@/errors";
@@ -78,6 +80,15 @@ type UpdateWorkspaceInput = {
   localPath: string;
 };
 
+function isWorkspaceLiveUniqueViolation(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const record = error as { code?: unknown; constraint?: unknown };
+  return record.code === "23505" && record.constraint === "workspaces_project_user_node_kind_branch_uq";
+}
+
 export class WorkspaceService {
   constructor(
     private readonly db: AppDb,
@@ -120,9 +131,9 @@ export class WorkspaceService {
         throw new WorkspaceNodeNotFoundError(input.nodeId);
       }
 
-      const reactivatedRows = await tx
-        .update(workspaces)
-        .set({ status: "active", localPath: input.localPath?.trim() ?? "", updatedAt: new Date() })
+      const existingLiveRows = await tx
+        .select({ id: workspaces.id })
+        .from(workspaces)
         .where(
           and(
             eq(workspaces.organizationId, input.organizationId),
@@ -131,42 +142,58 @@ export class WorkspaceService {
             eq(workspaces.nodeId, input.nodeId),
             eq(workspaces.kind, input.kind),
             branch ? eq(workspaces.branch, branch) : isNull(workspaces.branch),
-            eq(workspaces.status, "closed"),
+            inArray(workspaces.status, ["active", "provisioning"]),
           ),
         )
-        .returning();
+        .limit(1);
 
-      const reactivatedWorkspace = reactivatedRows[0];
-      if (reactivatedWorkspace) {
-        return reactivatedWorkspace;
+      if (existingLiveRows.length > 0) {
+        throw new WorkspaceAlreadyExistsError({
+          projectId: input.projectId,
+          nodeId: input.nodeId,
+          kind: input.kind,
+          branch,
+        });
       }
 
       const sourceBranch = input.sourceBranch?.trim() ?? null;
       const localPath = input.localPath?.trim() ?? "";
       const status: WorkspaceStatus = localPath ? "active" : "provisioning";
 
-      const insertedRows = await tx
-        .insert(workspaces)
-        .values({
-          id: input.id?.trim() || newId(),
-          organizationId: input.organizationId,
-          projectId: input.projectId,
-          userId: input.actorUserId,
-          nodeId: input.nodeId,
-          kind: input.kind,
-          branch,
-          sourceBranch,
-          localPath,
-          status,
-        })
-        .returning();
+      try {
+        const insertedRows = await tx
+          .insert(workspaces)
+          .values({
+            id: newId(),
+            organizationId: input.organizationId,
+            projectId: input.projectId,
+            userId: input.actorUserId,
+            nodeId: input.nodeId,
+            kind: input.kind,
+            branch,
+            sourceBranch,
+            localPath,
+            status,
+          })
+          .returning();
 
-      const workspace = insertedRows[0];
-      if (!workspace) {
-        throw new Error("Failed to create workspace");
+        const workspace = insertedRows[0];
+        if (!workspace) {
+          throw new WorkspaceCreateFailedError();
+        }
+
+        return workspace;
+      } catch (error) {
+        if (isWorkspaceLiveUniqueViolation(error)) {
+          throw new WorkspaceAlreadyExistsError({
+            projectId: input.projectId,
+            nodeId: input.nodeId,
+            kind: input.kind,
+            branch,
+          });
+        }
+        throw error;
       }
-
-      return workspace;
     });
 
     await this.workspaceProvisioner.enqueueWorkspaceProvision({

@@ -148,6 +148,12 @@ describe("workspaceCommands", () => {
       });
     });
     expect(rpcMocks.list).not.toHaveBeenCalled();
+    expect(workspaceCreateProgressStore.getState().progressByWorkspaceId[createdWorkspaceId ?? ""]).toEqual(
+      expect.objectContaining({
+        workspaceId: "workspace-2",
+        isComplete: false,
+      }),
+    );
     await vi.waitFor(
       () => {
         expect(resolveTabForWorkspace).toHaveBeenCalledTimes(1);

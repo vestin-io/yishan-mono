@@ -7,6 +7,7 @@ import type {
   WorkspaceStoreState,
 } from "../store/types";
 import { buildWorkspaceStateFromData } from "../store/workspace/state";
+import { resolveHydratedWorkspaceDisplayMetadata } from "./workspaceDisplayNames";
 
 type ProjectStoreSlice = Pick<
   WorkspaceStoreState,
@@ -181,6 +182,33 @@ function resolvePendingHydrationWorkspaces(
   return previousWorkspaces.filter((workspace) => !apiWorkspaceIdSet.has(workspace.id) && !workspace.worktreePath);
 }
 
+function preservePendingWorkspaceDisplayMetadata(
+  workspaces: WorkspaceItem[],
+  previousWorkspaces: WorkspaceItem[],
+): WorkspaceItem[] {
+  const previousWorkspaceById = new Map(previousWorkspaces.map((workspace) => [workspace.id, workspace]));
+
+  return workspaces.map((workspace) => {
+    const previousWorkspace = previousWorkspaceById.get(workspace.id);
+    if (!previousWorkspace) {
+      return workspace;
+    }
+
+    const hasPreviousPlaceholderPath = !(previousWorkspace.worktreePath?.trim() ?? "");
+    const hasHydratedPath = Boolean(workspace.worktreePath?.trim());
+    const isProvisioning = workspace.status === "provisioning" || previousWorkspace.status === "provisioning";
+    if (!hasPreviousPlaceholderPath || hasHydratedPath || !isProvisioning) {
+      return workspace;
+    }
+
+    return {
+      ...workspace,
+      name: previousWorkspace.name,
+      title: previousWorkspace.title,
+    };
+  });
+}
+
 function buildLatestPullRequestByWorkspaceId(
   workspacesFromApi: WorkspaceRecord[],
 ): WorkspaceStoreState["latestPullRequestByWorkspaceId"] {
@@ -243,27 +271,24 @@ function mapApiData(
       const parentId = workspace.projectId ?? "";
       return projectIdSet.has(parentId);
     })
-    .map(
-      (workspace) =>
-        ({
-          id: workspace.id,
-          organizationId: workspace.organizationId,
-          projectId: workspace.projectId,
-          repoId: workspace.projectId,
-          name: workspace.kind === "primary" ? "local" : (workspace.branch ?? "workspace"),
-          title:
-            workspace.kind === "primary"
-              ? "local"
-              : getFileName(workspace.localPath ?? "") || workspace.branch || "workspace",
-          sourceBranch: workspace.sourceBranch ?? "",
-          branch: workspace.branch ?? "main",
-          summaryId: workspace.id,
-          worktreePath: workspace.localPath,
-          nodeId: workspace.nodeId,
-          kind: "managed",
-          status: workspace.status,
-        }) satisfies WorkspaceItem,
-    );
+    .map((workspace) => {
+      const displayMetadata = resolveHydratedWorkspaceDisplayMetadata(workspace);
+      return {
+        id: workspace.id,
+        organizationId: workspace.organizationId,
+        projectId: workspace.projectId,
+        repoId: workspace.projectId,
+        name: displayMetadata.name,
+        title: displayMetadata.title,
+        sourceBranch: workspace.sourceBranch ?? "",
+        branch: workspace.branch ?? "main",
+        summaryId: workspace.id,
+        worktreePath: workspace.localPath,
+        nodeId: workspace.nodeId,
+        kind: "managed",
+        status: workspace.status,
+      } satisfies WorkspaceItem;
+    });
 
   return {
     projects: mappedProjects,
@@ -284,9 +309,10 @@ export function applyHydratedStateFromApiData(
   const previousSelectedProjectId = state.selectedProjectId;
   const previousSelectedWorkspaceId = state.selectedWorkspaceId;
   const { projects: mappedProjects, workspaces } = mapApiData(projects, workspacesFromApi);
+  const reconciledWorkspaces = preservePendingWorkspaceDisplayMetadata(workspaces, state.workspaces);
   const nextBaseState = buildWorkspaceStateFromData({
     projects: mappedProjects,
-    workspaces,
+    workspaces: reconciledWorkspaces,
   });
   const nextDisplayProjectIds = resolveNextDisplayProjectIds({
     mappedProjects,
@@ -294,7 +320,7 @@ export function applyHydratedStateFromApiData(
     previousProjects: state.projects,
   });
   const nextSelection = resolveHydratedSelection({
-    workspaces,
+    workspaces: reconciledWorkspaces,
     nextBaseState,
     previousSelectedProjectId,
     previousSelectedWorkspaceId,
@@ -306,7 +332,7 @@ export function applyHydratedStateFromApiData(
   // worktreePath) but do not yet exist in the API response. Without this,
   // a workspaceSnapshotChanged event triggered during async creation would
   // replace the store and destroy the pending workspace entry.
-  const pendingWorkspaces = resolvePendingHydrationWorkspaces(state.workspaces, workspaces);
+  const pendingWorkspaces = resolvePendingHydrationWorkspaces(state.workspaces, reconciledWorkspaces);
   state.workspaces = [...nextBaseState.workspaces, ...pendingWorkspaces];
   state.selectedProjectId = nextSelection.selectedProjectId;
   state.selectedWorkspaceId = nextSelection.selectedWorkspaceId;
@@ -323,7 +349,7 @@ export function applyHydratedStateFromApiData(
   }
 
   const nextWorkspaceIdSet = new Set([
-    ...workspaces.map((workspace) => workspace.id),
+    ...reconciledWorkspaces.map((workspace) => workspace.id),
     ...pendingWorkspaces.map((workspace) => workspace.id),
   ]);
   state.gitChangesCountByWorkspaceId = filterWorkspaceScopedRecord(

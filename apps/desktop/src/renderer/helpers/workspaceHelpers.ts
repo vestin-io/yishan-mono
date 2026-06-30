@@ -1,4 +1,5 @@
 import type { WorkspaceStoreState } from "../store/types";
+import { resolveExplicitWorkspaceDisplayMetadata } from "./workspaceDisplayNames";
 
 type WorkspaceStoreSlice = Pick<
   WorkspaceStoreState,
@@ -49,13 +50,14 @@ export function applyCreatedWorkspaceState(
   },
 ): void {
   const nextWorkspaceId = input.backendWorkspace.workspaceId;
+  const displayMetadata = resolveExplicitWorkspaceDisplayMetadata(input.backendWorkspace.name || input.normalizedName);
   const nextWorkspace = {
     id: nextWorkspaceId,
     organizationId: input.backendWorkspace.organizationId,
     projectId: input.projectId,
     repoId: input.projectId,
-    name: input.backendWorkspace.name || input.normalizedName,
-    title: input.backendWorkspace.name || input.normalizedName,
+    name: displayMetadata.name,
+    title: displayMetadata.title,
     sourceBranch: input.backendWorkspace.sourceBranch || "",
     branch: input.backendWorkspace.branch || input.normalizedBranch,
     summaryId: nextWorkspaceId,

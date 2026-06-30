@@ -43,17 +43,23 @@ export const workspaceCreateProgressStore = create<WorkspaceCreateProgressStoreS
       return;
     }
 
-    set((state) => ({
-      progressByWorkspaceId: {
-        ...state.progressByWorkspaceId,
-        [normalizedWorkspaceId]: {
-          workspaceId: normalizedWorkspaceId,
-          steps: createDefaultSteps(),
-          updatedAt: new Date().toISOString(),
-          isComplete: false,
+    set((state) => {
+      if (state.progressByWorkspaceId[normalizedWorkspaceId]) {
+        return state;
+      }
+
+      return {
+        progressByWorkspaceId: {
+          ...state.progressByWorkspaceId,
+          [normalizedWorkspaceId]: {
+            workspaceId: normalizedWorkspaceId,
+            steps: createDefaultSteps(),
+            updatedAt: new Date().toISOString(),
+            isComplete: false,
+          },
         },
-      },
-    }));
+      };
+    });
   },
   applyWorkspaceCreateProgressEvent: (event) => {
     const workspaceId = event.workspaceId.trim();
@@ -96,10 +102,12 @@ export const workspaceCreateProgressStore = create<WorkspaceCreateProgressStoreS
     }
 
     set((state) => {
-      const existingRecord = state.progressByWorkspaceId[normalizedWorkspaceId];
-      if (!existingRecord) {
-        return state;
-      }
+      const existingRecord = state.progressByWorkspaceId[normalizedWorkspaceId] ?? {
+        workspaceId: normalizedWorkspaceId,
+        steps: createDefaultSteps(),
+        updatedAt: new Date().toISOString(),
+        isComplete: false,
+      };
 
       return {
         progressByWorkspaceId: {
