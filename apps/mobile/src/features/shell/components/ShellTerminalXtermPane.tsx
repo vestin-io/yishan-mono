@@ -3,12 +3,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { ITheme } from "@xterm/xterm";
 import * as Clipboard from "expo-clipboard";
 import type { DOMProps } from "expo/dom";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type TextInput, View } from "react-native";
 
 import { useAuth } from "@/features/auth";
 import { useAppLanguage } from "@/features/i18n/AppLanguageProvider";
 import { writeRelayWorkspaceFile } from "@/features/workspaces/workspaces.relay";
+import { sanitizeTerminalDisplayOutput } from "../state/terminal-output";
 import type { TerminalItem, TerminalMessage } from "../state/shell.types";
 import ShellTerminalDomEmulator, { type ShellTerminalDomEmulatorHandle } from "./ShellTerminalDomEmulator";
 import { ShellTerminalKeyboardBridgeInput } from "./ShellTerminalKeyboardBridgeInput";
@@ -17,6 +18,7 @@ import { ShellTerminalXtermAccessory } from "./ShellTerminalXtermAccessory";
 import { getTerminalAccessoryBottomInset } from "./shell-terminal-active-pane-domain";
 import { type TerminalUploadImageSource, pickTerminalUploadImage } from "./shell-terminal-native-upload-domain";
 import { buildTerminalInsertedImagePath } from "./shell-terminal-upload-domain";
+
 type ShellTerminalXtermPaneProps = {
   blurRequestToken: number;
   isComposerDisabled: boolean;
@@ -67,6 +69,7 @@ export function ShellTerminalXtermPane({
   const [imageUploadSheetOpen, setImageUploadSheetOpen] = useState(false);
   const [nativeKeyboardInputValue, setNativeKeyboardInputValue] = useState("");
   const [readerModeEnabled, setReaderModeEnabled] = useState(false);
+  const readerOutput = useMemo(() => sanitizeTerminalDisplayOutput(terminalOutput), [terminalOutput]);
 
   const focusNativeKeyboardInput = () => {
     nativeKeyboardInputValueRef.current = "";
@@ -78,7 +81,7 @@ export function ShellTerminalXtermPane({
     nativeKeyboardInputValueRef.current = "";
     setNativeKeyboardInputValue("");
     nativeKeyboardInputRef.current?.blur();
-    terminalDomRef.current?.blurInputSession();
+    terminalDomRef.current?.blurInputSession?.();
     onDismissKeyboard();
   };
 
@@ -108,7 +111,7 @@ export function ShellTerminalXtermPane({
       return;
     }
 
-    terminalDomRef.current?.pasteText(text);
+    terminalDomRef.current?.pasteText?.(text);
   };
 
   const refreshClipboardState = useCallback(async () => {
@@ -229,7 +232,7 @@ export function ShellTerminalXtermPane({
             emptyDescription={t("shell.terminalInputPlaceholder")}
             emptyStatusLabel={t("shell.terminalReaderMode")}
             onExit={closeReaderMode}
-            output={terminalOutput}
+            output={readerOutput}
             selectedTerminal={selectedTerminal}
           />
         ) : (

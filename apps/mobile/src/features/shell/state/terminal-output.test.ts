@@ -36,4 +36,18 @@ describe("sanitizeTerminalDisplayOutput", () => {
 
     expect(sanitizeTerminalDisplayOutput(output)).toBe("jiatwork@MacBookPro nile % Pwd\n/Users/jiatwork/Works/nile\n%");
   });
+
+  it("removes ANSI control-sequence noise from interactive prompt redraws", () => {
+    const output =
+      "\u001b[2K\u001b[1m\u001b[7m%\u001b[27m\u001b[1m\u001b[0m\r\u001b[0m\u001b[27m\u001b[24m" +
+      "jiatwork@MacBookPro nile % \u001b[K\u001b[?2004h";
+
+    expect(sanitizeTerminalDisplayOutput(output)).toBe("jiatwork@MacBookPro nile % ");
+  });
+
+  it("preserves carriage-return rewrites without leaking escape fragments", () => {
+    const output = "Loading 10%\rLoading 100%\r\nDone";
+
+    expect(sanitizeTerminalDisplayOutput(output)).toBe("Loading 100%\nDone");
+  });
 });
