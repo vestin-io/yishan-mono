@@ -1,13 +1,3 @@
-import type {
-  WorkspaceCurrentPullRequest,
-  WorkspaceCurrentPullRequestCheck,
-  WorkspaceCurrentPullRequestDeployment,
-  WorkspaceFileDiff,
-  WorkspaceFileEntry,
-  WorkspaceGitChange,
-  WorkspaceGitChanges,
-} from "@yishan/core";
-
 export type JsonRpcRequest = {
   jsonrpc: "2.0";
   id: string;
@@ -86,11 +76,40 @@ export type DaemonWorkspace = {
   pullRequest?: DaemonWorkspacePullRequest;
 };
 
-export type DaemonWorkspacePullRequest = WorkspaceCurrentPullRequest;
+export type DaemonWorkspacePullRequest = {
+  number: number;
+  title?: string;
+  url?: string;
+  branch?: string;
+  baseBranch?: string;
+  githubState?: string;
+  status?: string;
+  reviewDecision?: string;
+  isDraft?: boolean;
+  complete?: boolean;
+  updatedAt?: string;
+  checks?: DaemonWorkspacePullRequestCheck[];
+  deployments?: DaemonWorkspacePullRequestDeployment[];
+};
 
-export type DaemonWorkspacePullRequestCheck = WorkspaceCurrentPullRequestCheck;
+export type DaemonWorkspacePullRequestCheck = {
+  name: string;
+  workflow?: string;
+  state: string;
+  description?: string;
+  url?: string;
+};
 
-export type DaemonWorkspacePullRequestDeployment = WorkspaceCurrentPullRequestDeployment;
+export type DaemonWorkspacePullRequestDeployment = {
+  id: number;
+  environment?: string;
+  state?: string;
+  description?: string;
+  environmentUrl?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  originalPayload?: string;
+};
 
 export type WorkspaceCreateInput = {
   workspaceId?: string;
@@ -390,8 +409,13 @@ export type WorkspaceCloseExecutionResponse = {
   lifecycleScriptWarnings: unknown[];
 };
 
-export type DaemonFileEntry = WorkspaceFileEntry & {
+export type DaemonFileEntry = {
+  path: string;
+  name: string;
+  isDir: boolean;
   isIgnored: boolean;
+  size: number;
+  mode: number;
   modifiedAt: string;
 };
 
@@ -429,13 +453,24 @@ export type FileMutationOkResponse = {
   ok: true;
 };
 
-export type FileDiffResponse = Pick<WorkspaceFileDiff, "oldContent" | "newContent"> & {
+export type FileDiffResponse = {
+  oldContent: string;
+  newContent: string;
   shouldSkipDecorations?: boolean;
 };
 
-export type GitChange = WorkspaceGitChange;
+export type GitChange = {
+  path: string;
+  kind: string;
+  additions: number;
+  deletions: number;
+};
 
-export type GitChangesBySection = WorkspaceGitChanges;
+export type GitChangesBySection = {
+  unstaged: GitChange[];
+  staged: GitChange[];
+  untracked: GitChange[];
+};
 
 export type GitStatusOperationResponse = {
   tracked?: boolean;

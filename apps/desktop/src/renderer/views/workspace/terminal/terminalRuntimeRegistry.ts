@@ -591,6 +591,7 @@ export function __resetTerminalRuntimeRegistryForTests(): void {
 
 const XTERM_VIEWPORT_STYLE_ID = "yishan-xterm-viewport-style";
 const XTERM_RIGHT_OVERSCAN_PX = 16;
+const XTERM_BOTTOM_OVERSCAN_PX = 16;
 
 function ensureXtermViewportStyle(): void {
   if (document.getElementById(XTERM_VIEWPORT_STYLE_ID)) {
@@ -605,6 +606,7 @@ function ensureXtermViewportStyle(): void {
     "}",
     "[data-terminal-tab-id] .xterm-screen {",
     `  width: calc(100% + ${XTERM_RIGHT_OVERSCAN_PX}px) !important;`,
+    `  height: calc(100% + ${XTERM_BOTTOM_OVERSCAN_PX}px) !important;`,
     "}",
     "[data-terminal-tab-id] .xterm-viewport {",
     "  overflow-y: scroll !important;",

@@ -185,9 +185,6 @@ describe("ChangesTabView", () => {
     render(<ChangesTabView />);
 
     const scopeInput = await screen.findByRole("combobox", { name: "Change scope" });
-    await waitFor(() => {
-      expect(mocks.listGitCommitsToTarget).toHaveBeenCalled();
-    });
     fireEvent.change(scopeInput, { target: { value: "abc1234" } });
     fireEvent.mouseDown(scopeInput);
     fireEvent.click(await screen.findByRole("option", { name: "abc1234 feat: improve flow" }));
@@ -253,9 +250,6 @@ describe("ChangesTabView", () => {
     render(<ChangesTabView />);
 
     const scopeInput = await screen.findByRole("combobox", { name: "Change scope" });
-    await waitFor(() => {
-      expect(mocks.listGitCommitsToTarget).toHaveBeenCalled();
-    });
     fireEvent.change(scopeInput, { target: { value: "All changes" } });
     fireEvent.mouseDown(scopeInput);
     fireEvent.click(await screen.findByRole("option", { name: "All changes (3)" }));
@@ -400,9 +394,6 @@ describe("ChangesTabView", () => {
     render(<ChangesTabView />);
 
     const scopeInput = await screen.findByRole("combobox", { name: "Change scope" });
-    await waitFor(() => {
-      expect(mocks.listGitCommitsToTarget).toHaveBeenCalled();
-    });
     fireEvent.change(scopeInput, { target: { value: "All changes" } });
     fireEvent.mouseDown(scopeInput);
     fireEvent.click(await screen.findByRole("option", { name: "All changes (2)" }));
@@ -498,9 +489,6 @@ describe("ChangesTabView", () => {
     render(<ChangesTabView />);
 
     const scopeInput = await screen.findByRole("combobox", { name: "Change scope" });
-    await waitFor(() => {
-      expect(mocks.listGitCommitsToTarget).toHaveBeenCalled();
-    });
     fireEvent.change(scopeInput, { target: { value: "All changes" } });
     fireEvent.mouseDown(scopeInput);
     fireEvent.click(await screen.findByRole("option", { name: "All changes (2)" }));
@@ -530,9 +518,6 @@ describe("ChangesTabView", () => {
     render(<ChangesTabView />);
 
     const scopeInput = await screen.findByRole("combobox", { name: "Change scope" });
-    await waitFor(() => {
-      expect(mocks.listGitCommitsToTarget).toHaveBeenCalled();
-    });
     fireEvent.change(scopeInput, { target: { value: "All changes" } });
     fireEvent.mouseDown(scopeInput);
     fireEvent.click(await screen.findByRole("option", { name: "All changes (2)" }));

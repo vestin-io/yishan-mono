@@ -1,6 +1,5 @@
-import type { WorkspaceFileEntry as CoreWorkspaceFileEntry } from "@yishan/core";
-
-export type WorkspaceFileEntry = Pick<CoreWorkspaceFileEntry, "path"> & {
+export type WorkspaceFileEntry = {
+  path: string;
   isIgnored: boolean;
 };
 

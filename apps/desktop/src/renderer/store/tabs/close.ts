@@ -1,18 +1,5 @@
 import type { WorkspaceTabStateSlice } from "./types";
 
-function resolveWorkspaceSelectedTabId(
-  workspaceId: string,
-  tabs: WorkspaceTabStateSlice["tabs"],
-  preferredTabId: string,
-): string {
-  const workspaceTabs = tabs.filter((tab) => tab.workspaceId === workspaceId);
-  if (preferredTabId && workspaceTabs.some((tab) => tab.id === preferredTabId)) {
-    return preferredTabId;
-  }
-
-  return workspaceTabs[0]?.id ?? "";
-}
-
 /** Closes one tab and updates selected-tab pointers and per-tab metadata maps. */
 export function closeTabState(state: WorkspaceTabStateSlice, tabId: string): Partial<WorkspaceTabStateSlice> | null {
   const currentTab = state.tabs.find((tab) => tab.id === tabId);
@@ -23,13 +10,9 @@ export function closeTabState(state: WorkspaceTabStateSlice, tabId: string): Par
   const workspaceTabs = state.tabs.filter((tab) => tab.workspaceId === currentTab.workspaceId);
   const remainingWorkspaceTabs = workspaceTabs.filter((tab) => tab.id !== tabId);
   const closedIndex = workspaceTabs.findIndex((tab) => tab.id === tabId);
-  const nextWorkspaceSelectedTabId =
-    state.selectedTabIdByWorkspaceId[currentTab.workspaceId] === tabId
-      ? (remainingWorkspaceTabs[closedIndex]?.id ?? remainingWorkspaceTabs[closedIndex - 1]?.id ?? "")
-      : resolveWorkspaceSelectedTabId(currentTab.workspaceId, remainingWorkspaceTabs, state.selectedTabIdByWorkspaceId[currentTab.workspaceId] ?? "");
   const nextSelectedTabId =
     state.selectedTabId === tabId
-      ? nextWorkspaceSelectedTabId
+      ? (remainingWorkspaceTabs[closedIndex]?.id ?? remainingWorkspaceTabs[closedIndex - 1]?.id ?? "")
       : state.selectedTabId;
 
   return {
@@ -37,7 +20,7 @@ export function closeTabState(state: WorkspaceTabStateSlice, tabId: string): Par
     selectedTabId: nextSelectedTabId,
     selectedTabIdByWorkspaceId: {
       ...state.selectedTabIdByWorkspaceId,
-      [currentTab.workspaceId]: nextWorkspaceSelectedTabId,
+      [currentTab.workspaceId]: nextSelectedTabId,
     },
   };
 }
@@ -107,9 +90,8 @@ export function closeAllTabsState(
   const selectedTabBelongsToWorkspace = state.tabs.some(
     (tab) => tab.id === state.selectedTabId && tab.workspaceId === currentTab.workspaceId,
   );
-  const nextWorkspaceSelectedTabId = tabs.find((tab) => tab.workspaceId === currentTab.workspaceId)?.id ?? "";
   const nextSelectedTabId = selectedTabBelongsToWorkspace
-    ? nextWorkspaceSelectedTabId
+    ? (tabs.find((tab) => tab.workspaceId === currentTab.workspaceId)?.id ?? "")
     : state.selectedTabId;
 
   return {
@@ -117,7 +99,7 @@ export function closeAllTabsState(
     selectedTabId: nextSelectedTabId,
     selectedTabIdByWorkspaceId: {
       ...state.selectedTabIdByWorkspaceId,
-      [currentTab.workspaceId]: nextWorkspaceSelectedTabId,
+      [currentTab.workspaceId]: nextSelectedTabId,
     },
   };
 }
