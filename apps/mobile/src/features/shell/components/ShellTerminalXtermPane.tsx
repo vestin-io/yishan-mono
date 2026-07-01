@@ -111,7 +111,12 @@ export function ShellTerminalXtermPane({
       return;
     }
 
-    terminalDomRef.current?.pasteText?.(text);
+    if (terminalDomRef.current?.pasteText) {
+      terminalDomRef.current.pasteText(text);
+      return;
+    }
+
+    onTerminalInput(text);
   };
 
   const refreshClipboardState = useCallback(async () => {
