@@ -174,12 +174,18 @@ function resolveHydratedSelection(input: {
   };
 }
 
-function resolvePendingHydrationWorkspaces(
+function resolvePreservedHydrationWorkspaces(
   previousWorkspaces: WorkspaceItem[],
   workspaces: WorkspaceItem[],
 ): WorkspaceItem[] {
   const apiWorkspaceIdSet = new Set(workspaces.map((workspace) => workspace.id));
-  return previousWorkspaces.filter((workspace) => !apiWorkspaceIdSet.has(workspace.id) && !workspace.worktreePath);
+  return previousWorkspaces.filter((workspace) => {
+    if (apiWorkspaceIdSet.has(workspace.id)) {
+      return false;
+    }
+
+    return !workspace.worktreePath || workspace.preserveOnMissingSnapshot === true;
+  });
 }
 
 function preservePendingWorkspaceDisplayMetadata(
@@ -319,8 +325,15 @@ export function applyHydratedStateFromApiData(
     orgPreferences,
     previousProjects: state.projects,
   });
+  // Preserve workspaces that are still being created locally (pending with no
+  // worktreePath) and just-created local workspaces marked for transient
+  // missing-snapshot protection. Without this, a workspaceSnapshotChanged event
+  // triggered during async creation can replace the store and destroy the
+  // visible workspace row before a later authoritative snapshot includes it.
+  const preservedWorkspaces = resolvePreservedHydrationWorkspaces(state.workspaces, reconciledWorkspaces);
+  const nextWorkspaces = [...nextBaseState.workspaces, ...preservedWorkspaces];
   const nextSelection = resolveHydratedSelection({
-    workspaces: reconciledWorkspaces,
+    workspaces: nextWorkspaces,
     nextBaseState,
     previousSelectedProjectId,
     previousSelectedWorkspaceId,
@@ -328,12 +341,7 @@ export function applyHydratedStateFromApiData(
   });
 
   state.projects = nextBaseState.projects;
-  // Preserve workspaces that are still being created locally (pending with no
-  // worktreePath) but do not yet exist in the API response. Without this,
-  // a workspaceSnapshotChanged event triggered during async creation would
-  // replace the store and destroy the pending workspace entry.
-  const pendingWorkspaces = resolvePendingHydrationWorkspaces(state.workspaces, reconciledWorkspaces);
-  state.workspaces = [...nextBaseState.workspaces, ...pendingWorkspaces];
+  state.workspaces = nextWorkspaces;
   state.selectedProjectId = nextSelection.selectedProjectId;
   state.selectedWorkspaceId = nextSelection.selectedWorkspaceId;
   state.displayProjectIds = nextDisplayProjectIds;
@@ -348,10 +356,7 @@ export function applyHydratedStateFromApiData(
     };
   }
 
-  const nextWorkspaceIdSet = new Set([
-    ...reconciledWorkspaces.map((workspace) => workspace.id),
-    ...pendingWorkspaces.map((workspace) => workspace.id),
-  ]);
+  const nextWorkspaceIdSet = new Set(nextWorkspaces.map((workspace) => workspace.id));
   state.gitChangesCountByWorkspaceId = filterWorkspaceScopedRecord(
     { ...(state.gitChangesCountByWorkspaceId ?? {}) },
     nextWorkspaceIdSet,

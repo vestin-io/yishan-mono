@@ -133,6 +133,7 @@ describe("workspaceCommands", () => {
       worktreePath: "",
       nodeId: undefined,
       status: "provisioning",
+      preserveOnMissingSnapshot: true,
     });
     await vi.waitFor(() => {
       expect(rpcMocks.createWorkspace).toHaveBeenCalledWith({

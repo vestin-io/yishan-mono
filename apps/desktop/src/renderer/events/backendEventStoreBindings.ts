@@ -266,6 +266,7 @@ const DEFAULT_BACKEND_EVENT_STORE_BINDINGS_DEPENDENCIES: BackendEventStoreBindin
         worktreePath: "",
         nodeId: payload.nodeId,
         status: "provisioning",
+        preserveOnMissingSnapshot: true,
       }),
     );
     workspaceCreateProgressStore.getState().startWorkspaceCreateProgress(payload.workspaceId);

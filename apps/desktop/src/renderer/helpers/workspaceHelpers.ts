@@ -46,6 +46,7 @@ export function applyCreatedWorkspaceState(
       worktreePath: string;
       nodeId?: string;
       status?: WorkspaceStoreState["workspaces"][number]["status"];
+      preserveOnMissingSnapshot?: boolean;
     };
   },
 ): void {
@@ -64,6 +65,7 @@ export function applyCreatedWorkspaceState(
     worktreePath: input.backendWorkspace.worktreePath,
     nodeId: input.backendWorkspace.nodeId,
     status: input.backendWorkspace.status,
+    ...(input.backendWorkspace.preserveOnMissingSnapshot ? { preserveOnMissingSnapshot: true } : {}),
   };
   const existingWorkspaceIndex = state.workspaces.findIndex((workspace) => workspace.id === nextWorkspaceId);
   if (existingWorkspaceIndex >= 0) {
