@@ -1,3 +1,5 @@
+import { createWorkspaceBrowserStateId } from "@/features/workspaces/browser/state/workspaceBrowserState";
+
 import type { ShellWorkspaceTabState, TerminalItem, WorkspacePaneLayoutState } from "./shell.types";
 
 type ShellStateSnapshotInput = {
@@ -6,14 +8,6 @@ type ShellStateSnapshotInput = {
   nextWorkspaceTabStateByWorkspaceId: Record<string, ShellWorkspaceTabState>;
   selectedNodeIdByOrganization: Record<string, string>;
 };
-
-function createWorkspaceBrowserStateId(organizationId: string, projectId: string, workspaceId: string) {
-  if (!organizationId || !projectId || !workspaceId) {
-    return "";
-  }
-
-  return `${organizationId}:${projectId}:${workspaceId}`;
-}
 
 export function buildStoredShellStateSnapshot(input: ShellStateSnapshotInput) {
   return {
@@ -27,7 +21,18 @@ export function buildStoredShellStateSnapshot(input: ShellStateSnapshotInput) {
 export function listWorkspaceBrowserStateIdsForCleanup(
   organizationId: string,
   projectId: string,
+  workspaceNodeIdsByWorkspaceId: Record<string, string | null | undefined>,
   workspaceIds: string[],
+  fallbackNodeId?: string | null,
 ) {
-  return workspaceIds.map((workspaceId) => createWorkspaceBrowserStateId(organizationId, projectId, workspaceId));
+  return workspaceIds
+    .map((workspaceId) =>
+      createWorkspaceBrowserStateId(
+        organizationId,
+        projectId,
+        workspaceId,
+        workspaceNodeIdsByWorkspaceId[workspaceId] ?? fallbackNodeId ?? "",
+      ),
+    )
+    .filter((stateId) => stateId.length > 0);
 }

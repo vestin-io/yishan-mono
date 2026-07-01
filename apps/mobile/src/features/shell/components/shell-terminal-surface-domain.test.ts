@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-import type { TerminalItem } from "../state/shell.types";
 import {
   buildNativeTerminalStreamKey,
   buildTerminalDomProps,
@@ -9,44 +8,50 @@ import {
   resolveTerminalRendererKind,
 } from "./shell-terminal-surface-domain";
 
-function createTerminal(input: Partial<TerminalItem> = {}): TerminalItem {
-  return {
-    createdAt: "2026-06-16T11:00:00.000Z",
-    id: "terminal-1",
-    importedFromBackend: false,
-    label: "Terminal",
-    orgId: "org-1",
-    projectId: "project-1",
-    status: "running",
-    updatedAt: "2026-06-16T11:00:00.000Z",
-    workspaceId: "workspace-1",
-    ...input,
-  };
-}
-
 describe("shell-terminal-surface-domain", () => {
-  it("falls back to the native renderer on web even when xterm is preferred", () => {
+  it("uses the native renderer only on web and xterm on native mobile platforms", () => {
     expect(resolveTerminalRendererKind("web")).toBe("native");
     expect(resolveTerminalRendererKind("ios")).toBe("xterm");
     expect(resolveTerminalRendererKind("android")).toBe("xterm");
   });
 
-  it("keeps codex terminals on xterm as part of the native default", () => {
-    expect(resolveTerminalRendererKind("ios", createTerminal({ agentKind: "codex" }))).toBe("xterm");
-    expect(resolveTerminalRendererKind("android", createTerminal({ agentKind: "codex" }))).toBe("xterm");
-  });
-
   it("builds a native stream key from terminal and session ids", () => {
     expect(
       buildNativeTerminalStreamKey(
-        createTerminal({ session: { sessionId: "session-1", status: "running", workspaceId: "workspace-1" } }),
+        {
+          createdAt: "2026-06-16T11:00:00.000Z",
+          id: "terminal-1",
+          importedFromBackend: false,
+          label: "Terminal",
+          orgId: "org-1",
+          projectId: "project-1",
+          session: { sessionId: "session-1", status: "running", workspaceId: "workspace-1" },
+          status: "running",
+          updatedAt: "2026-06-16T11:00:00.000Z",
+          workspaceId: "workspace-1",
+        },
         true,
       ),
     ).toBe("terminal-1:session-1");
   });
 
   it("returns null stream key when the emulator is disabled", () => {
-    expect(buildNativeTerminalStreamKey(createTerminal(), false)).toBeNull();
+    expect(
+      buildNativeTerminalStreamKey(
+        {
+          createdAt: "2026-06-16T11:00:00.000Z",
+          id: "terminal-1",
+          importedFromBackend: false,
+          label: "Terminal",
+          orgId: "org-1",
+          projectId: "project-1",
+          status: "running",
+          updatedAt: "2026-06-16T11:00:00.000Z",
+          workspaceId: "workspace-1",
+        },
+        false,
+      ),
+    ).toBeNull();
   });
 
   it("returns dom props only when the emulator is enabled", () => {

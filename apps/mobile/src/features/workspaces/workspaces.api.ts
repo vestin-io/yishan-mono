@@ -11,15 +11,6 @@ import {
 } from "./workspaces-api-domain";
 import type { Workspace, WorkspaceCurrentPullRequest, WorkspacePullRequestSummary } from "./workspaces.types";
 
-export type CreateWorkspaceInput = {
-  nodeId: string;
-  localPath: string;
-  kind?: "primary" | "worktree";
-  name?: string;
-  branch?: string;
-  sourceBranch?: string;
-};
-
 export async function listWorkspaces(
   accessToken: string,
   organizationId: string,
@@ -33,24 +24,6 @@ export async function listWorkspaces(
   );
 
   return readWorkspacesResponse(response);
-}
-
-export async function createWorkspace(
-  accessToken: string,
-  organizationId: string,
-  projectId: string,
-  input: CreateWorkspaceInput,
-): Promise<Workspace> {
-  const response = await apiRequest<WorkspaceResponseRecord>(
-    `/orgs/${organizationId}/projects/${projectId}/workspaces`,
-    {
-      method: "POST",
-      accessToken,
-      body: input,
-    },
-  );
-
-  return readWorkspaceResponse(response);
 }
 
 export async function closeWorkspace(

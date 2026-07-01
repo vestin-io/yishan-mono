@@ -42,37 +42,6 @@ export function ShellIconButton({
   );
 }
 
-export function ShellActionButton({
-  label,
-  onPress,
-}: {
-  label: string;
-  onPress: () => void;
-}) {
-  const theme = useTheme();
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => ({
-        alignItems: "center",
-        backgroundColor: theme.color12.val,
-        borderRadius: 14,
-        justifyContent: "center",
-        minHeight: 48,
-        opacity: pressed ? 0.85 : 1,
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-      })}
-    >
-      <Text color="$color1" fontSize="$4" fontWeight="700">
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
 export function ShellTreeIconBadge({
   backgroundColor,
   children,

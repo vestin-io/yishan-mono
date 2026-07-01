@@ -4,4 +4,5 @@
 
 .expo/
 expo-env.d.ts
+.tmp/
 # @end expo-cli

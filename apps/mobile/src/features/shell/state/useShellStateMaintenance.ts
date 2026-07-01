@@ -48,15 +48,25 @@ export function useShellStateMaintenance({
     [navigation, setPendingSelection],
   );
 
+  const resolveStoredWorkspaceNodeId = useCallback(
+    (workspaceId: string) => {
+      const workspaceTerminals = storedState.terminalsByWorkspaceId[workspaceId] ?? [];
+      return workspaceTerminals.find((terminal) => (terminal.nodeId?.trim() ?? "").length > 0)?.nodeId ?? null;
+    },
+    [storedState.terminalsByWorkspaceId],
+  );
+
   const dropWorkspaceState = useCallback(
     ({
       organizationId,
       projectId,
       workspaceId,
+      workspaceNodeId,
     }: {
       organizationId?: string | null;
       projectId?: string | null;
       workspaceId: string;
+      workspaceNodeId?: string | null;
     }) => {
       const {
         nextPaneLayoutByWorkspaceId,
@@ -64,6 +74,8 @@ export function useShellStateMaintenance({
         nextWorkspaceTabStateByWorkspaceId,
         workspaceTerminalIds,
       } = dropWorkspaceStoredState(storedState, selection, workspaceId);
+      const resolvedOrganizationId = organizationId ?? (selection.kind === "workspace" ? selection.orgId : "");
+      const resolvedWorkspaceNodeId = workspaceNodeId ?? resolveStoredWorkspaceNodeId(workspaceId);
 
       storedState.setTerminalsByWorkspaceId(nextTerminalsByWorkspaceId);
       storedState.setWorkspaceTabStateByWorkspaceId(nextWorkspaceTabStateByWorkspaceId);
@@ -76,12 +88,14 @@ export function useShellStateMaintenance({
 
       void (async () => {
         await persistShellStateCleanup({
+          fallbackNodeId: storedState.selectedNodeIdByOrganization[resolvedOrganizationId] ?? "",
           nextPaneLayoutByWorkspaceId,
           nextTerminalsByWorkspaceId,
           nextWorkspaceTabStateByWorkspaceId,
           organizationId: organizationId ?? "",
           projectId: projectId ?? "",
           selectedNodeIdByOrganization: storedState.selectedNodeIdByOrganization,
+          workspaceNodeIdsByWorkspaceId: { [workspaceId]: resolvedWorkspaceNodeId },
           workspaceIds: [workspaceId],
         });
 
@@ -90,17 +104,19 @@ export function useShellStateMaintenance({
         }
       })();
     },
-    [resetToShellHome, selection, stageShellHomeSelection, storedState],
+    [resetToShellHome, resolveStoredWorkspaceNodeId, selection, stageShellHomeSelection, storedState],
   );
 
   const dropProjectState = useCallback(
     ({
       organizationId,
       projectId,
+      workspaceNodeIdsByWorkspaceId,
       workspaceIds,
     }: {
       organizationId: string;
       projectId: string;
+      workspaceNodeIdsByWorkspaceId?: Record<string, string | null | undefined>;
       workspaceIds: string[];
     }) => {
       const {
@@ -109,6 +125,12 @@ export function useShellStateMaintenance({
         nextWorkspaceTabStateByWorkspaceId,
         projectTerminalIds,
       } = dropProjectStoredState(storedState, selection, organizationId, projectId, workspaceIds);
+      const resolvedWorkspaceNodeIdsByWorkspaceId = Object.fromEntries(
+        workspaceIds.map((workspaceId) => [
+          workspaceId,
+          workspaceNodeIdsByWorkspaceId?.[workspaceId] ?? resolveStoredWorkspaceNodeId(workspaceId),
+        ]),
+      );
 
       storedState.setTerminalsByWorkspaceId(nextTerminalsByWorkspaceId);
       storedState.setWorkspaceTabStateByWorkspaceId(nextWorkspaceTabStateByWorkspaceId);
@@ -123,12 +145,14 @@ export function useShellStateMaintenance({
 
       void (async () => {
         await persistShellStateCleanup({
+          fallbackNodeId: storedState.selectedNodeIdByOrganization[organizationId] ?? "",
           nextPaneLayoutByWorkspaceId,
           nextTerminalsByWorkspaceId,
           nextWorkspaceTabStateByWorkspaceId,
           organizationId,
           projectId,
           selectedNodeIdByOrganization: storedState.selectedNodeIdByOrganization,
+          workspaceNodeIdsByWorkspaceId: resolvedWorkspaceNodeIdsByWorkspaceId,
           workspaceIds,
         });
 
@@ -137,7 +161,7 @@ export function useShellStateMaintenance({
         }
       })();
     },
-    [navigation, resetToShellHome, selection, stageShellHomeSelection, storedState],
+    [navigation, resetToShellHome, resolveStoredWorkspaceNodeId, selection, stageShellHomeSelection, storedState],
   );
 
   const recentTerminals = useMemo(

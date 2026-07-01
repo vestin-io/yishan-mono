@@ -1,9 +1,6 @@
-import * as Clipboard from "expo-clipboard";
 import * as DocumentPicker from "expo-document-picker";
 import { File } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
-
-import { extractClipboardImageBase64Data } from "./shell-terminal-clipboard-image-domain";
 
 export type TerminalUploadImageSource = "camera" | "file" | "photo-library";
 
@@ -15,8 +12,6 @@ export type PickedTerminalUploadImage = {
 
 const DEFAULT_UPLOAD_FILE_NAME = "image.png";
 const DEFAULT_UPLOAD_MIME_TYPE = "image/png";
-const CLIPBOARD_UPLOAD_FILE_NAME = "clipboard-image.png";
-
 /**
  * Opens one native picker flow for terminal image upload and returns the selected image payload.
  */
@@ -32,28 +27,6 @@ export async function pickTerminalUploadImage(
   }
 
   return pickTerminalUploadImageFromFiles();
-}
-
-/**
- * Reads one image from the native clipboard and normalizes it into one upload payload.
- */
-export async function readTerminalClipboardImage(): Promise<PickedTerminalUploadImage | null> {
-  const hasImage = await Clipboard.hasImageAsync();
-  if (!hasImage) {
-    return null;
-  }
-
-  const clipboardImage = await Clipboard.getImageAsync({ format: "png" });
-  const base64Data = extractClipboardImageBase64Data(clipboardImage?.data ?? "");
-  if (!base64Data) {
-    return null;
-  }
-
-  return {
-    base64Data,
-    fileName: CLIPBOARD_UPLOAD_FILE_NAME,
-    mimeType: DEFAULT_UPLOAD_MIME_TYPE,
-  };
 }
 
 async function pickTerminalUploadImageFromLibrary(): Promise<PickedTerminalUploadImage | null> {

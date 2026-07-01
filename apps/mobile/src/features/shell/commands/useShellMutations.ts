@@ -11,7 +11,12 @@ export function useShellMutations({
   onProjectDeleted,
   onWorkspaceClosed,
 }: {
-  onProjectDeleted: (input: { organizationId: string; projectId: string; workspaceIds: string[] }) => void;
+  onProjectDeleted: (input: {
+    organizationId: string;
+    projectId: string;
+    workspaceIds: string[];
+    workspaceNodeIdsByWorkspaceId: Record<string, string>;
+  }) => void;
   onWorkspaceClosed: (input: { organizationId: string; projectId: string; workspace: Workspace }) => void;
 }) {
   const { session } = useAuth();
@@ -19,7 +24,12 @@ export function useShellMutations({
   const queryClient = useQueryClient();
 
   const deleteProjectMutation = useMutation({
-    mutationFn: async (input: { organizationId: string; projectId: string; workspaceIds: string[] }) => {
+    mutationFn: async (input: {
+      organizationId: string;
+      projectId: string;
+      workspaceIds: string[];
+      workspaceNodeIdsByWorkspaceId: Record<string, string>;
+    }) => {
       if (!accessToken) {
         throw new Error("Missing access token");
       }
@@ -54,6 +64,9 @@ export function useShellMutations({
       organizationId,
       projectId: project.id,
       workspaceIds: project.workspaces.map((workspace) => workspace.id),
+      workspaceNodeIdsByWorkspaceId: Object.fromEntries(
+        project.workspaces.map((workspace) => [workspace.id, workspace.nodeId]),
+      ),
     });
   };
 

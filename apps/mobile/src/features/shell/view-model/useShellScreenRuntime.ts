@@ -34,7 +34,7 @@ export function useShellScreenRuntime({
   const terminalMessages = useShellTerminalMessagesModel(shell);
 
   const mutations = useShellMutations({
-    onProjectDeleted: ({ organizationId, projectId, workspaceIds }) => {
+    onProjectDeleted: ({ organizationId, projectId, workspaceIds, workspaceNodeIdsByWorkspaceId }) => {
       const projectTerminals = Object.values(shell.terminalsByWorkspaceId)
         .flat()
         .filter((terminal) => terminal.orgId === organizationId && terminal.projectId === projectId);
@@ -44,7 +44,7 @@ export function useShellScreenRuntime({
       }
 
       sheets.closeProjectMenu();
-      shell.dropProjectState({ organizationId, projectId, workspaceIds });
+      shell.dropProjectState({ organizationId, projectId, workspaceIds, workspaceNodeIdsByWorkspaceId });
     },
     onWorkspaceClosed: ({ organizationId, workspace }) => {
       const workspaceTerminals = [...(shell.terminalsByWorkspaceId[workspace.id] ?? [])];
@@ -53,7 +53,12 @@ export function useShellScreenRuntime({
       }
 
       sheets.closeWorkspaceMenu();
-      shell.dropWorkspaceState({ organizationId, projectId: workspace.projectId, workspaceId: workspace.id });
+      shell.dropWorkspaceState({
+        organizationId,
+        projectId: workspace.projectId,
+        workspaceId: workspace.id,
+        workspaceNodeId: workspace.nodeId,
+      });
     },
   });
   const screenContext = useShellScreenContext({

@@ -21,7 +21,3 @@ export type WorkspaceFrontendEventsConnection = {
   projectId: string;
   workspaceId: string;
 };
-
-export function parseWorkspaceFrontendEventsMessage(data: string): WorkspaceFrontendEventsMessage {
-  return JSON.parse(data) as WorkspaceFrontendEventsMessage;
-}

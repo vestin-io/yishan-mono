@@ -74,18 +74,6 @@ export function getShellPaneTabLabel(
   return parts[parts.length - 1] || tab.path;
 }
 
-export function getShellPaneTabSubtitle(
-  tab: ShellPaneTab,
-  terminalsById: TerminalMap,
-  t: (key: string, params?: Record<string, string | number>) => string,
-) {
-  if (tab.kind === "terminal") {
-    return terminalsById[tab.terminalId]?.subtitle ?? t("shell.terminalTab");
-  }
-
-  return tab.kind === "diff" ? `${t("shell.changes")} · ${tab.path}` : tab.path;
-}
-
 export function getShellPaneTabTypeLabel(
   tab: ShellPaneTab,
   t: (key: string, params?: Record<string, string | number>) => string,

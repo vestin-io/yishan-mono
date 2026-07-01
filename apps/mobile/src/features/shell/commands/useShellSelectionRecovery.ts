@@ -35,6 +35,10 @@ export function useShellSelectionRecovery({
       organizationId: workspaceSelection.orgId,
       projectId: workspaceSelection.projectId,
       workspaceId: workspaceSelection.workspaceId,
+      workspaceNodeId:
+        shell.terminalsByWorkspaceId[workspaceSelection.workspaceId]?.find(
+          (terminal) => (terminal.nodeId?.trim() ?? "").length > 0,
+        )?.nodeId ?? null,
     });
   }, [screenContext.isShellLoading, screenContext.organizations, shell]);
 
@@ -60,6 +64,10 @@ export function useShellSelectionRecovery({
         organizationId: workspaceSelection.orgId,
         projectId: workspaceSelection.projectId,
         workspaceId: workspaceSelection.workspaceId,
+        workspaceNodeId:
+          shell.terminalsByWorkspaceId[workspaceSelection.workspaceId]?.find(
+            (terminal) => (terminal.nodeId?.trim() ?? "").length > 0,
+          )?.nodeId ?? null,
       });
       return;
     }
@@ -79,6 +87,10 @@ export function useShellSelectionRecovery({
       organizationId: workspaceSelection.orgId,
       projectId: workspaceSelection.projectId,
       workspaceId: workspaceSelection.workspaceId,
+      workspaceNodeId:
+        shell.terminalsByWorkspaceId[workspaceSelection.workspaceId]?.find(
+          (terminal) => (terminal.nodeId?.trim() ?? "").length > 0,
+        )?.nodeId ?? null,
     });
   }, [
     screenContext.currentOrganizationId,

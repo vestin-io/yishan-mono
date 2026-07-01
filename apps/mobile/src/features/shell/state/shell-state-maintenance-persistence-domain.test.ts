@@ -59,9 +59,32 @@ describe("shell-state-maintenance-persistence-domain", () => {
   });
 
   it("lists workspace browser state ids for cleanup", () => {
-    expect(listWorkspaceBrowserStateIdsForCleanup("org-1", "project-1", ["workspace-1", "workspace-2"])).toEqual([
-      "org-1:project-1:workspace-1",
-      "org-1:project-1:workspace-2",
-    ]);
+    expect(
+      listWorkspaceBrowserStateIdsForCleanup(
+        "org-1",
+        "project-1",
+        {
+          "workspace-1": "node-1",
+          "workspace-2": "node-2",
+        },
+        ["workspace-1", "workspace-2"],
+      ),
+    ).toEqual(["org-1:project-1:workspace-1:node-1", "org-1:project-1:workspace-2:node-2"]);
+  });
+
+  it("falls back to the provided node id when one workspace has no direct node context", () => {
+    expect(
+      listWorkspaceBrowserStateIdsForCleanup(
+        "org-1",
+        "project-1",
+        { "workspace-1": "node-1" },
+        ["workspace-1", "workspace-2"],
+        "node-fallback",
+      ),
+    ).toEqual(["org-1:project-1:workspace-1:node-1", "org-1:project-1:workspace-2:node-fallback"]);
+  });
+
+  it("returns empty browser state ids when cleanup has no node context", () => {
+    expect(listWorkspaceBrowserStateIdsForCleanup("org-1", "project-1", {}, ["workspace-1"])).toEqual([]);
   });
 });
