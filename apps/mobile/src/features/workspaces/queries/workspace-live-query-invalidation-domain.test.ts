@@ -29,6 +29,7 @@ describe("workspace-live-query-invalidation-domain", () => {
     ).toEqual({
       changedRelativePaths: ["src/app.ts", "src"],
       invalidateProjectLists: false,
+      invalidateWorkspacePullRequestQueries: false,
       invalidateWorkspaceLists: false,
       invalidateWorkspaceReadQueries: true,
       topic: "workspaceFilesChanged",
@@ -70,11 +71,53 @@ describe("workspace-live-query-invalidation-domain", () => {
     ).toEqual({
       change: "closed",
       invalidateProjectLists: true,
+      invalidateWorkspacePullRequestQueries: false,
       invalidateWorkspaceLists: true,
       invalidateWorkspaceReadQueries: true,
       resource: "workspace",
       topic: "workspaceSnapshotChanged",
     });
+  });
+
+  it("invalidates pull-request queries when the current workspace pull request changes", () => {
+    expect(
+      buildWorkspaceLiveQueryInvalidationPlan({
+        message: {
+          payload: {
+            pullRequest: {
+              number: 42,
+            },
+            workspaceId: "workspace-1",
+            workspaceWorktreePath: "/tmp/workspace-1",
+          },
+          topic: "workspacePullRequestUpdated",
+          type: "event",
+        },
+        scope,
+      }),
+    ).toEqual({
+      invalidateProjectLists: true,
+      invalidateWorkspacePullRequestQueries: true,
+      invalidateWorkspaceLists: true,
+      invalidateWorkspaceReadQueries: false,
+      pullRequestUpdated: true,
+      topic: "workspacePullRequestUpdated",
+    });
+  });
+
+  it("ignores pull-request updates for a different workspace", () => {
+    expect(
+      buildWorkspaceLiveQueryInvalidationPlan({
+        message: {
+          payload: {
+            workspaceId: "workspace-2",
+          },
+          topic: "workspacePullRequestUpdated",
+          type: "event",
+        },
+        scope,
+      }),
+    ).toBeNull();
   });
 
   it("ignores workspace snapshot changes from another project", () => {

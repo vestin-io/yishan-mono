@@ -38,10 +38,7 @@ export async function closeWorkspace(
       method: "PATCH",
       accessToken,
       body: {
-        kind: workspace.kind,
-        branch: workspace.branch ?? undefined,
-        nodeId: workspace.nodeId,
-        localPath: workspace.localPath,
+        workspaceId: workspace.id,
       },
     },
   );

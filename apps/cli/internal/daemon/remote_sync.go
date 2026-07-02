@@ -111,6 +111,7 @@ func closeRemoteWorkspace(_ context.Context, runtime *cliruntime.Runtime, closin
 
 	_, err := runtime.APIClient().CloseWorkspace(orgID, closing.ProjectID, api.CloseWorkspaceInput{
 		WorkspaceID: closing.WorkspaceID,
+		Source:      "daemon",
 	})
 	if err != nil {
 		if isReauthRequiredError(err) {

@@ -62,6 +62,7 @@ export const createWorkspaceBodySchema = z.object({
 
 export const closeWorkspaceBodySchema = z.object({
   workspaceId: nonEmptyStringSchema,
+  source: z.enum(["daemon"]).optional(),
 });
 
 export const workspaceTerminalParamsSchema = z.object({

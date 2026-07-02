@@ -12,6 +12,7 @@ import { organizationMembers, projects, workspaces } from "@/db/schema";
 import type { Workspace, WorkspaceKind, WorkspacePullRequestState } from "@/db/schema";
 import type { WorkspaceStatus } from "@/db/schema";
 import {
+  PrimaryWorkspaceProvisionNotSupportedError,
   PrimaryWorkspaceCloseNotAllowedError,
   ProjectNotFoundError,
   RelayUnavailableError,
@@ -27,6 +28,7 @@ import { assertOrganizationMember } from "@/services/shared/assertOrganizationMe
 import type { WorkspaceProvisioner } from "@/services/workspace-provisioner";
 import { fetchLatestPrByWorkspaceId } from "@/services/workspace-pull-request-service";
 import {
+  invokeWorkspaceRelay,
   type RelayWorkspaceConnectionAccess,
   type WorkspaceRelayDeps,
   resolveWorkspaceRelayAccess,
@@ -114,6 +116,7 @@ type CloseWorkspaceInput = {
   organizationId: string;
   actorUserId: string;
   projectId: string;
+  source?: "daemon";
 };
 
 export type CloseWorkspaceResult = {
@@ -182,6 +185,9 @@ export class WorkspaceService {
     const requestedLocalPath = input.localPath?.trim() ?? "";
     const requestedWorkspaceName = input.name?.trim() || branch || null;
     const requestedStatus: WorkspaceStatus = requestedLocalPath ? "active" : "provisioning";
+    if (input.kind === "primary" && !requestedLocalPath) {
+      throw new PrimaryWorkspaceProvisionNotSupportedError();
+    }
 
     let mutationResult: WorkspaceCreateMutationResult;
     try {
@@ -586,6 +592,49 @@ export class WorkspaceService {
       return {
         workspace: { ...existing, latestPullRequest: null },
         changed: false,
+      };
+    }
+
+    if (input.source !== "daemon" && existing.status === "active" && existing.localPath.trim() && this.config) {
+      await invokeWorkspaceRelay({
+        ...this.getRelayDeps(),
+        actorUserId: input.actorUserId,
+        method: "workspace.close",
+        organizationId: input.organizationId,
+        params: {
+          workspaceId: existing.id,
+          organizationId: input.organizationId,
+          projectId: input.projectId,
+          branch: existing.branch ?? undefined,
+        },
+        projectId: input.projectId,
+        workspaceId: input.workspaceId,
+      });
+
+      const currentRows = await this.db
+        .select()
+        .from(workspaces)
+        .where(
+          and(
+            eq(workspaces.organizationId, input.organizationId),
+            eq(workspaces.projectId, input.projectId),
+            eq(workspaces.userId, input.actorUserId),
+            eq(workspaces.id, input.workspaceId),
+          ),
+        )
+        .limit(1);
+
+      const current = currentRows[0];
+      if (!current) {
+        throw new WorkspaceNotFoundError({
+          workspaceId: input.workspaceId,
+          projectId: input.projectId,
+        });
+      }
+
+      return {
+        workspace: { ...current, latestPullRequest: null },
+        changed: current.status === "closed",
       };
     }
 

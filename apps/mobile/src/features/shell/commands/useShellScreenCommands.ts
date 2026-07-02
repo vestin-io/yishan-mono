@@ -61,7 +61,11 @@ export function useShellScreenCommands({
     shell,
     t,
   });
-  const { onOpenProjectCreate: rawOpenProjectCreate, projectMenuActions, workspaceMenuActions } = useShellMenuActions({
+  const {
+    onOpenProjectCreate: rawOpenProjectCreate,
+    projectMenuActions,
+    workspaceMenuActions,
+  } = useShellMenuActions({
     currentOrganizationId: screenContext.currentOrganizationId,
     mutations,
     sheets,

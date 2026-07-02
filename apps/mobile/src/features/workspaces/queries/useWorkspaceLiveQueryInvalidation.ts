@@ -88,6 +88,22 @@ export function useWorkspaceLiveQueryInvalidation({
           }),
         );
       }
+      if (plan.invalidateWorkspacePullRequestQueries) {
+        invalidations.push(
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.workspaceCurrentPullRequest(
+              workspace.organizationId,
+              workspace.projectId,
+              workspace.id,
+            ),
+          }),
+        );
+        invalidations.push(
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.workspacePullRequests(workspace.organizationId, workspace.projectId, workspace.id),
+          }),
+        );
+      }
       if (plan.invalidateWorkspaceReadQueries) {
         invalidations.push(
           queryClient.invalidateQueries({

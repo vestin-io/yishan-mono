@@ -16,6 +16,17 @@ type TerminalTouchScrollRuntime = Pick<TerminalWriteRuntime, "blur" | "focus" | 
 };
 
 type TerminalFocusRuntime = Pick<TerminalWriteRuntime, "focus">;
+type TerminalBufferLineRuntime = {
+  translateToString: (trimRight?: boolean, startColumn?: number, endColumn?: number) => string;
+};
+type TerminalBufferRuntime = {
+  active?: {
+    baseY?: number;
+    cursorY?: number;
+    getLine: (index: number) => TerminalBufferLineRuntime | null | undefined;
+    length: number;
+  };
+};
 
 type GestureScrollMode = "fallback_active" | "native_active" | "native_pending";
 type GestureInputSource = "pointer" | "touch" | null;
@@ -70,6 +81,29 @@ export function syncTerminalFromCache(
 
   resetTerminalFromCache(terminal, nextText);
   return nextText;
+}
+
+/**
+ * Reads one selection-friendly plain-text snapshot from xterm's parsed buffer.
+ */
+export function readTerminalPlainTextSnapshot(terminal: { buffer?: TerminalBufferRuntime } | null): string {
+  const activeBuffer = terminal?.buffer?.active;
+  if (!activeBuffer || activeBuffer.length <= 0) {
+    return "";
+  }
+
+  const lines: string[] = [];
+  let lastMeaningfulLineIndex = Math.max(0, (activeBuffer.baseY ?? 0) + (activeBuffer.cursorY ?? 0));
+
+  for (let index = 0; index < activeBuffer.length; index += 1) {
+    const nextLine = activeBuffer.getLine(index)?.translateToString(true) ?? "";
+    if (nextLine.length > 0) {
+      lastMeaningfulLineIndex = index;
+    }
+    lines.push(nextLine);
+  }
+
+  return lines.slice(0, lastMeaningfulLineIndex + 1).join("\n");
 }
 
 /**

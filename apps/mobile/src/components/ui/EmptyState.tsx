@@ -24,7 +24,11 @@ export function EmptyState({ title, message, actionLabel, onAction }: EmptyState
       <Paragraph color="$gray11" style={{ textAlign: "center" }}>
         {message}
       </Paragraph>
-      {actionLabel && onAction ? <Button onPress={onAction} themeInverse>{actionLabel}</Button> : null}
+      {actionLabel && onAction ? (
+        <Button onPress={onAction} themeInverse>
+          {actionLabel}
+        </Button>
+      ) : null}
     </YStack>
   );
 }

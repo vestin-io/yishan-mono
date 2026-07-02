@@ -27,7 +27,11 @@ export function ErrorState({ title, message, onRetry }: ErrorStateProps) {
         {title ?? t("errors.genericTitle")}
       </Text>
       <Paragraph color="$gray11">{message ?? t("errors.genericMessage")}</Paragraph>
-      {onRetry ? <Button onPress={onRetry} themeInverse>{t("common.retry")}</Button> : null}
+      {onRetry ? (
+        <Button onPress={onRetry} themeInverse>
+          {t("common.retry")}
+        </Button>
+      ) : null}
     </YStack>
   );
 }

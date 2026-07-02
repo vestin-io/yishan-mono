@@ -1,6 +1,8 @@
 import type { AgentKind } from "@yishan/core";
 
 import type { WorkspaceGitChangeKind, WorkspaceTerminalSession } from "@/features/workspaces/workspaces.types";
+import type { SplitPaneStateSlice } from "./split-pane/types";
+export type { PaneBranch, PaneLeaf, SplitDirection, SplitPaneNode } from "./split-pane/types";
 
 export type ShellSelection =
   | { kind: "home" }
@@ -121,30 +123,7 @@ export type ShellWorkspaceTabState = {
   selectedTabId: string;
 };
 
-export type SplitDirection = "horizontal" | "vertical";
-
-export type PaneLeaf = {
-  kind: "leaf";
-  id: string;
-  tabIds: string[];
-  selectedTabId: string;
-};
-
-export type PaneBranch = {
-  kind: "branch";
-  id: string;
-  direction: SplitDirection;
-  ratio: number;
-  first: SplitPaneNode;
-  second: SplitPaneNode;
-};
-
-export type SplitPaneNode = PaneLeaf | PaneBranch;
-
-export type WorkspacePaneLayoutState = {
-  root: SplitPaneNode;
-  activePaneId: string;
-};
+export type WorkspacePaneLayoutState = SplitPaneStateSlice;
 
 export type WorkspacePaneStoreState = {
   tabState: ShellWorkspaceTabState;

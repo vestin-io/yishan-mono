@@ -67,7 +67,15 @@ export function useShellDrawer({ drawerWidth, isNavOpen, onInteractionStart, set
         }
       });
     },
-    [drawerTranslateX, drawerWidth, handleInteractionStart, isNavOpen, overlayOpacity, setNavOpen, useAnimatedNativeDriver],
+    [
+      drawerTranslateX,
+      drawerWidth,
+      handleInteractionStart,
+      isNavOpen,
+      overlayOpacity,
+      setNavOpen,
+      useAnimatedNativeDriver,
+    ],
   );
 
   const openDrawer = useCallback(() => {
@@ -93,7 +101,15 @@ export function useShellDrawer({ drawerWidth, isNavOpen, onInteractionStart, set
         }),
       ]).start();
     });
-  }, [drawerTranslateX, drawerWidth, handleInteractionStart, isNavOpen, overlayOpacity, setNavOpen, useAnimatedNativeDriver]);
+  }, [
+    drawerTranslateX,
+    drawerWidth,
+    handleInteractionStart,
+    isNavOpen,
+    overlayOpacity,
+    setNavOpen,
+    useAnimatedNativeDriver,
+  ]);
 
   const edgePanResponder = useMemo(
     () =>
@@ -156,7 +172,15 @@ export function useShellDrawer({ drawerWidth, isNavOpen, onInteractionStart, set
           });
         },
       }),
-    [drawerTranslateX, drawerWidth, handleInteractionStart, isNavOpen, overlayOpacity, setNavOpen, useAnimatedNativeDriver],
+    [
+      drawerTranslateX,
+      drawerWidth,
+      handleInteractionStart,
+      isNavOpen,
+      overlayOpacity,
+      setNavOpen,
+      useAnimatedNativeDriver,
+    ],
   );
 
   const drawerPanResponder = useMemo(
@@ -202,7 +226,15 @@ export function useShellDrawer({ drawerWidth, isNavOpen, onInteractionStart, set
           ]).start();
         },
       }),
-    [closeDrawer, drawerTranslateX, drawerWidth, handleInteractionStart, isNavOpen, overlayOpacity, useAnimatedNativeDriver],
+    [
+      closeDrawer,
+      drawerTranslateX,
+      drawerWidth,
+      handleInteractionStart,
+      isNavOpen,
+      overlayOpacity,
+      useAnimatedNativeDriver,
+    ],
   );
 
   return {

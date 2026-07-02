@@ -2,13 +2,14 @@ import type { AppDb } from "@/db/client";
 import { workspaces } from "@/db/schema";
 import {
   OrganizationMembershipRequiredError,
+  PrimaryWorkspaceProvisionNotSupportedError,
   PrimaryWorkspaceCloseNotAllowedError,
   ProjectNotFoundError,
   WorkspaceBranchRequiredError,
   WorkspaceNotFoundError,
 } from "@/errors";
 import type { WorkspaceProvisioner } from "@/services/workspace-provisioner";
-import { resolveWorkspaceRelayAccess } from "@/services/workspace-relay";
+import { invokeWorkspaceRelay, resolveWorkspaceRelayAccess } from "@/services/workspace-relay";
 import { listWorkspaceGitBranchesViaRelay } from "@/services/workspace-relay-operations";
 import { WorkspaceService } from "@/services/workspace-service";
 import type { ServiceConfig } from "@/types";
@@ -28,6 +29,7 @@ vi.mock("@/services/workspace-relay-operations", () => {
   };
 });
 vi.mock("@/services/workspace-relay", () => ({
+  invokeWorkspaceRelay: vi.fn(),
   resolveWorkspaceRelayAccess: vi.fn(),
 }));
 vi.mock("@/services/workspace-pull-request-service", () => ({
@@ -35,6 +37,7 @@ vi.mock("@/services/workspace-pull-request-service", () => ({
 }));
 
 const listWorkspaceGitBranchesViaRelayMock = listWorkspaceGitBranchesViaRelay as ReturnType<typeof vi.fn>;
+const invokeWorkspaceRelayMock = vi.mocked(invokeWorkspaceRelay);
 const resolveWorkspaceRelayAccessMock = vi.mocked(resolveWorkspaceRelayAccess);
 
 // ── Fixtures ───────────────────────────────────────────────────────────────────
@@ -156,6 +159,7 @@ beforeEach(() => {
   stubProvisioner.enqueueWorkspaceProvision.mockClear();
   workspacePullRequestMocks.fetchLatestPrByWorkspaceId.mockReset();
   workspacePullRequestMocks.fetchLatestPrByWorkspaceId.mockResolvedValue(new Map());
+  invokeWorkspaceRelayMock.mockReset();
 });
 
 describe("WorkspaceService.createWorkspace", () => {
@@ -206,6 +210,21 @@ describe("WorkspaceService.createWorkspace", () => {
         localPath: "/repos/proj",
       }),
     ).rejects.toBeInstanceOf(ProjectNotFoundError);
+  });
+
+  it("throws PrimaryWorkspaceProvisionNotSupportedError for a primary workspace without localPath", async () => {
+    const { db } = makeDb();
+    const service = new WorkspaceService(db, makeOrgService("member"), stubProvisioner);
+
+    await expect(
+      service.createWorkspace({
+        organizationId: "org-1",
+        actorUserId: "user-1",
+        projectId: "proj-1",
+        nodeId: "node-1",
+        kind: "primary",
+      }),
+    ).rejects.toBeInstanceOf(PrimaryWorkspaceProvisionNotSupportedError);
   });
 
   it("inserts a new workspace and enqueues provisioning on success", async () => {
@@ -268,6 +287,9 @@ describe("WorkspaceService.createWorkspace", () => {
   it("creates a provisioning workspace when localPath is omitted", async () => {
     const provisioningRow = {
       ...WORKSPACE_ROW,
+      kind: "worktree" as const,
+      branch: "feature/test",
+      sourceBranch: "main",
       status: "provisioning" as const,
       localPath: "",
     };
@@ -279,7 +301,9 @@ describe("WorkspaceService.createWorkspace", () => {
       actorUserId: "user-1",
       projectId: "proj-1",
       nodeId: "node-1",
-      kind: "primary",
+      kind: "worktree",
+      branch: "feature/test",
+      sourceBranch: "main",
     });
 
     expect(txInsertValues).toHaveBeenCalledWith(
@@ -638,6 +662,38 @@ describe("WorkspaceService.closeWorkspace", () => {
     expect(result.changed).toBe(true);
     expect(result.workspace.status).toBe("closed");
     expect(updateWhere).toHaveBeenCalledOnce();
+  });
+
+  it("delegates active workspace close to relay when invoked by a client request", async () => {
+    const { db } = makeCloseDb({
+      existingRows: [WORKTREE_ACTIVE_ROW],
+      fallbackRows: [WORKTREE_CLOSED_ROW],
+    });
+    invokeWorkspaceRelayMock.mockResolvedValue({
+      result: { workspaceId: "ws-1" },
+      workspace: {
+        id: "ws-1",
+        localPath: "/repos/worktree",
+        nodeId: "node-1",
+      },
+    });
+    const service = new WorkspaceService(
+      db,
+      makeOrgService("member"),
+      stubProvisioner,
+      { relayApiToken: "relay-token", relayUrl: "wss://relay.test" } as ServiceConfig,
+    );
+
+    const result = await service.closeWorkspace({
+      organizationId: "org-1",
+      actorUserId: "user-1",
+      projectId: "proj-1",
+      workspaceId: "ws-1",
+    });
+
+    expect(invokeWorkspaceRelayMock).toHaveBeenCalledOnce();
+    expect(result.changed).toBe(true);
+    expect(result.workspace.status).toBe("closed");
   });
 
   it("returns changed true when provisioning workspace is rolled back and closed", async () => {

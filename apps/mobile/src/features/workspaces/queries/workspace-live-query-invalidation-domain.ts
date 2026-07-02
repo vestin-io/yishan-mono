@@ -20,14 +20,20 @@ type WorkspaceSnapshotChangedEvent = {
   workspaceId: string;
 };
 
+type WorkspacePullRequestUpdatedEvent = {
+  workspaceId: string;
+};
+
 export type WorkspaceLiveQueryInvalidationPlan = {
   change?: string;
   changedRelativePaths?: string[];
   invalidateProjectLists: boolean;
+  invalidateWorkspacePullRequestQueries: boolean;
   invalidateWorkspaceLists: boolean;
   invalidateWorkspaceReadQueries: boolean;
+  pullRequestUpdated?: boolean;
   resource?: string;
-  topic: "workspaceFilesChanged" | "workspaceSnapshotChanged";
+  topic: "workspaceFilesChanged" | "workspacePullRequestUpdated" | "workspaceSnapshotChanged";
 };
 
 function readWorkspaceFilesChangedEvent(message: WorkspaceFrontendEventsMessage): WorkspaceFilesChangedEvent | null {
@@ -50,6 +56,21 @@ function readWorkspaceFilesChangedEvent(message: WorkspaceFrontendEventsMessage)
     changedRelativePaths,
     workspaceId,
   };
+}
+
+function readWorkspacePullRequestUpdatedEvent(
+  message: WorkspaceFrontendEventsMessage,
+): WorkspacePullRequestUpdatedEvent | null {
+  if (message.type !== "event" || message.topic !== "workspacePullRequestUpdated") {
+    return null;
+  }
+
+  const workspaceId = typeof message.payload.workspaceId === "string" ? message.payload.workspaceId.trim() : "";
+  if (!workspaceId) {
+    return null;
+  }
+
+  return { workspaceId };
 }
 
 function readWorkspaceSnapshotChangedEvent(
@@ -88,9 +109,26 @@ export function buildWorkspaceLiveQueryInvalidationPlan(input: {
     return {
       changedRelativePaths: filesChangedEvent.changedRelativePaths,
       invalidateProjectLists: false,
+      invalidateWorkspacePullRequestQueries: false,
       invalidateWorkspaceLists: false,
       invalidateWorkspaceReadQueries: true,
       topic: "workspaceFilesChanged",
+    };
+  }
+
+  const pullRequestUpdatedEvent = readWorkspacePullRequestUpdatedEvent(input.message);
+  if (pullRequestUpdatedEvent) {
+    if (pullRequestUpdatedEvent.workspaceId !== input.scope.workspaceId) {
+      return null;
+    }
+
+    return {
+      invalidateProjectLists: true,
+      invalidateWorkspacePullRequestQueries: true,
+      invalidateWorkspaceLists: true,
+      invalidateWorkspaceReadQueries: false,
+      pullRequestUpdated: true,
+      topic: "workspacePullRequestUpdated",
     };
   }
 
@@ -107,6 +145,7 @@ export function buildWorkspaceLiveQueryInvalidationPlan(input: {
     return {
       change: snapshotChangedEvent.change,
       invalidateProjectLists: true,
+      invalidateWorkspacePullRequestQueries: false,
       invalidateWorkspaceLists: true,
       invalidateWorkspaceReadQueries: false,
       resource: snapshotChangedEvent.resource,
@@ -121,6 +160,7 @@ export function buildWorkspaceLiveQueryInvalidationPlan(input: {
   return {
     change: snapshotChangedEvent.change,
     invalidateProjectLists: true,
+    invalidateWorkspacePullRequestQueries: false,
     invalidateWorkspaceLists: true,
     invalidateWorkspaceReadQueries: snapshotChangedEvent.workspaceId === input.scope.workspaceId,
     resource: snapshotChangedEvent.resource,

@@ -1,6 +1,6 @@
 import { ArrowLeft } from "@tamagui/lucide-icons";
 import { useCallback, useEffect, useRef } from "react";
-import { Platform, ScrollView, TextInput, View } from "react-native";
+import { Text as NativeText, Platform, ScrollView, View } from "react-native";
 import { Text, useTheme } from "tamagui";
 
 import { useAppLanguage } from "@/features/i18n/AppLanguageProvider";
@@ -12,6 +12,8 @@ import {
   buildNativeTerminalScrollContentStyle,
   buildNativeTerminalTextStyle,
 } from "./shell-terminal-native-pane-domain";
+
+const NATIVE_TERMINAL_READER_BOTTOM_THRESHOLD = 24;
 
 type ShellTerminalReaderPaneProps = {
   emptyDescription: string;
@@ -32,7 +34,9 @@ export function ShellTerminalReaderPane({
   const { t } = useAppLanguage();
   const theme = useTheme();
   const scrollViewRef = useRef<ScrollView | null>(null);
-  const shouldAutoScrollRef = useRef(false);
+  const contentHeightRef = useRef(0);
+  const readerViewportHeightRef = useRef(0);
+  const shouldAutoScrollRef = useRef(true);
 
   const scrollToLatestOutput = useCallback(() => {
     scrollViewRef.current?.scrollToEnd({ animated: false });
@@ -43,8 +47,10 @@ export function ShellTerminalReaderPane({
       return;
     }
 
-    shouldAutoScrollRef.current = true;
-  }, [output]);
+    if (shouldAutoScrollRef.current) {
+      scrollToLatestOutput();
+    }
+  }, [output, scrollToLatestOutput]);
 
   return (
     <View style={buildNativeTerminalOutputSurfaceStyle()}>
@@ -57,37 +63,37 @@ export function ShellTerminalReaderPane({
           ]}
           keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
           keyboardShouldPersistTaps="handled"
-          onContentSizeChange={() => {
-            if (!shouldAutoScrollRef.current) {
-              return;
+          onContentSizeChange={(_, contentHeight) => {
+            contentHeightRef.current = contentHeight;
+            if (shouldAutoScrollRef.current) {
+              scrollToLatestOutput();
             }
-
-            shouldAutoScrollRef.current = false;
-            scrollToLatestOutput();
           }}
+          onLayout={(event) => {
+            readerViewportHeightRef.current = event.nativeEvent.layout.height;
+          }}
+          onScroll={(event) => {
+            const nextOffsetY = event.nativeEvent.contentOffset.y;
+            const remainingDistance = contentHeightRef.current - (nextOffsetY + readerViewportHeightRef.current);
+            shouldAutoScrollRef.current = remainingDistance <= NATIVE_TERMINAL_READER_BOTTOM_THRESHOLD;
+          }}
+          scrollEventThrottle={16}
           style={{ flex: 1 }}
         >
           {output ? (
-            <TextInput
-              contextMenuHidden={false}
-              multiline
-              readOnly
-              scrollEnabled={false}
+            <NativeText
+              selectable
               selectionColor={theme.color8.val}
-              showSoftInputOnFocus={false}
               style={[
                 buildNativeTerminalTextStyle(Platform.OS),
                 {
                   color: theme.color12.val,
                   minHeight: 0,
-                  paddingBottom: 0,
-                  paddingHorizontal: 0,
-                  paddingTop: 0,
-                  textAlignVertical: "top",
                 },
               ]}
-              value={output}
-            />
+            >
+              {output}
+            </NativeText>
           ) : (
             <View style={{ alignItems: "center", flex: 1, gap: 8, justifyContent: "center" }}>
               <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>

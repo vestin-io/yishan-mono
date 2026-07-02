@@ -3,13 +3,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { ITheme } from "@xterm/xterm";
 import * as Clipboard from "expo-clipboard";
 import type { DOMProps } from "expo/dom";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { type TextInput, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { StyleSheet, type TextInput, View } from "react-native";
 
 import { useAuth } from "@/features/auth";
 import { useAppLanguage } from "@/features/i18n/AppLanguageProvider";
 import { writeRelayWorkspaceFile } from "@/features/workspaces/workspaces.relay";
-import { sanitizeTerminalDisplayOutput } from "../state/terminal-output";
 import type { TerminalItem, TerminalMessage } from "../state/shell.types";
 import ShellTerminalDomEmulator, { type ShellTerminalDomEmulatorHandle } from "./ShellTerminalDomEmulator";
 import { ShellTerminalKeyboardBridgeInput } from "./ShellTerminalKeyboardBridgeInput";
@@ -68,8 +67,8 @@ export function ShellTerminalXtermPane({
   const [clipboardText, setClipboardText] = useState("");
   const [imageUploadSheetOpen, setImageUploadSheetOpen] = useState(false);
   const [nativeKeyboardInputValue, setNativeKeyboardInputValue] = useState("");
+  const [readerOutput, setReaderOutput] = useState("");
   const [readerModeEnabled, setReaderModeEnabled] = useState(false);
-  const readerOutput = useMemo(() => sanitizeTerminalDisplayOutput(terminalOutput), [terminalOutput]);
 
   const focusNativeKeyboardInput = () => {
     nativeKeyboardInputValueRef.current = "";
@@ -124,8 +123,14 @@ export function ShellTerminalXtermPane({
     setClipboardText(nextClipboardText);
   }, []);
 
+  const syncReaderOutput = useCallback(() => {
+    const nextReaderOutput = terminalDomRef.current?.readPlainTextSnapshot() ?? "";
+    setReaderOutput(nextReaderOutput);
+  }, []);
+
   const openReaderMode = () => {
     dismissTerminalKeyboard();
+    syncReaderOutput();
     setReaderModeEnabled(true);
   };
 
@@ -213,6 +218,24 @@ export function ShellTerminalXtermPane({
   }, [keyboardVisible]);
 
   useEffect(() => {
+    if (!readerModeEnabled) {
+      return;
+    }
+
+    const latestStreamKey = streamKey;
+    const latestTerminalOutput = terminalOutput;
+    const frameId = requestAnimationFrame(() => {
+      void latestStreamKey;
+      void latestTerminalOutput;
+      syncReaderOutput();
+    });
+
+    return () => {
+      cancelAnimationFrame(frameId);
+    };
+  }, [readerModeEnabled, streamKey, syncReaderOutput, terminalOutput]);
+
+  useEffect(() => {
     if (readerModeEnabled || imageUploadSheetOpen) {
       return;
     }
@@ -232,15 +255,10 @@ export function ShellTerminalXtermPane({
   return (
     <View style={{ flex: 1, minHeight: 0 }}>
       <View style={{ flex: 1, minHeight: 0 }}>
-        {readerModeEnabled ? (
-          <ShellTerminalReaderPane
-            emptyDescription={t("shell.terminalInputPlaceholder")}
-            emptyStatusLabel={t("shell.terminalReaderMode")}
-            onExit={closeReaderMode}
-            output={readerOutput}
-            selectedTerminal={selectedTerminal}
-          />
-        ) : (
+        <View
+          pointerEvents={readerModeEnabled ? "none" : "auto"}
+          style={readerModeEnabled ? styles.hiddenPane : undefined}
+        >
           <ShellTerminalDomEmulator
             blurRequestToken={blurRequestToken}
             dom={terminalDomProps}
@@ -255,7 +273,18 @@ export function ShellTerminalXtermPane({
             terminalId={selectedTerminal.id}
             terminalTheme={terminalTheme}
           />
-        )}
+        </View>
+        {readerModeEnabled ? (
+          <View style={styles.readerOverlay}>
+            <ShellTerminalReaderPane
+              emptyDescription={t("shell.terminalInputPlaceholder")}
+              emptyStatusLabel={t("shell.terminalReaderMode")}
+              onExit={closeReaderMode}
+              output={readerOutput}
+              selectedTerminal={selectedTerminal}
+            />
+          </View>
+        ) : null}
         <ShellTerminalKeyboardBridgeInput
           inputValue={nativeKeyboardInputValue}
           inputValueRef={nativeKeyboardInputValueRef}
@@ -285,3 +314,12 @@ export function ShellTerminalXtermPane({
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  hiddenPane: {
+    opacity: 0,
+  },
+  readerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+});

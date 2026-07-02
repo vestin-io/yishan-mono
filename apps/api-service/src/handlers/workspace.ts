@@ -73,6 +73,7 @@ export async function closeWorkspaceHandler(
     actorUserId: actorUser.id,
     organizationId: params.orgId,
     projectId: params.projectId,
+    source: body.source,
   });
   if (closeResult.changed) {
     await c.get("services").relayEvent.publishWorkspaceSnapshotChanged({

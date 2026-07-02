@@ -30,6 +30,7 @@ export interface WorkspaceProvisioner {
 
 type RelayWorkspaceCreateResult = {
   id?: string;
+  status?: string;
   worktreePath?: string;
 };
 
@@ -83,18 +84,9 @@ export class RelayWorkspaceProvisioner implements WorkspaceProvisioner {
         relayUrl,
       });
 
-      const workspaceId = result.id?.trim() || request.workspaceId;
       const localPath = result.worktreePath?.trim();
-      if (!localPath) {
-        throw new RelayRequestFailedError("workspace.create", {
-          cause: "Missing worktreePath in relay response",
-          nodeId: request.nodeId,
-          workspaceId,
-        });
-      }
-
       return {
-        localPath,
+        localPath: localPath || request.localPath,
       };
     } catch (error) {
       if (error instanceof RelayRpcError && error.code === -32002) {

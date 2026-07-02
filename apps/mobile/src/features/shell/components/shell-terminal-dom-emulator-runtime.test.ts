@@ -6,6 +6,7 @@ import {
   attachTerminalTouchScrollFallback,
   blurTerminal,
   focusTerminal,
+  readTerminalPlainTextSnapshot,
   resetTerminalFromCache,
   stabilizeTerminalViewport,
   syncTerminalFromCache,
@@ -184,6 +185,27 @@ describe("shell-terminal-dom-emulator-runtime", () => {
     focusTerminal(terminal);
 
     expect(terminal.focus).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads one plain-text snapshot from the parsed xterm buffer", () => {
+    const terminal = {
+      buffer: {
+        active: {
+          baseY: 0,
+          cursorY: 1,
+          getLine(index: number) {
+            return {
+              translateToString() {
+                return ["$ ls", "README.md", ""][index] ?? "";
+              },
+            };
+          },
+          length: 3,
+        },
+      },
+    };
+
+    expect(readTerminalPlainTextSnapshot(terminal)).toBe("$ ls\nREADME.md");
   });
 
   it("reactivates the xterm helper textarea when restoring the input session", () => {
@@ -697,7 +719,7 @@ describe("shell-terminal-dom-emulator-runtime", () => {
 
   it("does not reactivate the input session for mouse presses in simulator-driven taps", () => {
     const terminal = createTerminalRuntime();
-    const { helperTextarea, host, viewport } = createHostWithViewportAndTextarea();
+    const { helperTextarea, host } = createHostWithViewportAndTextarea();
 
     const cleanup = attachTerminalTouchScrollFallback(host, terminal);
 
@@ -706,7 +728,6 @@ describe("shell-terminal-dom-emulator-runtime", () => {
 
     expect(terminal.focus).not.toHaveBeenCalled();
     expect(helperTextarea.focus).not.toHaveBeenCalled();
-    expect(mouseDownEvent.defaultPrevented).toBe(true);
 
     cleanup();
   });

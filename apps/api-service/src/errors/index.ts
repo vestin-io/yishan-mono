@@ -262,6 +262,17 @@ export class WorkspaceCreateFailedError extends AppError {
   }
 }
 
+export class PrimaryWorkspaceProvisionNotSupportedError extends AppError {
+  constructor() {
+    super(
+      "Primary workspace provisioning is not supported here; create or register a local primary workspace instead",
+      StatusCodes.BAD_REQUEST,
+      "PRIMARY_WORKSPACE_PROVISION_NOT_SUPPORTED",
+    );
+    this.name = "PrimaryWorkspaceProvisionNotSupportedError";
+  }
+}
+
 export class PrimaryWorkspaceCloseNotAllowedError extends AppError {
   constructor(workspaceId: string) {
     super("Primary workspace cannot be closed", StatusCodes.BAD_REQUEST, "PRIMARY_WORKSPACE_CLOSE_NOT_ALLOWED", {
